@@ -1,7 +1,4 @@
 module.exports = {
-    contracts_directory: './solidity',
-    contracts_build_directory: './solidity/build/contracts',
-    test_directory: './solidity/test',
     networks: {
         production: {
             host: 'localhost',
@@ -11,7 +8,7 @@ module.exports = {
             gas: 9500000
         }
     },
-    plugins: ['solidity-coverage', 'truffle-contract-size'],
+    plugins: ['solidity-coverage'],
     compilers: {
         solc: {
             version: '0.6.12',

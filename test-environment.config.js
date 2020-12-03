@@ -7,8 +7,7 @@ module.exports = {
     contracts: {
         type: 'truffle',
         defaultGas: 9500000,
-        defaultGasPrice: 20000000000,
-        artifactsDir: 'solidity/build/contracts'
+        defaultGasPrice: 20000000000
     },
 
     node: {

@@ -9,7 +9,7 @@ npm-debug.log
 # python
 *.pyc
 
-solidity/build
+build
 .coverage_artifacts
 .coverage_contracts
 coverage

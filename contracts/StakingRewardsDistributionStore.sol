@@ -160,6 +160,11 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
         return (p.provider, p.poolToken, p.startTime);
     }
 
+    function positionExists(uint256 id) external view override returns (bool) {
+        Position memory p = _positions[id];
+        return p.provider != address(0);
+    }
+
     function providerPositionsCount(address provider) external view override returns (uint256) {
         return _providerPositions[provider].length();
     }

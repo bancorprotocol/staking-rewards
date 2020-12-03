@@ -44,15 +44,15 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
     uint256 private _totalRewards;
     mapping(uint256 => uint256) private _totalEpochRewards;
 
-    mapping(address => RewardData) private _rewards;
+    mapping(uint256 => RewardData) private _rewards;
     EnumerableSet.UintSet private _committedEpochs;
 
     event MaxRewardsUpdated(uint256 prevMaxRewards, uint256 newMaxRewards);
     event MaxRewardsPerEpochUpdated(uint256 prevMaxRewardsPerEpoch, uint256 newMaxRewardsPerEpoch);
 
-    event RewardsUpdated(address indexed provider, uint256 amount);
-    event RewardsClaimed(address indexed provider, uint256 amount);
-    event RewardsStaked(address indexed provider, IERC20 indexed poolToken, uint256 amount);
+    event RewardsUpdated(uint256 indexed id, uint256 amount);
+    event RewardsClaimed(uint256 indexed id, uint256 amount);
+    event RewardsStaked(uint256 indexed id, IERC20 indexed poolToken, uint256 amount, uint256 indexed newId);
 
     constructor(
         IStakingRewardsDistributionStore store,
@@ -114,21 +114,21 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
 
     function setRewards(
         uint256 epoch,
-        address[] calldata providers,
+        uint256[] calldata ids,
         uint256[] calldata amounts
     ) external notCommitted(epoch) onlyRewardsDistributor {
-        uint256 length = providers.length;
+        uint256 length = ids.length;
         require(length == amounts.length, "ERR_INVALID_LENGTH");
 
         uint256 totalRewards = _totalRewards;
         uint256 totalEpochRewards = _totalEpochRewards[epoch];
 
         for (uint256 i = 0; i < length; ++i) {
-            address provider = providers[i];
+            uint256 id = ids[i];
             uint256 amount = amounts[i];
-            _validAddress(provider);
+            require(_store.positionExists(id), "ERR_INVALID_ID");
 
-            RewardData storage rewards = _rewards[provider];
+            RewardData storage rewards = _rewards[id];
 
             {
                 uint256 prevRewards = rewards.rewards[epoch];
@@ -139,7 +139,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
             rewards.rewards[epoch] = amount;
             rewards.pendingEpochs.add(epoch);
 
-            emit RewardsUpdated(provider, amount);
+            emit RewardsUpdated(id, amount);
         }
 
         require(totalEpochRewards <= _maxRewardsPerEpoch, "ERR_MAX_REWARDS_PER_EPOCH");
@@ -206,8 +206,8 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return _committedEpochs.contains(epoch);
     }
 
-    function pendingProviderEpochs(address provider) external view returns (uint256[] memory) {
-        EnumerableSet.UintSet storage pendingEpochs = _rewards[provider].pendingEpochs;
+    function pendingPositionEpochs(uint256 id) external view returns (uint256[] memory) {
+        EnumerableSet.UintSet storage pendingEpochs = _rewards[id].pendingEpochs;
         uint256 length = pendingEpochs.length();
         uint256[] memory list = new uint256[](length);
         for (uint256 i = 0; i < length; ++i) {
@@ -216,30 +216,33 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return list;
     }
 
-    function pendingProviderEpochRewards(address provider, uint256 epoch) external view returns (uint256) {
-        return _rewards[provider].rewards[epoch];
+    function pendingPositionEpochRewards(uint256 id, uint256 epoch) external view returns (uint256) {
+        return _rewards[id].rewards[epoch];
     }
 
     function position(uint256 id) private view returns (Position memory) {
-        Position memory p;
-        (p.provider, p.poolToken, p.startTime) = _store.position(id);
+        Position memory pos;
+        (pos.provider, pos.poolToken, pos.startTime) = _store.position(id);
 
-        return p;
+        return pos;
     }
 
     function poolProgram(IERC20 poolToken) private view returns (PoolProgram memory) {
-        PoolProgram memory p;
-        (p.startTime, p.endTime) = _store.poolProgram(poolToken);
+        PoolProgram memory pos;
+        (pos.startTime, pos.endTime) = _store.poolProgram(poolToken);
 
-        return p;
+        return pos;
     }
 
-    function rewards() public returns (uint256) {
-        return rewards(false);
+    function rewards(uint256 id) public returns (uint256) {
+        return rewards(id, false);
     }
 
-    function rewards(bool claim) private returns (uint256) {
-        RewardData storage rewardsData = _rewards[msg.sender];
+    function rewards(uint256 id, bool claim) private returns (uint256) {
+        Position memory pos = position(id);
+        require(pos.provider == msg.sender, "ERR_ACCESS_DENIED");
+
+        RewardData storage rewardsData = _rewards[id];
         EnumerableSet.UintSet storage pendingEpochs = rewardsData.pendingEpochs;
 
         uint256 amount = 0;
@@ -257,22 +260,22 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
             delete rewardsData.pendingEpochs;
         }
 
-        return amount.mul(rewardsMultiplier()).div(PPM_RESOLUTION);
+        return amount.mul(rewardsMultiplier(pos)).div(PPM_RESOLUTION);
     }
 
-    function claimRewards() external {
-        uint256 amount = rewards(true);
+    function claimRewards(uint256 id) external {
+        uint256 amount = rewards(id, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
         _store.updateLastClaimTime(msg.sender);
 
         _networkTokenGovernance.mint(msg.sender, amount);
 
-        emit RewardsClaimed(msg.sender, amount);
+        emit RewardsClaimed(id, amount);
     }
 
-    function stakeRewards(IERC20 poolToken) external returns (uint256) {
-        uint256 amount = rewards();
+    function stakeRewards(uint256 id, IERC20 poolToken) external returns (uint256) {
+        uint256 amount = rewards(id, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
         ILiquidityProtection lp = _liquidityProtection;
@@ -282,26 +285,14 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         networkToken.safeApprove(address(lp), amount);
         tokenGov.mint(address(this), amount);
 
-        uint256 id = lp.addLiquidityFor(msg.sender, poolToken, networkToken, amount);
+        uint256 newId = lp.addLiquidityFor(msg.sender, poolToken, networkToken, amount);
 
         // please note, that in order to incentivize restaking, we won't be updating the time of the last claim, thus
         // preserving the rewards bonus multiplier
 
-        emit RewardsStaked(msg.sender, poolToken, amount);
+        emit RewardsStaked(id, poolToken, amount, newId);
 
         return id;
-    }
-
-    function rewardsMultiplier() public view returns (uint32) {
-        uint32 multiplier = PPM_RESOLUTION;
-
-        uint256 length = _store.providerPositionsCount(msg.sender);
-        for (uint256 i = 0; i < length; ++i) {
-            uint32 newMultiplier = rewardsMultiplier(_store.providerPosition(msg.sender, i));
-            multiplier = multiplier < newMultiplier ? multiplier : newMultiplier;
-        }
-
-        return multiplier;
     }
 
     /**
@@ -311,22 +302,43 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
      * @param id the position id to retrieve the rewards multiplier for
      * @return the rewards multiplier
      */
-    function rewardsMultiplier(uint256 id) private view returns (uint32) {
-        Position memory p = position(id);
-        require(p.provider != address(0), "ERR_INVALID_ID");
+    function rewardsMultiplier(uint256 id) external view returns (uint32) {
+        Position memory pos = position(id);
+        require(pos.provider == msg.sender, "ERR_ACCESS_DENIED");
 
-        PoolProgram memory program = poolProgram(p.poolToken);
+        return rewardsMultiplier(pos);
+    }
+
+    /**
+     * @dev returns the rewards multiplier based on the time that the position was held an no other position was claimed
+     * or removed
+     *
+     * @param pos the position to retrieve the rewards multiplier for
+     * @return the rewards multiplier
+     */
+    function rewardsMultiplier(Position memory pos) private view returns (uint32) {
+        PoolProgram memory program = poolProgram(pos.poolToken);
+
+        uint256 endTime = Math.min(program.endTime, time());
 
         // please note that if this position was already closed, the LP's removal time checkpoint will affect
         // the resulting multiplier.
-        uint256 endTime = Math.min(program.endTime, time());
 
-        return
-            rewardsMultiplier(
-                p.startTime,
-                endTime,
-                Math.max(_lastRemoveTimes.checkpoint(msg.sender), _store.lastClaimTime(msg.sender))
+        uint256 effectiveStakingDuration =
+            endTime.sub(
+                Math.max(
+                    pos.startTime,
+                    Math.max(_lastRemoveTimes.checkpoint(msg.sender), _store.lastClaimTime(msg.sender))
+                )
             );
+
+        // given x representing the staking duration (in seconds), the resulting multiplier (in PPM) is:
+        // * for 0 <= x <= 1 weeks: 100% PPM
+        // * for 1 <= x <= 2 weeks: 125% PPM
+        // * for 2 <= x <= 3 weeks: 150% PPM
+        // * for 3 <= x <= 4 weeks: 175% PPM
+        // * for x > 4 weeks: 200% PPM
+        return PPM_RESOLUTION + MULTIPLIER_INCREMENT * uint32(Math.min(effectiveStakingDuration.div(1 weeks), 4));
     }
 
     /**
@@ -342,15 +354,5 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         uint256 _startTime,
         uint256 _endTime,
         uint256 _lastClaimTime
-    ) private pure returns (uint32) {
-        uint256 effectiveStakingDuration = _endTime.sub(Math.max(_startTime, _lastClaimTime));
-
-        // given x representing the staking duration (in seconds), the resulting multiplier (in PPM) is:
-        // * for 0 <= x <= 1 weeks: 100% PPM
-        // * for 1 <= x <= 2 weeks: 125% PPM
-        // * for 2 <= x <= 3 weeks: 150% PPM
-        // * for 3 <= x <= 4 weeks: 175% PPM
-        // * for x > 4 weeks: 200% PPM
-        return PPM_RESOLUTION + MULTIPLIER_INCREMENT * uint32(Math.min(effectiveStakingDuration.div(1 weeks), 4));
-    }
+    ) private pure returns (uint32) {}
 }

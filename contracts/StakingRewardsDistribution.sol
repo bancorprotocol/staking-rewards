@@ -173,6 +173,10 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         _maxRewardsPerEpoch = maxRewardsPerEpoch;
     }
 
+    function liquidityProtection() external view returns (ILiquidityProtection) {
+        return _liquidityProtection;
+    }
+
     function maxRewards() external view returns (uint256) {
         return _maxRewards;
     }
@@ -206,14 +210,29 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return _committedEpochs.contains(epoch);
     }
 
-    function pendingPositionEpochs(uint256 id) external view returns (uint256[] memory) {
+    function pendingPositionEpochs(uint256 id, bool committedOnly) external view returns (uint256[] memory) {
         EnumerableSet.UintSet storage pendingEpochs = _rewards[id].pendingEpochs;
         uint256 length = pendingEpochs.length();
         uint256[] memory list = new uint256[](length);
+        uint256 filteredLength = 0;
         for (uint256 i = 0; i < length; ++i) {
-            list[i] = pendingEpochs.at(i);
+            uint256 epoch = pendingEpochs.at(i);
+            if (!committedOnly || isEpochCommitted(epoch)) {
+                list[i] = pendingEpochs.at(i);
+                filteredLength++;
+            }
         }
-        return list;
+
+        if (filteredLength == length) {
+            return list;
+        }
+
+        uint256[] memory filteredList = new uint256[](filteredLength);
+        for (uint256 i = 0; i < filteredLength; ++i) {
+            filteredList[i] = list[i];
+        }
+
+        return filteredList;
     }
 
     function pendingPositionEpochRewards(uint256 id, uint256 epoch) external view returns (uint256) {
@@ -263,7 +282,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return amount.mul(rewardsMultiplier(pos)).div(PPM_RESOLUTION);
     }
 
-    function claimRewards(uint256 id) external {
+    function claimRewards(uint256 id) external returns (uint256) {
         uint256 amount = rewards(id, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
@@ -272,9 +291,11 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         _networkTokenGovernance.mint(msg.sender, amount);
 
         emit RewardsClaimed(id, amount);
+
+        return amount;
     }
 
-    function stakeRewards(uint256 id, IERC20 poolToken) external returns (uint256) {
+    function stakeRewards(uint256 id, IERC20 poolToken) external returns (uint256, uint256) {
         uint256 amount = rewards(id, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
@@ -292,7 +313,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
 
         emit RewardsStaked(id, poolToken, amount, newId);
 
-        return id;
+        return (id, amount);
     }
 
     /**

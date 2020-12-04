@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  */
 interface ILiquidityProtection {
     function addLiquidityFor(
-        address recipient,
+        address owner,
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 amount

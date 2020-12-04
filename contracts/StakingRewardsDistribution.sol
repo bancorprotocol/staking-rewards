@@ -313,7 +313,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
 
         emit RewardsStaked(id, poolToken, amount, newId);
 
-        return (id, amount);
+        return (amount, newId);
     }
 
     /**

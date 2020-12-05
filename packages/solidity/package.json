@@ -4,11 +4,11 @@
     "description": "Bancor staking rewards distribution",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/bancorprotocol/staking-rwwards.git"
+        "url": "git+https://github.com/bancorprotocol/staking-rewards.git"
     },
-    "homepage": "https://github.com/bancorprotocol/staking-rwwards#readme",
+    "homepage": "https://github.com/bancorprotocol/staking-rewards#readme",
     "bugs": {
-        "url": "https://github.com/bancorprotocol/staking-rwwards/issues"
+        "url": "https://github.com/bancorprotocol/staking-rewards/issues"
     },
     "author": "Leonid Beder",
     "license": "MIT",

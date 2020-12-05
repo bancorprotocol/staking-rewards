@@ -8,5 +8,6 @@ module.exports = {
     recursive: true,
     before_timeout: 600000,
     timeout: 600000,
-    useColors: true
+    useColors: true,
+    bail: true
 };

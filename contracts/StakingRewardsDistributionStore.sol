@@ -17,16 +17,16 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
     // the owner role is used to set the values in the store
     bytes32 public constant ROLE_OWNER = keccak256("ROLE_OWNER");
 
-    // a mapping between pool tokens and their respective LM program information
+    // the mapping between pool tokens and their respective LM program information
     mapping(IERC20 => PoolProgram) private _programs;
 
-    // a mapping between position IDs and data
+    // the mapping between position IDs and data
     mapping(uint256 => Position) private _positions;
 
-    // a mapping between providers and their respective position IDs
+    // the mapping between providers and their respective position IDs
     mapping(address => EnumerableSet.UintSet) private _providerPositions;
 
-    // a mapping between providers and their respective last claim times
+    // the mapping between providers and their respective last claim times
     mapping(address => uint256) private _lastClaimTimes;
 
     /**
@@ -276,6 +276,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns a position
+     *
      * @param id the ID of the position
      *
      * @return the position data
@@ -298,6 +299,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns whether a position exists
+     *
      * @param id the ID of the position
      *
      * @return whether a position exists
@@ -308,6 +310,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns whether a position exists
+     *
      * @param pos the position data
      *
      * @return whether a position exists
@@ -318,6 +321,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns the total number of provider's positions
+     *
      * @param provider the owner of the position
      *
      * @return the total number of provider's positions
@@ -328,6 +332,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns the all provider's positions
+     *
      * @param provider the owner of the position
      *
      * @return the all provider's positions
@@ -344,6 +349,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns the a specific provider's position
+     *
      * @param provider the owner of the position
      * @param index the index of the position to return
      *
@@ -355,6 +361,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev updates provider's last claim time
+     *
      * @param provider the owner of the position
      */
     function updateLastClaimTime(address provider) external override onlyOwner {
@@ -366,6 +373,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
 
     /**
      * @dev returns provider's last claim time
+     *
      * @param provider the owner of the position
      *
      * @return provider's last claim time

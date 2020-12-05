@@ -258,7 +258,7 @@ describe('StakingRewardsDistribution', () => {
 
                 rewards[id] = amount;
 
-                expectEvent(res, 'RewardsUpdated', { id, amount });
+                expectEvent(res, 'RewardsUpdated', { epoch, id, amount });
             }
 
             for (const [id, amount] of Object.entries(rewards)) {

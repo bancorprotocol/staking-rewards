@@ -15,6 +15,9 @@ import "./ILiquidityProtection.sol";
 import "./Time.sol";
 import "./Utils.sol";
 
+/**
+ * @dev This contract manages the distribution of the staking rewards.
+ */
 contract StakingRewardsDistribution is AccessControl, Time, Utils {
     using SafeMath for uint256;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -25,35 +28,84 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         mapping(uint256 => uint256) rewards;
     }
 
-    // The supervisor role is used to globally govern the contract and its governing roles.
+    // the supervisor role is used to globally govern the contract and its governing roles.
     bytes32 public constant ROLE_SUPERVISOR = keccak256("ROLE_SUPERVISOR");
 
-    // The governor role is used to govern the minter role.
+    // the governor role is used to govern the minter role.
     bytes32 public constant ROLE_REWARDS_DISTRIBUTOR = keccak256("ROLE_REWARDS_DISTRIBUTOR");
 
     uint32 public constant PPM_RESOLUTION = 1000000;
-    uint32 public constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4; // 25%
 
+    // the weekly 25% increase of the rewards multiplier (in units of PPM)
+    uint32 public constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4;
+
+    // the staking rewards positions and pool specific data
     IStakingRewardsDistributionStore private immutable _store;
+
+    // the permissioned wrapper around the network token which should allow this contract to mint staking rewards
     ITokenGovernance private immutable _networkTokenGovernance;
+
+    // the checkpoint store recording last protected position removal times
     ICheckpointStore private immutable _lastRemoveTimes;
+
+    // the instance of the LiquidityProtection contract for staking of the rewards
     ILiquidityProtection private _liquidityProtection;
+
+    // the maximum pending rewards that the contract can distribute
     uint256 private _maxRewards;
+
+    // the maximum pending rewards that the contract can distribute per epoch
     uint256 private _maxRewardsPerEpoch;
 
+    // the current total amount of pending rewards
     uint256 private _totalRewards;
+
+    // the current total amount of pending rewards per epoch
     mapping(uint256 => uint256) private _totalEpochRewards;
 
+    // the mapping between position IDs and rewards data
     mapping(uint256 => RewardData) private _rewards;
+
+    // the list of committed epochs
     EnumerableSet.UintSet private _committedEpochs;
 
-    event MaxRewardsUpdated(uint256 prevMaxRewards, uint256 newMaxRewards);
-    event MaxRewardsPerEpochUpdated(uint256 prevMaxRewardsPerEpoch, uint256 newMaxRewardsPerEpoch);
+    /**
+     * @dev triggered when pending rewards are being added or updated
+     *
+     * @param epoch the rewards distribution epoch
+     * @param id the ID of the position
+     * @param amount the reward amount
+     */
+    event RewardsUpdated(uint256 indexed epoch, uint256 indexed id, uint256 amount);
 
-    event RewardsUpdated(uint256 indexed id, uint256 amount);
+    /**
+     * @dev triggered when pending rewards are being claimed
+     *
+     * @param id the ID of the position
+     * @param amount the total rewards amount
+     */
     event RewardsClaimed(uint256 indexed id, uint256 amount);
+
+    /**
+     * @dev triggered when pending rewards are being added or updated
+     *
+     * @param id the ID of the position
+     * @param poolToken the pool token representing the new LM pool
+     * @param amount the reward amount
+     * @param newId the ID of the new position
+     */
     event RewardsStaked(uint256 indexed id, IERC20 indexed poolToken, uint256 amount, uint256 indexed newId);
 
+    /**
+     * @dev initializes a new StakingRewardsDistribution contract
+     *
+     * @param store the staking rewards positions and pool specific data
+     * @param networkTokenGovernance the permissioned wrapper around the network token
+     * @param lastRemoveTimes the checkpoint store recording last protected position removal times
+     * @param liquidityProtection the instance of the LiquidityProtection contract for staking of the rewards
+     * @param maxRewards the maximum pending rewards that the contract can distribute
+     * @param maxRewardsPerEpoch the maximum pending rewards that the contract can distribute per epoch
+     */
     constructor(
         IStakingRewardsDistributionStore store,
         ITokenGovernance networkTokenGovernance,
@@ -112,6 +164,13 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         require(!isEpochCommitted(epoch), "ERR_ALREADY_COMMITTED");
     }
 
+    /**
+     * @dev adds or updates rewards
+     *
+     * @param epoch the rewards distribution epoch
+     * @param ids IDs of the positions
+     * @param amounts reward amounts
+     */
     function setRewards(
         uint256 epoch,
         uint256[] calldata ids,
@@ -139,16 +198,21 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
             rewards.rewards[epoch] = amount;
             rewards.pendingEpochs.add(epoch);
 
-            emit RewardsUpdated(id, amount);
+            emit RewardsUpdated(epoch, id, amount);
         }
 
         require(totalEpochRewards <= _maxRewardsPerEpoch, "ERR_MAX_REWARDS_PER_EPOCH");
-        _totalEpochRewards[epoch] = totalEpochRewards;
-
         require(totalRewards <= _maxRewards, "ERR_MAX_REWARDS");
+
+        _totalEpochRewards[epoch] = totalEpochRewards;
         _totalRewards = totalRewards;
     }
 
+    /**
+     * @dev sets the instance of the LiquidityProtection contract
+     *
+     * @param liquidityProtection the instance of the LiquidityProtection contract for staking of the rewards
+     */
     function setLiquidityProtection(ILiquidityProtection liquidityProtection)
         external
         onlySupervisor
@@ -157,46 +221,89 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         _liquidityProtection = liquidityProtection;
     }
 
-    function setMaxRewards(uint256 maxRewards) external onlySupervisor {
-        require(maxRewards >= _maxRewardsPerEpoch, "ERR_INVALID_VALUE");
-
-        emit MaxRewardsUpdated(_maxRewards, maxRewards);
-
-        _maxRewards = maxRewards;
-    }
-
-    function setMaxRewardsPerEpoch(uint256 maxRewardsPerEpoch) external onlySupervisor {
-        require(maxRewardsPerEpoch <= _maxRewards, "ERR_INVALID_VALUE");
-
-        emit MaxRewardsPerEpochUpdated(_maxRewardsPerEpoch, maxRewardsPerEpoch);
-
-        _maxRewardsPerEpoch = maxRewardsPerEpoch;
-    }
-
+    /**
+     * @dev returns the instance of the LiquidityProtection contract
+     *
+     * @return the instance of the LiquidityProtection contract for staking of the rewards
+     */
     function liquidityProtection() external view returns (ILiquidityProtection) {
         return _liquidityProtection;
     }
 
+    /**
+     * @dev sets the maximum pending rewards that the contract can distribute
+     *
+     * @param maxRewards the maximum pending rewards that the contract can distributes
+     */
+    function setMaxRewards(uint256 maxRewards) external onlySupervisor {
+        require(maxRewards >= _maxRewardsPerEpoch, "ERR_INVALID_VALUE");
+
+        _maxRewards = maxRewards;
+    }
+
+    /**
+     * @dev returns the maximum pending rewards that the contract can distribute
+     *
+     * @return the maximum pending rewards that the contract can distributes
+     */
     function maxRewards() external view returns (uint256) {
         return _maxRewards;
     }
 
+    /**
+     * @dev sets the maximum pending rewards that the contract can distribute per epoch
+     *
+     * @param maxRewardsPerEpoch the maximum pending rewards that the contract can distribute per epoch
+     */
+    function setMaxRewardsPerEpoch(uint256 maxRewardsPerEpoch) external onlySupervisor {
+        require(maxRewardsPerEpoch <= _maxRewards, "ERR_INVALID_VALUE");
+
+        _maxRewardsPerEpoch = maxRewardsPerEpoch;
+    }
+
+    /**
+     * @dev returns the maximum pending rewards that the contract can distribute per epoch
+     *
+     * @return the maximum pending rewards that the contract can distribute per epoch
+     */
     function maxRewardsPerEpoch() external view returns (uint256) {
         return _maxRewardsPerEpoch;
     }
 
+    /**
+     * @dev returns the current total amount of pending rewards
+     *
+     * @return the current total amount of pending rewards
+     */
     function totalRewards() external view returns (uint256) {
         return _totalRewards;
     }
 
+    /**
+     * @dev returns the current total amount of pending rewards per epoch
+     *
+     * @param epoch the rewards distribution epoch
+     *
+     * @return the current total amount of pending rewards per epoch
+     */
     function totalEpochRewards(uint256 epoch) external view returns (uint256) {
         return _totalEpochRewards[epoch];
     }
 
+    /**
+     * @dev commits all epoch's rewards and enables their distribution
+     *
+     * @param epoch the rewards distribution epoch
+     */
     function commitEpoch(uint256 epoch) external onlyRewardsDistributor {
         require(_committedEpochs.add(epoch), "ERR_ALREADY_COMMITTED");
     }
 
+    /**
+     * @dev returns all committed epochs
+     *
+     * @return all committed epochs
+     */
     function committedEpochs() external view returns (uint256[] memory) {
         uint256 length = _committedEpochs.length();
         uint256[] memory list = new uint256[](length);
@@ -206,10 +313,25 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return list;
     }
 
+    /**
+     * @dev returns whether an epoch is committed
+     *
+     * @param epoch the rewards distribution epoch
+     *
+     * @return whether an epoch is committed
+     */
     function isEpochCommitted(uint256 epoch) public view returns (bool) {
         return _committedEpochs.contains(epoch);
     }
 
+    /**
+     * @dev returns all pending epochs for the specified ID with an option to filter non-committed positions out
+     *
+     * @param id the ID of the position
+     * @param committedOnly whether to include positions committed only
+     *
+     * @return all pending epochs
+     */
     function pendingPositionEpochs(uint256 id, bool committedOnly) external view returns (uint256[] memory) {
         EnumerableSet.UintSet storage pendingEpochs = _rewards[id].pendingEpochs;
         uint256 length = pendingEpochs.length();
@@ -235,10 +357,25 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return filteredList;
     }
 
+    /**
+     * @dev returns the rewards of a specific pending epoch
+     *
+     * @param id the ID of the position
+     * @param epoch the rewards distribution epoch
+     *
+     * @return the rewards
+     */
     function pendingPositionEpochRewards(uint256 id, uint256 epoch) external view returns (uint256) {
         return _rewards[id].rewards[epoch];
     }
 
+    /**
+     * @dev returns position data
+     *
+     * @param id the ID of the position
+     *
+     * @return position data
+     */
     function position(uint256 id) private view returns (Position memory) {
         Position memory pos;
         (pos.provider, pos.poolToken, pos.startTime) = _store.position(id);
@@ -246,6 +383,13 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return pos;
     }
 
+    /**
+     * @dev returns pool data
+     *
+     * @param poolToken the pool token representing the new LM pool
+     *
+     * @return pool data
+     */
     function poolProgram(IERC20 poolToken) private view returns (PoolProgram memory) {
         PoolProgram memory pos;
         (pos.startTime, pos.endTime) = _store.poolProgram(poolToken);
@@ -253,10 +397,25 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return pos;
     }
 
+    /**
+     * @dev returns position's rewards
+     *
+     * @param id the ID of the position
+     *
+     * @return position's rewards
+     */
     function rewards(uint256 id) public returns (uint256) {
         return rewards(id, false);
     }
 
+    /**
+     * @dev returns position's rewards and optionally marks them as claimed
+     *
+     * @param id the ID of the position
+     * @param claim whether to mark the rewards as claimed
+     *
+     * @return position's rewards
+     */
     function rewards(uint256 id, bool claim) private returns (uint256) {
         Position memory pos = position(id);
         require(pos.provider == msg.sender, "ERR_ACCESS_DENIED");
@@ -279,13 +438,23 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
             delete rewardsData.pendingEpochs;
         }
 
+        // apply the rewards multiplier to the base rewards
         return amount.mul(rewardsMultiplier(pos)).div(PPM_RESOLUTION);
     }
 
+    /**
+     * @dev claims position's rewards
+     *
+     * @param id the ID of the position
+     *
+     * @return position's rewards
+     */
     function claimRewards(uint256 id) external returns (uint256) {
         uint256 amount = rewards(id, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
+        // make sure to update the last claim time so that it'll be taken into effect when calculating the next rewards
+        // multiplier
         _store.updateLastClaimTime(msg.sender);
 
         _networkTokenGovernance.mint(msg.sender, amount);
@@ -295,6 +464,14 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         return amount;
     }
 
+    /**
+     * @dev claims and stakes position's rewards
+     *
+     * @param id the ID of the position
+     * @param poolToken the pool token representing the new LM pool
+     *
+     * @return position's rewards and the ID of the new position
+     */
     function stakeRewards(uint256 id, IERC20 poolToken) external returns (uint256, uint256) {
         uint256 amount = rewards(id, true);
         require(amount > 0, "ERR_NO_REWARDS");
@@ -361,19 +538,4 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         // * for x > 4 weeks: 200% PPM
         return PPM_RESOLUTION + MULTIPLIER_INCREMENT * uint32(Math.min(effectiveStakingDuration.div(1 weeks), 4));
     }
-
-    /**
-     * @dev returns the rewards multiplier based on the time that the position was held an no other position was claimed
-     * or removed
-     *
-     * @param _startTime the staking starting time
-     * @param _endTime the staking ending time
-     * @param _lastClaimTime the time of the last claim/remove/transfer
-     * @return the rewards multiplier
-     */
-    function rewardsMultiplier(
-        uint256 _startTime,
-        uint256 _endTime,
-        uint256 _lastClaimTime
-    ) private pure returns (uint32) {}
 }

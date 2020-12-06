@@ -16,8 +16,8 @@ const warning = (...data) => {
     console.log(chalk.yellow('WARN'), ...data);
 };
 
-const important = (...data) => {
-    console.log(chalk.cyan('INFO'), ...data);
+const notice = (...data) => {
+    console.log(chalk.cyan('NOTICE'), ...data);
 };
 
 const info = (...data) => {
@@ -35,7 +35,7 @@ const arg = (message, value) => `${chalk.green(message)}=${value}`;
 module.exports = {
     error,
     warning,
-    important,
+    notice,
     info,
     trace,
     arg

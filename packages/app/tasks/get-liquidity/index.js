@@ -13,6 +13,9 @@ Contract.setProvider(settings.web3Provider);
 
 const main = async () => {
     try {
+        const ETH_RESERVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
+
         const LiquidityProtectionStore = new Contract(
             settings.contracts.LiquidityProtectionStore.abi,
             settings.contracts.LiquidityProtectionStore.address
@@ -31,6 +34,24 @@ const main = async () => {
                 reserveRateD: position[6],
                 timestamp: position[7]
             };
+        };
+
+        const getReserveTokenInfo = async (reserveToken) => {
+            let name;
+            let symbol;
+            if (reserveToken === ETH_RESERVE_ADDRESS) {
+                name = 'Ethereum Reserve';
+                symbol = 'ETH';
+            } else if (reserveToken === MKR_RESERVE_ADDRESS) {
+                name = 'MakerDAO';
+                symbol = 'MKR';
+            } else {
+                const ReserveToken = new Contract(settings.contracts.ERC20.abi, reserveToken);
+                name = await ReserveToken.methods.name().call();
+                symbol = await ReserveToken.methods.symbol().call();
+            }
+
+            return { name, symbol };
         };
 
         const getProtectionLiquidityChanges = async (data, fromBlock, toBlock) => {
@@ -76,12 +97,16 @@ const main = async () => {
                             );
 
                             if (!data.liquidity[poolToken]) {
-                                data.liquidity[poolToken] = {};
+                                const PoolToken = new Contract(settings.contracts.ERC20.abi, poolToken);
+                                const name = await PoolToken.methods.name().call();
+                                const symbol = await PoolToken.methods.symbol().call();
+                                data.liquidity[poolToken] = { name, symbol };
                             }
 
                             const poolTokenRecord = data.liquidity[poolToken];
                             if (!poolTokenRecord[reserveToken]) {
-                                poolTokenRecord[reserveToken] = { currentAmount: 0, snapshots: {} };
+                                const { name, symbol } = await getReserveTokenInfo(reserveToken);
+                                poolTokenRecord[reserveToken] = { name, symbol, currentAmount: 0, snapshots: {} };
                             }
 
                             const reserveTokenRecord = poolTokenRecord[reserveToken];

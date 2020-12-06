@@ -202,7 +202,7 @@ const main = async () => {
 
             await getProtectionLiquidityChanges(data, fromBlock, toBlock);
 
-            data.lastBlock = toBlock;
+            data.lastBlockNumber = toBlock;
         };
 
         const dbDir = path.resolve(__dirname, '../../data');
@@ -215,11 +215,11 @@ const main = async () => {
         }
 
         let fromBlock;
-        if (!data.lastBlock) {
+        if (!data.lastBlockNumber) {
             warning('DB last block number is missing. Starting from the beginning');
             fromBlock = settings.genesisBlock;
         } else {
-            fromBlock = data.lastBlock + 1;
+            fromBlock = data.lastBlockNumber + 1;
         }
 
         const reorgOffset = 1000;

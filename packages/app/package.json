@@ -13,8 +13,12 @@
     "author": "Leonid Beder",
     "license": "MIT",
     "scripts": {},
-    "devDependencies": {
+    "dependencies": {
+        "mkdirp": "^1.0.4",
         "chalk": "^4.1.0",
         "web3": "1.3.0"
+    },
+    "devDependencies": {
+        "bn.js": "^5.1.3"
     }
 }

@@ -14,8 +14,9 @@
     "license": "MIT",
     "scripts": {},
     "dependencies": {
-        "mkdirp": "^1.0.4",
         "chalk": "^4.1.0",
+        "mkdirp": "^1.0.4",
+        "moment": "^2.29.1",
         "web3": "1.3.0"
     },
     "devDependencies": {

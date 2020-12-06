@@ -290,7 +290,7 @@ const main = async () => {
 
         if (toBlock - fromBlock < reorgOffset) {
             error(
-                'Unable to satisfy the reorg window. Please wait for',
+                'Unable to satisfy the reorg window. Please wait for additional',
                 arg('blocks', reorgOffset - (toBlock - fromBlock + 1)),
                 'to pass'
             );

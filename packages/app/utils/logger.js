@@ -10,6 +10,8 @@ const { verbose } = yargs(hideBin(process.argv)).option('verbose', {
 
 const error = (...data) => {
     console.log(chalk.bold.red('ERROR'), ...data);
+
+    process.exit(1);
 };
 
 const warning = (...data) => {

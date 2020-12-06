@@ -61,7 +61,7 @@ const main = async () => {
                 const endBlock = Math.min(i + batchSize - 1, toBlock);
 
                 notice(
-                    'Querying for all protection change events from',
+                    'Querying all protection change events from',
                     arg('startBlock', i),
                     'to',
                     arg('endBlock', endBlock),
@@ -104,12 +104,21 @@ const main = async () => {
                             }
 
                             const poolTokenRecord = data.liquidity[poolToken];
-                            if (!poolTokenRecord[reserveToken]) {
-                                const { name, symbol } = await getReserveTokenInfo(reserveToken);
-                                poolTokenRecord[reserveToken] = { name, symbol, currentAmount: 0, snapshots: {} };
+                            if (!poolTokenRecord.reserveTokens) {
+                                poolTokenRecord.reserveTokens = {};
                             }
 
-                            const reserveTokenRecord = poolTokenRecord[reserveToken];
+                            if (!poolTokenRecord.reserveTokens[reserveToken]) {
+                                const { name, symbol } = await getReserveTokenInfo(reserveToken);
+                                poolTokenRecord.reserveTokens[reserveToken] = {
+                                    name,
+                                    symbol,
+                                    currentAmount: 0,
+                                    snapshots: {}
+                                };
+                            }
+
+                            const reserveTokenRecord = poolTokenRecord.reserveTokens[reserveToken];
                             reserveTokenRecord.currentAmount = new BN(reserveTokenRecord.currentAmount)
                                 .add(new BN(reserveAmount))
                                 .toString();
@@ -158,17 +167,18 @@ const main = async () => {
                             }
 
                             if (matches.length !== 1) {
-                                throw new Error(
-                                    `Failed to fully match pool and reserve tokens. Expected to find 1 match, but found ${matches.length} matches. Aborting`
+                                error(
+                                    'Failed to fully match pool and reserve tokens. Expected to find 1 match, but found',
+                                    arg('matches', matches.length)
                                 );
                             }
 
                             const { poolToken, reserveToken } = matches[0];
                             const poolTokenRecord = data.liquidity[poolToken];
-                            const reserveTokenRecord = poolTokenRecord[reserveToken];
+                            const reserveTokenRecord = poolTokenRecord.reserveTokens[reserveToken];
 
                             if (new BN(reserveTokenRecord.currentAmount).lte(new BN(newReserveAmount))) {
-                                throw new Error('Update liquidity amount can only decrease the reserve token amount');
+                                error('Update liquidity amount can only decrease the reserve token amount');
                             }
 
                             reserveTokenRecord.currentAmount = new BN(reserveTokenRecord.currentAmount)
@@ -198,10 +208,10 @@ const main = async () => {
                             );
 
                             const poolTokenRecord = data.liquidity[poolToken];
-                            const reserveTokenRecord = poolTokenRecord[reserveToken];
+                            const reserveTokenRecord = poolTokenRecord.reserveTokens[reserveToken];
 
                             if (new BN(reserveTokenRecord.currentAmount).lt(new BN(reserveAmount))) {
-                                throw new Error('Remove liquidity amount is too high for poolToken');
+                                error('Remove liquidity amount is too high for poolToken');
                             }
 
                             reserveTokenRecord.currentAmount = new BN(reserveTokenRecord.currentAmount)
@@ -220,12 +230,38 @@ const main = async () => {
             info('Finished processing all new protection change events', arg('count', eventCount));
         };
 
+        const verifyProtectionLiquidityChanges = async (data, toBlock) => {
+            notice('Verifying total reserve amounts at', arg('blockNumber', toBlock));
+
+            for (const [poolToken, poolTokenData] of Object.entries(data.liquidity)) {
+                for (const [reserveToken, data] of Object.entries(poolTokenData.reserveTokens)) {
+                    trace('Verifying', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
+
+                    const expectedAmount = await LiquidityProtectionStore.methods
+                        .totalProtectedReserveAmount(poolToken, reserveToken)
+                        .call({}, toBlock);
+                    if (!new BN(expectedAmount).eq(new BN(data.currentAmount))) {
+                        error(
+                            'Previous liquidity does not add up for',
+                            arg('poolToken', poolToken),
+                            arg('reserveToken', reserveToken),
+                            '[',
+                            arg('expected', expectedAmount),
+                            arg('actual', data.currentAmount),
+                            ']'
+                        );
+                    }
+                }
+            }
+        };
+
         const getProtectedLiquidity = async (data, fromBlock, toBlock) => {
             if (!data.liquidity) {
                 data.liquidity = {};
             }
 
             await getProtectionLiquidityChanges(data, fromBlock, toBlock);
+            await verifyProtectionLiquidityChanges(data, toBlock);
 
             data.lastBlockNumber = toBlock;
         };
@@ -248,13 +284,24 @@ const main = async () => {
         }
 
         const reorgOffset = 1000;
-        const toBlock = (await web3.eth.getBlockNumber()) - reorgOffset;
+        const latestBlock = await web3.eth.getBlockNumber();
+        const toBlock = latestBlock - reorgOffset;
+        reorgOffset;
+
+        if (toBlock - fromBlock < reorgOffset) {
+            error(
+                'Unable to satisfy the reorg window. Please wait for',
+                arg('blocks', reorgOffset - (toBlock - fromBlock + 1)),
+                'to pass'
+            );
+        }
 
         notice(
             'Getting protected liquidity from',
             arg('fromBlock', fromBlock),
             'to',
             arg('toBlock', toBlock),
+            '(excluding)',
             arg('reorgOffset', reorgOffset)
         );
 
@@ -264,9 +311,7 @@ const main = async () => {
 
         process.exit(0);
     } catch (e) {
-        error(e);
-
-        process.exit(-1);
+        process.exit(1);
     }
 };
 

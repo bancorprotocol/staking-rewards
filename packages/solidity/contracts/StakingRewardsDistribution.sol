@@ -392,7 +392,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
      */
     function poolProgram(IERC20 poolToken) private view returns (PoolProgram memory) {
         PoolProgram memory pos;
-        (pos.startTime, pos.endTime) = _store.poolProgram(poolToken);
+        (pos.startTime, pos.endTime, pos.weeklyRewards) = _store.poolProgram(poolToken);
 
         return pos;
     }

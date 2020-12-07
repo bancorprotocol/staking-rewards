@@ -25,6 +25,7 @@ const MAX_REWARDS_PER_EPOCH = MAX_REWARDS.div(new BN(10));
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
 const REWARDS_DURATION = duration.weeks(12);
+const WEEKLY_REWARDS = new BN(200000).mul(new BN(10).pow(new BN(18)));
 
 describe('StakingRewardsDistribution', () => {
     let now;
@@ -234,7 +235,7 @@ describe('StakingRewardsDistribution', () => {
 
             await staking.grantRole(ROLE_REWARDS_DISTRIBUTOR, distributor);
 
-            await store.addPoolProgram(poolToken, now, REWARDS_DURATION);
+            await store.addPoolProgram(poolToken, now, REWARDS_DURATION, WEEKLY_REWARDS);
             await store.addPositions(poolToken, providers, ids, startTimes);
         });
 
@@ -464,7 +465,7 @@ describe('StakingRewardsDistribution', () => {
         beforeEach(async () => {
             await setTime(new BN(1000));
 
-            await store.addPoolProgram(poolToken, now, now.add(REWARDS_DURATION));
+            await store.addPoolProgram(poolToken, now, now.add(REWARDS_DURATION), WEEKLY_REWARDS);
         });
 
         it('should revert when for unregistered positions or providers', async () => {
@@ -550,7 +551,7 @@ describe('StakingRewardsDistribution', () => {
 
             await staking.grantRole(ROLE_REWARDS_DISTRIBUTOR, distributor);
 
-            await store.addPoolProgram(poolToken, now, now.add(REWARDS_DURATION));
+            await store.addPoolProgram(poolToken, now, now.add(REWARDS_DURATION), WEEKLY_REWARDS);
             await store.addPositions(poolToken, providers, ids, startTimes);
         });
 

@@ -35,8 +35,9 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
      * @param poolToken the pool token representing the LM pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
+     * @param weeklyRewards the program's weekly rewards
      */
-    event PoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime);
+    event PoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 weeklyRewards);
 
     /**
      * @dev triggered when a pool program is being updated
@@ -44,8 +45,9 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
      * @param poolToken the pool token representing the LM pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
+     * @param weeklyRewards the program's weekly rewards
      */
-    event PoolProgramUpdated(IERC20 indexed poolToken, uint256 startTime, uint256 endTime);
+    event PoolProgramUpdated(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 weeklyRewards);
 
     /**
      * @dev triggered when a pool program is being removing
@@ -146,24 +148,28 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
      * @param poolToken the pool token representing the LM pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
+     * @param weeklyRewards the program's weekly rewards
      */
     function addPoolProgram(
         IERC20 poolToken,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        uint256 weeklyRewards
     ) external override onlyOwner validAddress(address(poolToken)) {
         require(startTime > 0 && startTime < endTime && endTime > time(), "ERR_INVALID_DURATION");
+        require(weeklyRewards > 0, "ERR_ZERO_VALUE");
 
         PoolProgram storage program = _programs[poolToken];
         bool newProgram = !isPoolParticipating(program);
 
         program.startTime = startTime;
         program.endTime = endTime;
+        program.weeklyRewards = weeklyRewards;
 
         if (newProgram) {
-            emit PoolProgramAdded(poolToken, startTime, endTime);
+            emit PoolProgramAdded(poolToken, startTime, endTime, weeklyRewards);
         } else {
-            emit PoolProgramUpdated(poolToken, startTime, endTime);
+            emit PoolProgramUpdated(poolToken, startTime, endTime, weeklyRewards);
         }
     }
 
@@ -188,12 +194,16 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
         view
         override
         onlyParticipating(poolToken)
-        returns (uint256, uint256)
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
     {
         PoolProgram memory program = _programs[poolToken];
         require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
 
-        return (program.startTime, program.endTime);
+        return (program.startTime, program.endTime, program.weeklyRewards);
     }
 
     /**

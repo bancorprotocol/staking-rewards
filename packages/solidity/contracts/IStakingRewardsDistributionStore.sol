@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 struct PoolProgram {
     uint256 startTime;
     uint256 endTime;
+    uint256 weeklyRewards;
 }
 
 struct Position {
@@ -20,12 +21,20 @@ interface IStakingRewardsDistributionStore {
     function addPoolProgram(
         IERC20 poolToken,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        uint256 weeklyRewards
     ) external;
 
     function removePoolProgram(IERC20 poolToken) external;
 
-    function poolProgram(IERC20 poolToken) external view returns (uint256, uint256);
+    function poolProgram(IERC20 poolToken)
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
 
     function addPositions(
         IERC20 poolToken,

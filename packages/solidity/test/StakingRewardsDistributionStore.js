@@ -43,34 +43,46 @@ describe('StakingRewardsDistributionStore', () => {
     describe('adding pools', () => {
         it('should revert when a non-owner attempts to add a pool', async () => {
             await expectRevert(
-                store.addPoolProgram(poolToken, now, now.add(new BN(2000)), { from: nonOwner }),
+                store.addPoolProgram(poolToken, now, now.add(new BN(2000)), new BN(1000), { from: nonOwner }),
                 'ERR_ACCESS_DENIED'
             );
         });
 
         it('should revert when adding a zero address pool', async () => {
             await expectRevert(
-                store.addPoolProgram(ZERO_ADDRESS, now, now.add(new BN(2000)), { from: owner }),
+                store.addPoolProgram(ZERO_ADDRESS, now, now.add(new BN(2000)), new BN(1000), { from: owner }),
                 'ERR_INVALID_ADDRESS'
             );
         });
 
         it('should revert when adding a pool with invalid starting or ending times', async () => {
             await expectRevert(
-                store.addPoolProgram(poolToken, new BN(0), now.add(new BN(2000)), { from: owner }),
+                store.addPoolProgram(poolToken, new BN(0), now.add(new BN(2000)), new BN(1000), { from: owner }),
                 'ERR_INVALID_DURATION'
             );
 
             await expectRevert(
-                store.addPoolProgram(poolToken, now.add(new BN(2000)), now, { from: owner }),
+                store.addPoolProgram(poolToken, now.add(new BN(2000)), now, new BN(1000), { from: owner }),
                 'ERR_INVALID_DURATION'
             );
 
-            await expectRevert(store.addPoolProgram(poolToken, now, now, { from: owner }), 'ERR_INVALID_DURATION');
+            await expectRevert(
+                store.addPoolProgram(poolToken, now, now, new BN(1000), { from: owner }),
+                'ERR_INVALID_DURATION'
+            );
 
             await expectRevert(
-                store.addPoolProgram(poolToken, now.sub(new BN(100)), now.sub(new BN(1)), { from: owner }),
+                store.addPoolProgram(poolToken, now.sub(new BN(100)), now.sub(new BN(1)), new BN(1000), {
+                    from: owner
+                }),
                 'ERR_INVALID_DURATION'
+            );
+        });
+
+        it('should revert when adding without any weekly rewards', async () => {
+            await expectRevert(
+                store.addPoolProgram(poolToken, now, now.add(new BN(2000)), new BN(0), { from: owner }),
+                'ERR_ZERO_VALUE'
             );
         });
 
@@ -79,13 +91,15 @@ describe('StakingRewardsDistributionStore', () => {
 
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
-            const res = await store.addPoolProgram(poolToken, startTime, endTime, { from: owner });
-            expectEvent(res, 'PoolProgramAdded', { startTime, endTime });
+            const weeklyRewards = new BN(1000);
+            const res = await store.addPoolProgram(poolToken, startTime, endTime, weeklyRewards, { from: owner });
+            expectEvent(res, 'PoolProgramAdded', { startTime, endTime, weeklyRewards });
 
             expect(await store.isPoolParticipating.call(poolToken)).to.be.true();
             const pool = await store.poolProgram.call(poolToken);
             expect(pool[0]).to.be.bignumber.equal(startTime);
             expect(pool[1]).to.be.bignumber.equal(endTime);
+            expect(pool[2]).to.be.bignumber.equal(weeklyRewards);
 
             const poolToken2 = accounts[9];
 
@@ -93,20 +107,27 @@ describe('StakingRewardsDistributionStore', () => {
 
             const startTime2 = now.add(new BN(100000));
             const endTime2 = startTime2.add(new BN(6000));
-            const res2 = await store.addPoolProgram(poolToken2, startTime2, endTime2, { from: owner });
-            expectEvent(res2, 'PoolProgramAdded', { startTime: startTime2, endTime: endTime2 });
+            const weeklyRewards2 = startTime2.add(new BN(9999));
+            const res2 = await store.addPoolProgram(poolToken2, startTime2, endTime2, weeklyRewards2, { from: owner });
+            expectEvent(res2, 'PoolProgramAdded', {
+                startTime: startTime2,
+                endTime: endTime2,
+                weeklyRewards: weeklyRewards2
+            });
 
             expect(await store.isPoolParticipating.call(poolToken2)).to.be.true();
             const pool2 = await store.poolProgram.call(poolToken2);
             expect(pool2[0]).to.be.bignumber.equal(startTime2);
             expect(pool2[1]).to.be.bignumber.equal(endTime2);
+            expect(pool2[2]).to.be.bignumber.equal(weeklyRewards2);
         });
 
         context('with a registered pool', async () => {
             beforeEach(async () => {
                 const startTime = now;
                 const endTime = startTime.add(new BN(2000));
-                await store.addPoolProgram(poolToken, startTime, endTime, { from: owner });
+                const weeklyRewards = new BN(1000);
+                await store.addPoolProgram(poolToken, startTime, endTime, weeklyRewards, { from: owner });
                 expect(await store.isPoolParticipating.call(poolToken)).to.be.true();
             });
 
@@ -129,30 +150,43 @@ describe('StakingRewardsDistributionStore', () => {
             it('should allow updating pools', async () => {
                 const startTime2 = now.add(new BN(10000000));
                 const endTime2 = startTime2.add(new BN(20000000));
+                const weeklyRewards2 = new BN(1000);
 
-                const res = await store.addPoolProgram(poolToken, startTime2, endTime2, { from: owner });
-                expectEvent(res, 'PoolProgramUpdated', { startTime: startTime2, endTime: endTime2 });
+                const res = await store.addPoolProgram(poolToken, startTime2, endTime2, weeklyRewards2, {
+                    from: owner
+                });
+                expectEvent(res, 'PoolProgramUpdated', {
+                    startTime: startTime2,
+                    endTime: endTime2,
+                    weeklyRewards: weeklyRewards2
+                });
 
                 const pool = await store.poolProgram.call(poolToken);
                 expect(pool[0]).to.be.bignumber.equal(startTime2);
                 expect(pool[1]).to.be.bignumber.equal(endTime2);
+                expect(pool[2]).to.be.bignumber.equal(weeklyRewards2);
             });
 
             it('should revert when updating a pool with invalid starting or ending times', async () => {
                 await expectRevert(
-                    store.addPoolProgram(poolToken, new BN(0), now.add(new BN(2000)), { from: owner }),
+                    store.addPoolProgram(poolToken, new BN(0), now.add(new BN(2000)), new BN(1000), { from: owner }),
                     'ERR_INVALID_DURATION'
                 );
 
                 await expectRevert(
-                    store.addPoolProgram(poolToken, now.add(new BN(2000)), now, { from: owner }),
+                    store.addPoolProgram(poolToken, now.add(new BN(2000)), now, new BN(1000), { from: owner }),
                     'ERR_INVALID_DURATION'
                 );
 
-                await expectRevert(store.addPoolProgram(poolToken, now, now, { from: owner }), 'ERR_INVALID_DURATION');
+                await expectRevert(
+                    store.addPoolProgram(poolToken, now, now, new BN(1000), { from: owner }),
+                    'ERR_INVALID_DURATION'
+                );
 
                 await expectRevert(
-                    store.addPoolProgram(poolToken, now.sub(new BN(100)), now.sub(new BN(1)), { from: owner }),
+                    store.addPoolProgram(poolToken, now.sub(new BN(100)), now.sub(new BN(1)), new BN(1000), {
+                        from: owner
+                    }),
                     'ERR_INVALID_DURATION'
                 );
             });
@@ -167,7 +201,9 @@ describe('StakingRewardsDistributionStore', () => {
         beforeEach(async () => {
             const startTime = now;
             const endTime = startTime.add(new BN(20000));
-            await store.addPoolProgram(poolToken, startTime, endTime, { from: owner });
+            const weeklyRewards = new BN(1000);
+
+            await store.addPoolProgram(poolToken, startTime, endTime, weeklyRewards, { from: owner });
         });
 
         it('should revert when a non-owner attempts to add positions', async () => {

@@ -4,8 +4,8 @@ const mkdirp = require('mkdirp');
 const Web3 = require('web3');
 const Contract = require('web3-eth-contract');
 
-const { trace, info, error, warning, arg } = require('../../utils/logger');
-const settings = require('../../settings.json');
+const { trace, info, error, warning, arg } = require('../utils/logger');
+const settings = require('../settings.json');
 
 web3 = new Web3(settings.web3Provider);
 BN = web3.utils.BN;
@@ -325,9 +325,9 @@ const getProtectedLiquidity = async (data, fromBlock, toBlock) => {
 
 const main = async () => {
     try {
-        const dbDir = path.resolve(__dirname, '../../data');
+        const dbDir = path.resolve(__dirname, '../data');
         await mkdirp(dbDir);
-        const dbPath = path.resolve(dbDir, 'liquidity.json');
+        const dbPath = path.join(dbDir, 'liquidity.json');
         let data = {};
         if (fs.existsSync(dbPath)) {
             const rawData = fs.readFileSync(dbPath);

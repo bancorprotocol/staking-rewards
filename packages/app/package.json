@@ -1,0 +1,25 @@
+{
+    "name": "@bancor/rewards-app",
+    "version": "0.0.1",
+    "description": "Bancor staking rewards distribution app",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/bancorprotocol/staking-rewards.git"
+    },
+    "homepage": "https://github.com/bancorprotocol/staking-rewards#readme",
+    "bugs": {
+        "url": "https://github.com/bancorprotocol/staking-rewards/issues"
+    },
+    "author": "Leonid Beder",
+    "license": "MIT",
+    "scripts": {},
+    "dependencies": {
+        "chalk": "^4.1.0",
+        "mkdirp": "^1.0.4",
+        "moment": "^2.29.1",
+        "web3": "1.3.0"
+    },
+    "devDependencies": {
+        "bn.js": "^5.1.3"
+    }
+}

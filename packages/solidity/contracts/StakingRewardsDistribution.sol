@@ -66,6 +66,12 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
     // the mapping between position IDs and rewards data
     mapping(uint256 => RewardData) private _rewards;
 
+    // the mapping between positions and their total claimed rewards
+    mapping(uint256 => uint256) _claimedPositionRewards;
+
+    // the mapping between providers and their total claimed rewards
+    mapping(address => uint256) _claimedProviderRewards;
+
     // the list of committed epochs
     EnumerableSet.UintSet private _committedEpochs;
 
@@ -370,6 +376,28 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
     }
 
     /**
+     * @dev returns the total claimed rewards for a specific position
+     *
+     * @param id the ID of the position
+     *
+     * @return the total claimed rewards
+     */
+    function claimedPositionRewards(uint256 id) external view returns (uint256) {
+        return _claimedPositionRewards[id];
+    }
+
+    /**
+     * @dev returns the total claimed rewards for a specific provider
+     *
+     * @param provider the provider
+     *
+     * @return the total claimed rewards
+     */
+    function claimedProviderRewards(address provider) external view returns (uint256) {
+        return _claimedProviderRewards[provider];
+    }
+
+    /**
      * @dev returns position data
      *
      * @param id the ID of the position
@@ -429,6 +457,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
             RewardData storage rewardsData = _rewards[id];
             EnumerableSet.UintSet storage pendingEpochs = rewardsData.pendingEpochs;
 
+            uint256 pendingAmount = 0;
             uint256 pendingEpochsLength = pendingEpochs.length();
             for (uint256 j = 0; j < pendingEpochsLength; ++j) {
                 uint256 epoch = pendingEpochs.at(j);
@@ -436,12 +465,20 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
                     continue;
                 }
 
-                amount = amount.add(rewardsData.rewards[epoch]);
+                pendingAmount = pendingAmount.add(rewardsData.rewards[epoch]);
             }
 
             if (claim) {
+                _claimedPositionRewards[id] = _claimedPositionRewards[id].add(pendingAmount);
+
                 delete rewardsData.pendingEpochs;
             }
+
+            amount = amount.add(pendingAmount);
+        }
+
+        if (claim) {
+            _claimedProviderRewards[msg.sender] = _claimedProviderRewards[msg.sender].add(amount);
         }
 
         return amount;

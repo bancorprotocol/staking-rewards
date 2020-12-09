@@ -631,11 +631,17 @@ describe('StakingRewardsDistribution', () => {
                     );
                 }
 
+                const totalPositionRewards = new BN(0);
                 let totalRewards = new BN(0);
                 for (const epoch of Object.keys(rewards)) {
                     for (const id of ids) {
-                        if (rewards[epoch][id]) {
-                            totalRewards = totalRewards.add(rewards[epoch][id]);
+                        const reward = rewards[epoch][id];
+                        if (reward) {
+                            totalRewards = totalRewards.add(reward);
+                            if (!totalPositionRewards[id]) {
+                                totalPositionRewards[id] = new BN(0);
+                            }
+                            totalPositionRewards[id] = totalPositionRewards[id].add(reward);
                         }
                     }
                 }
@@ -687,7 +693,13 @@ describe('StakingRewardsDistribution', () => {
                     expect(await liquidityProtection.amount.call()).to.be.bignumber.equal(totalRewards);
                 }
 
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(totalRewards);
+
                 for (const id of ids) {
+                    expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(
+                        totalPositionRewards[id]
+                    );
+
                     const pendingPositionEpochs2 = await staking.pendingPositionEpochs.call(id, true);
                     expect(pendingPositionEpochs2).to.be.ofSize(0);
 
@@ -725,6 +737,48 @@ describe('StakingRewardsDistribution', () => {
             it('should revert when claiming and staking rewards twice', async () => {
                 await testRewards(ids, provider, true);
                 await expectRevert(staking.stakeRewards(ids, poolToken2, { from: provider }), 'ERR_NO_REWARDS');
+            });
+
+            it('should update total position claimed rewards when claiming', async () => {
+                const id = ids[0];
+
+                await staking.claimRewards([id], { from: provider });
+                const claimed = await staking.claimedPositionRewards.call(id);
+
+                const epoch = new BN(3333);
+                const reward = new BN(999999999999);
+                await staking.setRewards(epoch, [id], [reward], { from: distributor });
+                await staking.commitEpoch(epoch, { from: distributor });
+                await staking.claimRewards([id], { from: provider });
+                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(claimed.add(reward));
+            });
+
+            it('should update total position claimed rewards when staking', async () => {
+                const id = ids[0];
+
+                await staking.stakeRewards([id], poolToken2, { from: provider });
+                const claimed = await staking.claimedPositionRewards.call(id);
+
+                const epoch = new BN(3333);
+                const reward = new BN(999999999999);
+                await staking.setRewards(epoch, [id], [reward], { from: distributor });
+                await staking.commitEpoch(epoch, { from: distributor });
+                await staking.stakeRewards([id], poolToken2, { from: provider });
+                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(claimed.add(reward));
+            });
+
+            it('should update total provider claimed rewards when claiming', async () => {
+                const id = ids[0];
+
+                await staking.claimRewards([id], { from: provider });
+                const claimed = await staking.claimedProviderRewards.call(provider);
+
+                const epoch = new BN(3333);
+                const reward = new BN(999999999999);
+                await staking.setRewards(epoch, [id], [reward], { from: distributor });
+                await staking.commitEpoch(epoch, { from: distributor });
+                await staking.claimRewards([id], { from: provider });
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(claimed.add(reward));
             });
 
             context('with uncommitted rewards', async () => {

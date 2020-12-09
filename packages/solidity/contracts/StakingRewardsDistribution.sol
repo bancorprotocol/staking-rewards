@@ -81,20 +81,20 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
     /**
      * @dev triggered when pending rewards are being claimed
      *
-     * @param id the ID of the position
+     * @param ids the IDs of the positions
      * @param amount the total rewards amount
      */
-    event RewardsClaimed(uint256 indexed id, uint256 amount);
+    event RewardsClaimed(uint256[] ids, uint256 amount);
 
     /**
      * @dev triggered when pending rewards are being added or updated
      *
-     * @param id the ID of the position
+     * @param ids the IDs of the positions
      * @param poolToken the pool token representing the new LM pool
      * @param amount the reward amount
      * @param newId the ID of the new position
      */
-    event RewardsStaked(uint256 indexed id, IERC20 indexed poolToken, uint256 amount, uint256 indexed newId);
+    event RewardsStaked(uint256[] ids, IERC20 indexed poolToken, uint256 amount, uint256 indexed newId);
 
     /**
      * @dev initializes a new StakingRewardsDistribution contract
@@ -400,57 +400,62 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
     /**
      * @dev returns position's rewards
      *
-     * @param id the ID of the position
+     * @param ids the IDs of the position
      *
      * @return position's rewards
      */
-    function rewards(uint256 id) public returns (uint256) {
-        return rewards(id, false);
+    function rewards(uint256[] calldata ids) public returns (uint256) {
+        return rewards(ids, false);
     }
 
     /**
      * @dev returns position's rewards and optionally marks them as claimed
      *
-     * @param id the ID of the position
+     * @param ids the IDs of the positions to claim
      * @param claim whether to mark the rewards as claimed
      *
-     * @return position's rewards
+     * @return amount position's rewards
      */
-    function rewards(uint256 id, bool claim) private returns (uint256) {
-        Position memory pos = position(id);
-        require(pos.provider == msg.sender, "ERR_ACCESS_DENIED");
-
-        RewardData storage rewardsData = _rewards[id];
-        EnumerableSet.UintSet storage pendingEpochs = rewardsData.pendingEpochs;
-
+    function rewards(uint256[] calldata ids, bool claim) private returns (uint256) {
         uint256 amount = 0;
-        uint256 length = pendingEpochs.length();
+
+        uint256 length = ids.length;
         for (uint256 i = 0; i < length; ++i) {
-            uint256 epoch = pendingEpochs.at(i);
-            if (!isEpochCommitted(epoch)) {
-                continue;
+            uint256 id = ids[i];
+
+            // it should be possible to query other provider's rewards, but obviously not to claim them
+            require(!claim || position(id).provider == msg.sender, "ERR_ACCESS_DENIED");
+
+            RewardData storage rewardsData = _rewards[id];
+            EnumerableSet.UintSet storage pendingEpochs = rewardsData.pendingEpochs;
+
+            uint256 pendingEpochsLength = pendingEpochs.length();
+            for (uint256 j = 0; j < pendingEpochsLength; ++j) {
+                uint256 epoch = pendingEpochs.at(j);
+                if (!isEpochCommitted(epoch)) {
+                    continue;
+                }
+
+                amount = amount.add(rewardsData.rewards[epoch]);
             }
 
-            amount = amount.add(rewardsData.rewards[epoch]);
+            if (claim) {
+                delete rewardsData.pendingEpochs;
+            }
         }
 
-        if (claim) {
-            delete rewardsData.pendingEpochs;
-        }
-
-        // apply the rewards multiplier to the base rewards
-        return amount.mul(rewardsMultiplier(pos)).div(PPM_RESOLUTION);
+        return amount;
     }
 
     /**
      * @dev claims position's rewards
      *
-     * @param id the ID of the position
+     * @param ids the IDs of the positions to claim
      *
      * @return position's rewards
      */
-    function claimRewards(uint256 id) external returns (uint256) {
-        uint256 amount = rewards(id, true);
+    function claimRewards(uint256[] calldata ids) external returns (uint256) {
+        uint256 amount = rewards(ids, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
         // make sure to update the last claim time so that it'll be taken into effect when calculating the next rewards
@@ -459,7 +464,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
 
         _networkTokenGovernance.mint(msg.sender, amount);
 
-        emit RewardsClaimed(id, amount);
+        emit RewardsClaimed(ids, amount);
 
         return amount;
     }
@@ -467,13 +472,13 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
     /**
      * @dev claims and stakes position's rewards
      *
-     * @param id the ID of the position
+     * @param ids the IDs of the position rewards to stake
      * @param poolToken the pool token representing the new LM pool
      *
      * @return position's rewards and the ID of the new position
      */
-    function stakeRewards(uint256 id, IERC20 poolToken) external returns (uint256, uint256) {
-        uint256 amount = rewards(id, true);
+    function stakeRewards(uint256[] calldata ids, IERC20 poolToken) external returns (uint256, uint256) {
+        uint256 amount = rewards(ids, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
         ILiquidityProtection lp = _liquidityProtection;
@@ -488,7 +493,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         // please note, that in order to incentivize restaking, we won't be updating the time of the last claim, thus
         // preserving the rewards bonus multiplier
 
-        emit RewardsStaked(id, poolToken, amount, newId);
+        emit RewardsStaked(ids, poolToken, amount, newId);
 
         return (amount, newId);
     }
@@ -497,14 +502,17 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
      * @dev returns the rewards multiplier based on the time that the position was held an no other position was claimed
      * or removed
      *
-     * @param id the position id to retrieve the rewards multiplier for
+     * @param ids the position ids to retrieve the rewards multiplier for
      * @return the rewards multiplier
      */
-    function rewardsMultiplier(uint256 id) external view returns (uint32) {
-        Position memory pos = position(id);
-        require(pos.provider == msg.sender, "ERR_ACCESS_DENIED");
+    function rewardsMultipliers(uint256[] calldata ids) external view returns (uint32[] memory) {
+        uint256 length = ids.length;
+        uint32[] memory multipliers = new uint32[](length);
+        for (uint256 i = 0; i < length; ++i) {
+            multipliers[i] = rewardsMultiplier(position(ids[i]));
+        }
 
-        return rewardsMultiplier(pos);
+        return multipliers;
     }
 
     /**
@@ -526,7 +534,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
             endTime.sub(
                 Math.max(
                     pos.startTime,
-                    Math.max(_lastRemoveTimes.checkpoint(msg.sender), _store.lastClaimTime(msg.sender))
+                    Math.max(_lastRemoveTimes.checkpoint(pos.provider), _store.lastClaimTime(pos.provider))
                 )
             );
 

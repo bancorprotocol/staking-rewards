@@ -50,7 +50,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
     event PoolProgramUpdated(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 weeklyRewards);
 
     /**
-     * @dev triggered when a pool program is being removing
+     * @dev triggered when a pool program is being removed
      *
      * @param poolToken the pool token representing the LM pool
      */

@@ -10,8 +10,11 @@ const TestERC20Token = contract.fromArtifact('TestERC20Token');
 const CheckpointStore = contract.fromArtifact('TestCheckpointStore');
 const TokenGovernance = contract.fromArtifact('TestTokenGovernance');
 const LiquidityProtection = contract.fromArtifact('TestLiquidityProtection');
+const ContractRegistry = contract.fromArtifact('TestContractRegistry');
 const StakingRewardsDistributionStore = contract.fromArtifact('TestStakingRewardsDistributionStore');
 const StakingRewardsDistribution = contract.fromArtifact('TestStakingRewardsDistribution');
+
+const LIQUIDITY_PROTECTION = web3.utils.asciiToHex('LiquidityProtection');
 
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
@@ -20,7 +23,7 @@ const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
 const ROLE_REWARDS_DISTRIBUTOR = web3.utils.keccak256('ROLE_REWARDS_DISTRIBUTOR');
 
 const MAX_REWARDS = new BN(1000000000).mul(new BN(10).pow(new BN(18)));
-const MAX_REWARDS_PER_EPOCH = MAX_REWARDS.div(new BN(10));
+const MAX_REWARDS_PER_UPDATE = MAX_REWARDS.div(new BN(10));
 
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
@@ -33,6 +36,7 @@ const expectEqualArrays = (arr1, arr2) => {
 
 describe('StakingRewardsDistribution', () => {
     let now;
+    let contractRegistry;
     let networkToken;
     let checkpointStore;
     let networkTokenGovernance;
@@ -53,6 +57,8 @@ describe('StakingRewardsDistribution', () => {
     };
 
     beforeEach(async () => {
+        contractRegistry = await ContractRegistry.new();
+
         networkToken = await TestERC20Token.new('TKN', 'TKN');
         await networkToken.issue(supervisor, MAX_REWARDS);
 
@@ -62,6 +68,8 @@ describe('StakingRewardsDistribution', () => {
         await networkTokenGovernance.acceptTokenOwnership();
 
         liquidityProtection = await LiquidityProtection.new();
+        await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
+
         checkpointStore = await CheckpointStore.new();
 
         store = await StakingRewardsDistributionStore.new();
@@ -69,9 +77,9 @@ describe('StakingRewardsDistribution', () => {
             store.address,
             networkTokenGovernance.address,
             checkpointStore.address,
-            liquidityProtection.address,
             MAX_REWARDS,
-            MAX_REWARDS_PER_EPOCH
+            MAX_REWARDS_PER_UPDATE,
+            contractRegistry.address
         );
 
         await networkTokenGovernance.grantRole(ROLE_MINTER, staking.address);
@@ -91,9 +99,8 @@ describe('StakingRewardsDistribution', () => {
             expect(await staking.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
             expect(await staking.hasRole.call(ROLE_REWARDS_DISTRIBUTOR, supervisor)).to.be.false();
 
-            expect(await staking.liquidityProtection.call()).to.eql(liquidityProtection.address);
             expect(await staking.maxRewards.call()).to.be.bignumber.equal(MAX_REWARDS);
-            expect(await staking.maxRewardsPerEpoch.call()).to.be.bignumber.equal(MAX_REWARDS_PER_EPOCH);
+            expect(await staking.maxRewardsPerUpdate.call()).to.be.bignumber.equal(MAX_REWARDS_PER_UPDATE);
         });
 
         it('should revert if initialized with a zero address store', async () => {
@@ -102,9 +109,9 @@ describe('StakingRewardsDistribution', () => {
                     ZERO_ADDRESS,
                     networkTokenGovernance.address,
                     checkpointStore.address,
-                    liquidityProtection.address,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_EPOCH
+                    MAX_REWARDS_PER_UPDATE,
+                    contractRegistry.address
                 ),
                 'ERR_INVALID_ADDRESS'
             );
@@ -116,9 +123,9 @@ describe('StakingRewardsDistribution', () => {
                     store.address,
                     ZERO_ADDRESS,
                     checkpointStore.address,
-                    liquidityProtection.address,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_EPOCH
+                    MAX_REWARDS_PER_UPDATE,
+                    contractRegistry.address
                 ),
                 'ERR_INVALID_ADDRESS'
             );
@@ -130,23 +137,9 @@ describe('StakingRewardsDistribution', () => {
                     store.address,
                     networkTokenGovernance.address,
                     ZERO_ADDRESS,
-                    liquidityProtection.address,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_EPOCH
-                ),
-                'ERR_INVALID_ADDRESS'
-            );
-        });
-
-        it('should revert if initialized with a zero address liquidity protection', async () => {
-            await expectRevert(
-                StakingRewardsDistribution.new(
-                    store.address,
-                    networkTokenGovernance.address,
-                    checkpointStore.address,
-                    ZERO_ADDRESS,
-                    MAX_REWARDS,
-                    MAX_REWARDS_PER_EPOCH
+                    MAX_REWARDS_PER_UPDATE,
+                    contractRegistry.address
                 ),
                 'ERR_INVALID_ADDRESS'
             );
@@ -158,11 +151,25 @@ describe('StakingRewardsDistribution', () => {
                     store.address,
                     networkTokenGovernance.address,
                     checkpointStore.address,
-                    liquidityProtection.address,
                     MAX_REWARDS,
-                    MAX_REWARDS.add(new BN(1))
+                    MAX_REWARDS.add(new BN(1)),
+                    contractRegistry.address
                 ),
                 'ERR_INVALID_VALUE'
+            );
+        });
+
+        it('should revert if initialized with a zero address registry', async () => {
+            await expectRevert(
+                StakingRewardsDistribution.new(
+                    store.address,
+                    networkTokenGovernance.address,
+                    checkpointStore.address,
+                    MAX_REWARDS,
+                    MAX_REWARDS_PER_UPDATE,
+                    ZERO_ADDRESS
+                ),
+                'ERR_INVALID_ADDRESS'
             );
         });
     });
@@ -170,33 +177,13 @@ describe('StakingRewardsDistribution', () => {
     describe('configuration', () => {
         const nonSupervisor = accounts[0];
 
-        it('should revert if a non-supervisor attempts to set the liquidity protection', async () => {
-            await expectRevert(
-                staking.setLiquidityProtection(liquidityProtection.address, { from: nonSupervisor }),
-                'ERR_ACCESS_DENIED'
-            );
-        });
-
-        it('should revert when setting the liquidity protection to a zero address', async () => {
-            await expectRevert(
-                staking.setLiquidityProtection(ZERO_ADDRESS, { from: supervisor }),
-                'ERR_INVALID_ADDRESS'
-            );
-        });
-
-        it('should allow setting the liquidity protection', async () => {
-            const liquidityProtection2 = accounts[9];
-            await staking.setLiquidityProtection(liquidityProtection2, { from: supervisor });
-            expect(await staking.liquidityProtection.call()).to.eql(liquidityProtection2);
-        });
-
         it('should revert if a non-supervisor attempts to set the max rewards', async () => {
             await expectRevert(staking.setMaxRewards(MAX_REWARDS, { from: nonSupervisor }), 'ERR_ACCESS_DENIED');
         });
 
-        it('should revert when setting the max rewards to be below max rewards per epoch', async () => {
+        it('should revert when setting the max rewards to be below max rewards per an update', async () => {
             await expectRevert(
-                staking.setMaxRewards(MAX_REWARDS_PER_EPOCH.sub(new BN(1)), { from: supervisor }),
+                staking.setMaxRewards(MAX_REWARDS_PER_UPDATE.sub(new BN(1)), { from: supervisor }),
                 'ERR_INVALID_VALUE'
             );
         });
@@ -207,24 +194,24 @@ describe('StakingRewardsDistribution', () => {
             expect(await staking.maxRewards.call()).to.be.bignumber.equal(maxRewards);
         });
 
-        it('should revert if a non-supervisor attempts to set the max rewards per epoch', async () => {
+        it('should revert if a non-supervisor attempts to set the max rewards per an update', async () => {
             await expectRevert(
-                staking.setMaxRewardsPerEpoch(MAX_REWARDS_PER_EPOCH, { from: nonSupervisor }),
+                staking.setMaxRewardsPerUpdate(MAX_REWARDS_PER_UPDATE, { from: nonSupervisor }),
                 'ERR_ACCESS_DENIED'
             );
         });
 
-        it('should revert when setting the max rewards per epoch to be above the max rewards', async () => {
+        it('should revert when setting the max rewards per an update to be above the max rewards', async () => {
             await expectRevert(
-                staking.setMaxRewardsPerEpoch(MAX_REWARDS.add(new BN(1)), { from: supervisor }),
+                staking.setMaxRewardsPerUpdate(MAX_REWARDS.add(new BN(1)), { from: supervisor }),
                 'ERR_INVALID_VALUE'
             );
         });
 
-        it('should allow setting the max rewards per epoch', async () => {
-            const maxRewardsPerEpoch = MAX_REWARDS_PER_EPOCH.add(new BN(1000));
-            await staking.setMaxRewardsPerEpoch(maxRewardsPerEpoch, { from: supervisor });
-            expect(await staking.maxRewardsPerEpoch.call()).to.be.bignumber.equal(maxRewardsPerEpoch);
+        it('should allow setting the max rewards per an update', async () => {
+            const maxRewardsPerUpdate = MAX_REWARDS_PER_UPDATE.add(new BN(1000));
+            await staking.setMaxRewardsPerUpdate(maxRewardsPerUpdate, { from: supervisor });
+            expect(await staking.maxRewardsPerUpdate.call()).to.be.bignumber.equal(maxRewardsPerUpdate);
         });
     });
 
@@ -243,46 +230,30 @@ describe('StakingRewardsDistribution', () => {
             await store.addPositions(poolToken, providers, ids, startTimes);
         });
 
-        const testSetRewards = async (epoch, ids, amounts) => {
+        const testSetRewards = async (ids, amounts, prevTotalAmounts) => {
             let totalRewards = await staking.totalRewards.call();
-            let totalEpochRewards = await staking.totalEpochRewards.call(epoch);
-
-            for (const id of ids) {
-                const prevAmount = await staking.pendingPositionEpochRewards.call(id, epoch);
-                totalRewards = totalRewards.sub(prevAmount);
-                totalEpochRewards = totalEpochRewards.sub(prevAmount);
+            for (const amount of amounts) {
+                totalRewards = totalRewards.add(amount);
             }
 
-            const res = await staking.setRewards(epoch, ids, amounts, { from: distributor });
+            const res = await staking.setRewards(ids, amounts, prevTotalAmounts, { from: distributor });
 
             const rewards = {};
-            let epochRewards = new BN(0);
             for (let i = 0; i < ids.length; ++i) {
                 const id = ids[i];
                 const amount = amounts[i];
 
                 rewards[id] = amount;
 
-                expectEvent(res, 'RewardsUpdated', { epoch, id, amount });
-            }
-
-            for (const [id, amount] of Object.entries(rewards)) {
-                const pendingPositionEpochs = await staking.pendingPositionEpochs.call(id, false);
-                expect(pendingPositionEpochs.map((e) => e.toString())).to.be.containing(epoch.toString());
-                expect(await staking.pendingPositionEpochRewards.call(id, epoch)).to.be.bignumber.equal(amount);
-
-                totalRewards = totalRewards.add(amount);
-                totalEpochRewards = totalEpochRewards.add(amount);
-                epochRewards = epochRewards.add(amount);
+                expectEvent(res, 'RewardsUpdated', { id, amount });
             }
 
             expect(await staking.totalRewards.call()).be.bignumber.equal(totalRewards);
-            expect(await staking.totalEpochRewards.call(epoch)).be.bignumber.equal(totalEpochRewards);
         };
 
         it('should revert when a non-distributor attempts to set rewards', async () => {
             await expectRevert(
-                staking.setRewards(new BN(1), [ids[0], ids[1]], [new BN(10), new BN(200)], {
+                staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(200)], [new BN(0), new BN(0)], {
                     from: nonDistributor
                 }),
                 'ERR_ACCESS_DENIED'
@@ -291,148 +262,102 @@ describe('StakingRewardsDistribution', () => {
 
         it('should revert when setting rewards for non-existing positions', async () => {
             await expectRevert(
-                staking.setRewards(new BN(1), [ids[0], new BN(50000)], [new BN(10), new BN(200)], {
+                staking.setRewards([ids[0], new BN(50000)], [new BN(10), new BN(200)], [new BN(0), new BN(0)], {
                     from: distributor
                 }),
                 'ERR_INVALID_ID'
             );
         });
 
-        it('should revert when a setting more than the max epoch rewards', async () => {
+        it('should revert when a setting more than the max per update rewards', async () => {
             await expectRevert(
-                staking.setRewards(new BN(1), [ids[0], ids[1]], [new BN(10), MAX_REWARDS_PER_EPOCH], {
+                staking.setRewards([ids[0], ids[1]], [new BN(10), MAX_REWARDS_PER_UPDATE], [new BN(0), new BN(0)], {
                     from: distributor
                 }),
-                'ERR_MAX_REWARDS_PER_EPOCH'
-            );
-
-            const reward = new BN(1000);
-            await staking.setRewards(new BN(1), [ids[0], ids[1]], [reward, MAX_REWARDS_PER_EPOCH.sub(reward)], {
-                from: distributor
-            });
-            await expectRevert(
-                staking.setRewards(new BN(1), [ids[2]], [new BN(1)], { from: distributor }),
-                'ERR_MAX_REWARDS_PER_EPOCH'
+                'ERR_MAX_REWARDS_PER_UPDATE'
             );
         });
 
         it('should revert when a setting more than the global max rewards', async () => {
             await expectRevert(
-                staking.setRewards(new BN(1), [ids[0], ids[1]], [new BN(10), MAX_REWARDS], {
+                staking.setRewards([ids[0], ids[1]], [new BN(10), MAX_REWARDS], [new BN(0), new BN(0)], {
                     from: distributor
                 }),
-                'ERR_MAX_REWARDS_PER_EPOCH'
+                'ERR_MAX_REWARDS_PER_UPDATE'
             );
 
             let i;
-            for (i = new BN(0); i.lt(MAX_REWARDS.div(MAX_REWARDS_PER_EPOCH)); i = i.add(new BN(1))) {
-                await staking.setRewards(i, [ids[0]], [MAX_REWARDS_PER_EPOCH], { from: distributor });
+            let prevAmount = new BN(0);
+            for (i = new BN(0); i.lt(MAX_REWARDS.div(MAX_REWARDS_PER_UPDATE)); i = i.add(new BN(1))) {
+                await staking.setRewards([ids[0]], [MAX_REWARDS_PER_UPDATE], [i.mul(MAX_REWARDS_PER_UPDATE)], {
+                    from: distributor
+                });
             }
 
-            await expectRevert(staking.setRewards(i, [ids[0]], [new BN(1)], { from: distributor }), 'ERR_MAX_REWARDS');
+            await expectRevert(
+                staking.setRewards([ids[0]], [new BN(1)], [MAX_REWARDS], { from: distributor }),
+                'ERR_MAX_REWARDS'
+            );
         });
 
         it('should revert when a setting rewards with invalid lengths', async () => {
             await expectRevert(
-                staking.setRewards(new BN(1), [ids[0]], [new BN(10), new BN(10)], { from: distributor }),
+                staking.setRewards([ids[0]], [new BN(10), new BN(10)], [new BN(0), new BN(0)], { from: distributor }),
                 'ERR_INVALID_LENGTH'
             );
 
             await expectRevert(
-                staking.setRewards(new BN(1), [ids[0], ids[1]], [new BN(10)], { from: distributor }),
+                staking.setRewards([ids[0], ids[1]], [new BN(10)], [new BN(0), new BN(0)], { from: distributor }),
+                'ERR_INVALID_LENGTH'
+            );
+
+            await expectRevert(
+                staking.setRewards([ids[0], ids[1]], [new BN(10)], [new BN(0), new BN(0)], { from: distributor }),
                 'ERR_INVALID_LENGTH'
             );
         });
 
-        it('should allow committing an epoch', async () => {
-            const epoch = new BN(123);
-            await staking.setRewards(epoch, [ids[0], ids[1]], [new BN(100), new BN(1000)], {
-                from: distributor
-            });
-
-            expect(await staking.isEpochCommitted.call(epoch)).to.be.false();
-            await staking.commitEpoch(epoch, { from: distributor });
-            expect(await staking.isEpochCommitted.call(epoch)).to.be.true();
-
-            const epoch2 = new BN(200);
-            await staking.setRewards(epoch2, [ids[1]], [new BN(1000)], { from: distributor });
-
-            expect(await staking.isEpochCommitted.call(epoch2)).to.be.false();
-            await staking.commitEpoch(epoch2, { from: distributor });
-            expect(await staking.isEpochCommitted.call(epoch2)).to.be.true();
-        });
-
-        it('should revert when attempting to commit an epoch twice', async () => {
-            const epoch = new BN(123);
-            await staking.setRewards(epoch, [ids[0], ids[1]], [new BN(100), new BN(1000)], {
-                from: distributor
-            });
-
-            await staking.commitEpoch(epoch, { from: distributor });
-            await expectRevert(staking.commitEpoch(epoch, { from: distributor }), 'ERR_ALREADY_COMMITTED');
-        });
-
-        it('should revert a non-distributor attempts to commit an epoch rewards', async () => {
-            const epoch = new BN(123);
-            await staking.setRewards(epoch, [ids[0], ids[1]], [new BN(100), new BN(1000)], {
-                from: distributor
-            });
-
-            await expectRevert(staking.commitEpoch(epoch, { from: nonDistributor }), 'ERR_ACCESS_DENIED');
-        });
-
-        it('should revert when a setting rewards to already committed epoch', async () => {
-            const epoch = new BN(123);
-            await staking.setRewards(epoch, [ids[0], ids[1]], [new BN(100), new BN(1000)], {
-                from: distributor
-            });
-
-            await staking.commitEpoch(epoch, { from: distributor });
-
+        it('should revert when a setting rewards with incorrect previous amounts', async () => {
             await expectRevert(
-                staking.setRewards(epoch, [ids[0], ids[1]], [new BN(100), new BN(1000)], {
+                staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(10)], [new BN(0), new BN(1)], {
                     from: distributor
                 }),
-                'ERR_ALREADY_COMMITTED'
+                'ERR_INVALID_AMOUNT'
+            );
+
+            await staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(10)], [new BN(0), new BN(0)], {
+                from: distributor
+            });
+
+            await expectRevert(
+                staking.setRewards([ids[0], ids[1]], [new BN(200), new BN(100)], [new BN(0), new BN(10)], {
+                    from: distributor
+                }),
+                'ERR_INVALID_AMOUNT'
+            );
+
+            await expectRevert(
+                staking.setRewards([ids[0], ids[1]], [new BN(200), new BN(100)], [new BN(10), new BN(0)], {
+                    from: distributor
+                }),
+                'ERR_INVALID_AMOUNT'
             );
         });
 
-        it('should allow setting multiple epoch rewards', async () => {
-            await testSetRewards(new BN(100), [ids[0], ids[1], ids[2]], [new BN(1000), new BN(2000), new BN(3000)]);
+        it('should allow setting multiple rewards', async () => {
+            await testSetRewards(
+                [ids[0], ids[1], ids[2]],
+                [new BN(1000), new BN(2000), new BN(3000)],
+                [new BN(0), new BN(0), new BN(0)]
+            );
 
-            await testSetRewards(new BN(101), [ids[0], ids[2]], [new BN(10000), new BN(30000)]);
+            await testSetRewards([ids[0], ids[2]], [new BN(10000), new BN(30000)], [new BN(1000), new BN(3000)]);
 
             await testSetRewards(
-                new BN(1000),
                 [ids[2], ids[0], ids[1], ids[3]],
-                [new BN(10000), new BN(30000), new BN(0), new BN(1)]
+                [new BN(10000), new BN(30000), new BN(0), new BN(1)],
+                [new BN(33000), new BN(11000), new BN(2000), new BN(0)]
             );
-        });
-
-        it('should overwrite same epoch rewards', async () => {
-            const epoch = new BN(100);
-            await testSetRewards(epoch, [ids[0], ids[1], ids[2]], [new BN(1000), new BN(2000), new BN(3000)]);
-
-            await testSetRewards(epoch, [ids[0], ids[1], ids[2]], [new BN(100000), new BN(200000), new BN(300000)]);
-
-            await testSetRewards(epoch, [ids[0], ids[1], ids[2]], [new BN(0), new BN(0), new BN(0)]);
-        });
-
-        it('should overwrite same provider rewards', async () => {
-            const epoch = new BN(100);
-
-            await testSetRewards(
-                epoch,
-                [ids[0], ids[1], ids[0], ids[1], ids[1]],
-                [new BN(1000), new BN(2000), new BN(30000), new BN(4000), new BN(50000)]
-            );
-
-            expect(await staking.pendingPositionEpochRewards.call(ids[0], epoch)).to.be.bignumber.equal(new BN(30000));
-            expect(await staking.pendingPositionEpochRewards.call(ids[1], epoch)).to.be.bignumber.equal(new BN(50000));
-
-            await testSetRewards(epoch, [ids[2], ids[1], ids[2]], [new BN(1000), new BN(2000), new BN(50000)]);
-
-            expect(await staking.pendingPositionEpochRewards.call(ids[2], epoch)).to.be.bignumber.equal(new BN(50000));
         });
     });
 
@@ -572,76 +497,53 @@ describe('StakingRewardsDistribution', () => {
         });
 
         context('with pending rewards', async () => {
-            const epochs = [
-                new BN(1),
-                new BN(100),
-                new BN(200),
-                new BN(1000),
-                new BN(1001),
-                new BN(10000),
-                new BN(10001)
-            ];
-            const rewards = {
-                [epochs[0]]: {
+            const rewards = [
+                {
                     [ids[0]]: new BN(1000),
                     [ids[1]]: new BN(2000),
                     [ids[2]]: new BN(3000),
                     [ids[3]]: new BN(30000)
                 },
-                [epochs[1]]: {
+                {
                     [ids[0]]: new BN(100000),
                     [ids[1]]: new BN(200000),
                     [ids[2]]: new BN(300000),
                     [ids[3]]: new BN(888888)
                 },
-                [epochs[2]]: {
+                {
                     [ids[0]]: new BN(100000)
                 },
-                [epochs[3]]: {
+                {
                     [ids[1]]: new BN(500000)
                 },
-                [epochs[4]]: {
+                {
                     [ids[2]]: new BN(700000)
                 },
-                [epochs[5]]: {
+                {
                     [ids[0]]: new BN(1),
                     [ids[1]]: new BN(2),
                     [ids[2]]: new BN(3),
                     [ids[3]]: new BN(4)
                 },
-                [epochs[6]]: {
+                {
                     [ids[0]]: new BN(100),
                     [ids[1]]: new BN(1000),
                     [ids[2]]: new BN(10000),
                     [ids[3]]: new BN(100000)
                 }
-            };
+            ];
 
             const testRewards = async (ids, provider, stake = false) => {
-                for (const id of ids) {
-                    const pendingPositionEpochs = await staking.pendingPositionEpochs.call(id, true);
-                    expect(pendingPositionEpochs.map((e) => e.toString())).to.be.equalTo(
-                        Object.keys(rewards).reduce((res, epoch) => {
-                            if (rewards[epoch][id]) {
-                                res.push(epoch.toString());
-                            }
-
-                            return res;
-                        }, [])
-                    );
-                }
-
                 const totalPositionRewards = new BN(0);
                 let totalRewards = new BN(0);
-                for (const epoch of Object.keys(rewards)) {
-                    for (const id of ids) {
-                        const reward = rewards[epoch][id];
-                        if (reward) {
-                            totalRewards = totalRewards.add(reward);
+                for (const data of rewards) {
+                    for (const [id, amount] of Object.entries(data)) {
+                        if (amount) {
+                            totalRewards = totalRewards.add(amount);
                             if (!totalPositionRewards[id]) {
                                 totalPositionRewards[id] = new BN(0);
                             }
-                            totalPositionRewards[id] = totalPositionRewards[id].add(reward);
+                            totalPositionRewards[id] = totalPositionRewards[id].add(amount);
                         }
                     }
                 }
@@ -699,25 +601,22 @@ describe('StakingRewardsDistribution', () => {
                     expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(
                         totalPositionRewards[id]
                     );
-
-                    const pendingPositionEpochs2 = await staking.pendingPositionEpochs.call(id, true);
-                    expect(pendingPositionEpochs2).to.be.ofSize(0);
-
-                    // make sure that epoch rewards are still preserved for monitoring
-                    for (const [epoch, data] of Object.entries(rewards)) {
-                        expect(await staking.pendingPositionEpochRewards.call(id, epoch)).to.be.bignumber.equal(
-                            data[id] ? data[id] : new BN(0)
-                        );
-                    }
                 }
+
+                expect(await staking.rewards.call(ids)).to.be.bignumber.equal(new BN(0));
             };
 
             beforeEach(async () => {
-                for (const [epoch, data] of Object.entries(rewards)) {
+                for (const data of rewards) {
                     const ids = Object.keys(data);
                     const amounts = Object.values(data);
-                    await staking.setRewards(epoch, ids, amounts, { from: distributor });
-                    await staking.commitEpoch(epoch, { from: distributor });
+
+                    const prevAmounts = [];
+                    for (const id of ids) {
+                        prevAmounts.push(await staking.rewards.call([id]));
+                    }
+
+                    await staking.setRewards(ids, amounts, prevAmounts, { from: distributor });
                 }
             });
 
@@ -745,10 +644,8 @@ describe('StakingRewardsDistribution', () => {
                 await staking.claimRewards([id], { from: provider });
                 const claimed = await staking.claimedPositionRewards.call(id);
 
-                const epoch = new BN(3333);
                 const reward = new BN(999999999999);
-                await staking.setRewards(epoch, [id], [reward], { from: distributor });
-                await staking.commitEpoch(epoch, { from: distributor });
+                await staking.setRewards([id], [reward], [new BN(0)], { from: distributor });
                 await staking.claimRewards([id], { from: provider });
                 expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(claimed.add(reward));
             });
@@ -759,10 +656,8 @@ describe('StakingRewardsDistribution', () => {
                 await staking.stakeRewards([id], poolToken2, { from: provider });
                 const claimed = await staking.claimedPositionRewards.call(id);
 
-                const epoch = new BN(3333);
                 const reward = new BN(999999999999);
-                await staking.setRewards(epoch, [id], [reward], { from: distributor });
-                await staking.commitEpoch(epoch, { from: distributor });
+                await staking.setRewards([id], [reward], [new BN(0)], { from: distributor });
                 await staking.stakeRewards([id], poolToken2, { from: provider });
                 expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(claimed.add(reward));
             });
@@ -773,32 +668,10 @@ describe('StakingRewardsDistribution', () => {
                 await staking.claimRewards([id], { from: provider });
                 const claimed = await staking.claimedProviderRewards.call(provider);
 
-                const epoch = new BN(3333);
                 const reward = new BN(999999999999);
-                await staking.setRewards(epoch, [id], [reward], { from: distributor });
-                await staking.commitEpoch(epoch, { from: distributor });
+                await staking.setRewards([id], [reward], [new BN(0)], { from: distributor });
                 await staking.claimRewards([id], { from: provider });
                 expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(claimed.add(reward));
-            });
-
-            context('with uncommitted rewards', async () => {
-                let totalRewards;
-                beforeEach(async () => {
-                    totalRewards = await staking.rewards.call(ids);
-                    await staking.setRewards(new BN(1111), [ids[0]], [new BN(999999999999)], { from: distributor });
-                });
-
-                it('should not claim non-committed rewards', async () => {
-                    expect(await staking.rewards.call(ids)).to.be.bignumber.equal(totalRewards);
-
-                    await testRewards(ids, provider);
-                });
-
-                it('should not claim and stake non-committed rewards', async () => {
-                    expect(await staking.rewards.call(ids)).to.be.bignumber.equal(totalRewards);
-
-                    await testRewards(ids, provider, true);
-                });
             });
         });
     });

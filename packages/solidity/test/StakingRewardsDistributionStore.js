@@ -8,7 +8,7 @@ const StakingRewardsDistributionStore = contract.fromArtifact('TestStakingReward
 
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 
-describe.only('StakingRewardsDistributionStore', () => {
+describe('StakingRewardsDistributionStore', () => {
     let store;
     const owner = defaultSender;
     const nonOwner = accounts[1];

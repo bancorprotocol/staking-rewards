@@ -24,11 +24,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     using EnumerableSet for EnumerableSet.UintSet;
     using SafeERC20 for IERC20;
 
-    struct RewardData {
-        EnumerableSet.UintSet pendingEpochs;
-        mapping(uint256 => uint256) rewards;
-    }
-
     // the supervisor role is used to globally govern the contract and its governing roles.
     bytes32 public constant ROLE_SUPERVISOR = keccak256("ROLE_SUPERVISOR");
 
@@ -52,17 +47,14 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     // the maximum pending rewards that the contract can distribute
     uint256 private _maxRewards;
 
-    // the maximum pending rewards that the contract can distribute per epoch
-    uint256 private _maxRewardsPerEpoch;
+    // the maximum pending rewards that the contract can distribute per an update
+    uint256 private _maxRewardsPerUpdate;
 
     // the current total amount of pending rewards
     uint256 private _totalRewards;
 
-    // the current total amount of pending rewards per epoch
-    mapping(uint256 => uint256) private _totalEpochRewards;
-
     // the mapping between position IDs and rewards data
-    mapping(uint256 => RewardData) private _rewards;
+    mapping(uint256 => uint256) private _rewards;
 
     // the mapping between positions and their total claimed rewards
     mapping(uint256 => uint256) _claimedPositionRewards;
@@ -70,17 +62,13 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     // the mapping between providers and their total claimed rewards
     mapping(address => uint256) _claimedProviderRewards;
 
-    // the list of committed epochs
-    EnumerableSet.UintSet private _committedEpochs;
-
     /**
      * @dev triggered when pending rewards are being added or updated
      *
-     * @param epoch the rewards distribution epoch
      * @param id the ID of the position
      * @param amount the reward amount
      */
-    event RewardsUpdated(uint256 indexed epoch, uint256 indexed id, uint256 amount);
+    event RewardsUpdated(uint256 indexed id, uint256 amount);
 
     /**
      * @dev triggered when pending rewards are being claimed
@@ -107,7 +95,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @param networkTokenGovernance the permissioned wrapper around the network token
      * @param lastRemoveTimes the checkpoint store recording last protected position removal times
      * @param maxRewards the maximum pending rewards that the contract can distribute
-     * @param maxRewardsPerEpoch the maximum pending rewards that the contract can distribute per epoch
+     * @param maxRewardsPerUpdate the maximum pending rewards that the contract can distribute per an update
      * @param registry address of a contract registry contract
      */
     constructor(
@@ -115,7 +103,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         ITokenGovernance networkTokenGovernance,
         ICheckpointStore lastRemoveTimes,
         uint256 maxRewards,
-        uint256 maxRewardsPerEpoch
+        uint256 maxRewardsPerUpdate,
         IContractRegistry registry
     )
         public
@@ -124,13 +112,13 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         validAddress(address(lastRemoveTimes))
         ContractRegistryClient(registry)
     {
-        require(maxRewardsPerEpoch <= maxRewards, "ERR_INVALID_VALUE");
+        require(maxRewardsPerUpdate <= maxRewards, "ERR_INVALID_VALUE");
 
         _store = store;
         _networkTokenGovernance = networkTokenGovernance;
         _lastRemoveTimes = lastRemoveTimes;
         _maxRewards = maxRewards;
-        _maxRewardsPerEpoch = maxRewardsPerEpoch;
+        _maxRewardsPerUpdate = maxRewardsPerUpdate;
 
         // Set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
@@ -158,56 +146,44 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         require(hasRole(ROLE_REWARDS_DISTRIBUTOR, msg.sender), "ERR_ACCESS_DENIED");
     }
 
-    modifier notCommitted(uint256 epoch) {
-        _notCommitted(epoch);
-        _;
-    }
-
-    function _notCommitted(uint256 epoch) internal view {
-        require(!isEpochCommitted(epoch), "ERR_ALREADY_COMMITTED");
-    }
-
     /**
      * @dev adds or updates rewards
      *
-     * @param epoch the rewards distribution epoch
      * @param ids IDs of the positions
      * @param amounts reward amounts
+     * @param prevTotalAmounts previous total reward amounts
      */
     function setRewards(
-        uint256 epoch,
         uint256[] calldata ids,
-        uint256[] calldata amounts
-    ) external notCommitted(epoch) onlyRewardsDistributor {
+        uint256[] calldata amounts,
+        uint256[] calldata prevTotalAmounts
+    ) external onlyRewardsDistributor {
         uint256 length = ids.length;
-        require(length == amounts.length, "ERR_INVALID_LENGTH");
+        require(length == amounts.length && amounts.length == prevTotalAmounts.length, "ERR_INVALID_LENGTH");
 
         uint256 totalRewards = _totalRewards;
-        uint256 totalEpochRewards = _totalEpochRewards[epoch];
+        uint256 totalUpdateRewards = 0;
 
         for (uint256 i = 0; i < length; ++i) {
             uint256 id = ids[i];
             uint256 amount = amounts[i];
+            uint256 prevTotalAmount = prevTotalAmounts[i];
             require(_store.positionExists(id), "ERR_INVALID_ID");
 
-            RewardData storage rewards = _rewards[id];
+            uint256 totalAmount = _rewards[id];
+            require(totalAmount == prevTotalAmount, "ERR_INVALID_AMOUNT");
 
-            {
-                uint256 prevRewards = rewards.rewards[epoch];
-                totalEpochRewards = totalEpochRewards.sub(prevRewards).add(amount);
-                totalRewards = totalRewards.sub(prevRewards).add(amount);
-            }
+            _rewards[id] = prevTotalAmount.add(amount);
 
-            rewards.rewards[epoch] = amount;
-            rewards.pendingEpochs.add(epoch);
+            totalRewards = totalRewards.add(amount);
+            totalUpdateRewards = totalUpdateRewards.add(amount);
 
-            emit RewardsUpdated(epoch, id, amount);
+            emit RewardsUpdated(id, amount);
         }
 
-        require(totalEpochRewards <= _maxRewardsPerEpoch, "ERR_MAX_REWARDS_PER_EPOCH");
+        require(totalUpdateRewards <= _maxRewardsPerUpdate, "ERR_MAX_REWARDS_PER_UPDATE");
         require(totalRewards <= _maxRewards, "ERR_MAX_REWARDS");
 
-        _totalEpochRewards[epoch] = totalEpochRewards;
         _totalRewards = totalRewards;
     }
 
@@ -217,7 +193,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @param maxRewards the maximum pending rewards that the contract can distributes
      */
     function setMaxRewards(uint256 maxRewards) external onlySupervisor {
-        require(maxRewards >= _maxRewardsPerEpoch, "ERR_INVALID_VALUE");
+        require(maxRewards >= _maxRewardsPerUpdate, "ERR_INVALID_VALUE");
 
         _maxRewards = maxRewards;
     }
@@ -232,23 +208,23 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     }
 
     /**
-     * @dev sets the maximum pending rewards that the contract can distribute per epoch
+     * @dev sets the maximum pending rewards that the contract can distribute per an update
      *
-     * @param maxRewardsPerEpoch the maximum pending rewards that the contract can distribute per epoch
+     * @param maxRewardsPerUpdate the maximum pending rewards that the contract can distribute per an update
      */
-    function setMaxRewardsPerEpoch(uint256 maxRewardsPerEpoch) external onlySupervisor {
-        require(maxRewardsPerEpoch <= _maxRewards, "ERR_INVALID_VALUE");
+    function setMaxRewardsPerUpdate(uint256 maxRewardsPerUpdate) external onlySupervisor {
+        require(maxRewardsPerUpdate <= _maxRewards, "ERR_INVALID_VALUE");
 
-        _maxRewardsPerEpoch = maxRewardsPerEpoch;
+        _maxRewardsPerUpdate = maxRewardsPerUpdate;
     }
 
     /**
-     * @dev returns the maximum pending rewards that the contract can distribute per epoch
+     * @dev returns the maximum pending rewards that the contract can distribute per an update
      *
-     * @return the maximum pending rewards that the contract can distribute per epoch
+     * @return the maximum pending rewards that the contract can distribute per an update
      */
-    function maxRewardsPerEpoch() external view returns (uint256) {
-        return _maxRewardsPerEpoch;
+    function maxRewardsPerUpdate() external view returns (uint256) {
+        return _maxRewardsPerUpdate;
     }
 
     /**
@@ -258,96 +234,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      */
     function totalRewards() external view returns (uint256) {
         return _totalRewards;
-    }
-
-    /**
-     * @dev returns the current total amount of pending rewards per epoch
-     *
-     * @param epoch the rewards distribution epoch
-     *
-     * @return the current total amount of pending rewards per epoch
-     */
-    function totalEpochRewards(uint256 epoch) external view returns (uint256) {
-        return _totalEpochRewards[epoch];
-    }
-
-    /**
-     * @dev commits all epoch's rewards and enables their distribution
-     *
-     * @param epoch the rewards distribution epoch
-     */
-    function commitEpoch(uint256 epoch) external onlyRewardsDistributor {
-        require(_committedEpochs.add(epoch), "ERR_ALREADY_COMMITTED");
-    }
-
-    /**
-     * @dev returns all committed epochs
-     *
-     * @return all committed epochs
-     */
-    function committedEpochs() external view returns (uint256[] memory) {
-        uint256 length = _committedEpochs.length();
-        uint256[] memory list = new uint256[](length);
-        for (uint256 i = 0; i < length; ++i) {
-            list[i] = _committedEpochs.at(i);
-        }
-        return list;
-    }
-
-    /**
-     * @dev returns whether an epoch is committed
-     *
-     * @param epoch the rewards distribution epoch
-     *
-     * @return whether an epoch is committed
-     */
-    function isEpochCommitted(uint256 epoch) public view returns (bool) {
-        return _committedEpochs.contains(epoch);
-    }
-
-    /**
-     * @dev returns all pending epochs for the specified ID with an option to filter non-committed positions out
-     *
-     * @param id the ID of the position
-     * @param committedOnly whether to include positions committed only
-     *
-     * @return all pending epochs
-     */
-    function pendingPositionEpochs(uint256 id, bool committedOnly) external view returns (uint256[] memory) {
-        EnumerableSet.UintSet storage pendingEpochs = _rewards[id].pendingEpochs;
-        uint256 length = pendingEpochs.length();
-        uint256[] memory list = new uint256[](length);
-        uint256 filteredLength = 0;
-        for (uint256 i = 0; i < length; ++i) {
-            uint256 epoch = pendingEpochs.at(i);
-            if (!committedOnly || isEpochCommitted(epoch)) {
-                list[i] = pendingEpochs.at(i);
-                filteredLength++;
-            }
-        }
-
-        if (filteredLength == length) {
-            return list;
-        }
-
-        uint256[] memory filteredList = new uint256[](filteredLength);
-        for (uint256 i = 0; i < filteredLength; ++i) {
-            filteredList[i] = list[i];
-        }
-
-        return filteredList;
-    }
-
-    /**
-     * @dev returns the rewards of a specific pending epoch
-     *
-     * @param id the ID of the position
-     * @param epoch the rewards distribution epoch
-     *
-     * @return the rewards
-     */
-    function pendingPositionEpochRewards(uint256 id, uint256 epoch) external view returns (uint256) {
-        return _rewards[id].rewards[epoch];
     }
 
     /**
@@ -426,30 +312,16 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         for (uint256 i = 0; i < length; ++i) {
             uint256 id = ids[i];
 
-            // it should be possible to query other provider's rewards, but obviously not to claim them
-            require(!claim || position(id).provider == msg.sender, "ERR_ACCESS_DENIED");
-
-            RewardData storage rewardsData = _rewards[id];
-            EnumerableSet.UintSet storage pendingEpochs = rewardsData.pendingEpochs;
-
-            uint256 pendingAmount = 0;
-            uint256 pendingEpochsLength = pendingEpochs.length();
-            for (uint256 j = 0; j < pendingEpochsLength; ++j) {
-                uint256 epoch = pendingEpochs.at(j);
-                if (!isEpochCommitted(epoch)) {
-                    continue;
-                }
-
-                pendingAmount = pendingAmount.add(rewardsData.rewards[epoch]);
-            }
+            uint256 reward = _rewards[id];
+            amount = amount.add(reward);
 
             if (claim) {
-                _claimedPositionRewards[id] = _claimedPositionRewards[id].add(pendingAmount);
+                // it should be possible to query other provider's rewards, but obviously not to claim them
+                require(position(id).provider == msg.sender, "ERR_ACCESS_DENIED");
 
-                delete rewardsData.pendingEpochs;
+                _rewards[id] = 0;
+                _claimedPositionRewards[id] = _claimedPositionRewards[id].add(reward);
             }
-
-            amount = amount.add(pendingAmount);
         }
 
         if (claim) {

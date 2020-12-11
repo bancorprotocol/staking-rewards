@@ -10,18 +10,18 @@ contract TestStakingRewardsDistribution is StakingRewardsDistribution, TestTime 
         IStakingRewardsDistributionStore store,
         ITokenGovernance networkTokenGovernance,
         ICheckpointStore lastRemoveTimes,
-        ILiquidityProtection liquidityProtection,
         uint256 maxRewards,
-        uint256 maxRewardsPerEpoch
+        uint256 maxRewardsPerUpdate,
+        IContractRegistry registry
     )
         public
         StakingRewardsDistribution(
             store,
             networkTokenGovernance,
             lastRemoveTimes,
-            liquidityProtection,
             maxRewards,
-            maxRewardsPerEpoch
+            maxRewardsPerUpdate,
+            registry
         )
     {}
 

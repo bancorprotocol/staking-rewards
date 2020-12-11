@@ -14,11 +14,12 @@ import "./ICheckpointStore.sol";
 import "./ILiquidityProtection.sol";
 import "./Time.sol";
 import "./Utils.sol";
+import "./ContractRegistryClient.sol";
 
 /**
  * @dev This contract manages the distribution of the staking rewards.
  */
-contract StakingRewardsDistribution is AccessControl, Time, Utils {
+contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegistryClient {
     using SafeMath for uint256;
     using EnumerableSet for EnumerableSet.UintSet;
     using SafeERC20 for IERC20;
@@ -47,9 +48,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
 
     // the checkpoint store recording last protected position removal times
     ICheckpointStore private immutable _lastRemoveTimes;
-
-    // the instance of the LiquidityProtection contract for staking of the rewards
-    ILiquidityProtection private _liquidityProtection;
 
     // the maximum pending rewards that the contract can distribute
     uint256 private _maxRewards;
@@ -108,30 +106,29 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
      * @param store the staking rewards positions and pool specific data
      * @param networkTokenGovernance the permissioned wrapper around the network token
      * @param lastRemoveTimes the checkpoint store recording last protected position removal times
-     * @param liquidityProtection the instance of the LiquidityProtection contract for staking of the rewards
      * @param maxRewards the maximum pending rewards that the contract can distribute
      * @param maxRewardsPerEpoch the maximum pending rewards that the contract can distribute per epoch
+     * @param registry address of a contract registry contract
      */
     constructor(
         IStakingRewardsDistributionStore store,
         ITokenGovernance networkTokenGovernance,
         ICheckpointStore lastRemoveTimes,
-        ILiquidityProtection liquidityProtection,
         uint256 maxRewards,
         uint256 maxRewardsPerEpoch
+        IContractRegistry registry
     )
         public
         validAddress(address(store))
         validAddress(address(networkTokenGovernance))
         validAddress(address(lastRemoveTimes))
-        validAddress(address(liquidityProtection))
+        ContractRegistryClient(registry)
     {
         require(maxRewardsPerEpoch <= maxRewards, "ERR_INVALID_VALUE");
 
         _store = store;
         _networkTokenGovernance = networkTokenGovernance;
         _lastRemoveTimes = lastRemoveTimes;
-        _liquidityProtection = liquidityProtection;
         _maxRewards = maxRewards;
         _maxRewardsPerEpoch = maxRewardsPerEpoch;
 
@@ -212,28 +209,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
 
         _totalEpochRewards[epoch] = totalEpochRewards;
         _totalRewards = totalRewards;
-    }
-
-    /**
-     * @dev sets the instance of the LiquidityProtection contract
-     *
-     * @param liquidityProtection the instance of the LiquidityProtection contract for staking of the rewards
-     */
-    function setLiquidityProtection(ILiquidityProtection liquidityProtection)
-        external
-        onlySupervisor
-        validAddress(address(liquidityProtection))
-    {
-        _liquidityProtection = liquidityProtection;
-    }
-
-    /**
-     * @dev returns the instance of the LiquidityProtection contract
-     *
-     * @return the instance of the LiquidityProtection contract for staking of the rewards
-     */
-    function liquidityProtection() external view returns (ILiquidityProtection) {
-        return _liquidityProtection;
     }
 
     /**
@@ -518,7 +493,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils {
         uint256 amount = rewards(ids, true);
         require(amount > 0, "ERR_NO_REWARDS");
 
-        ILiquidityProtection lp = _liquidityProtection;
+        ILiquidityProtection lp = ILiquidityProtection(addressOf(LIQUIDITY_PROTECTION));
         ITokenGovernance tokenGov = _networkTokenGovernance;
         IERC20 networkToken = tokenGov.token();
 

@@ -56,11 +56,11 @@ interface IStakingRewardsDistributionStore {
 
     function positionExists(uint256 id) external view returns (bool);
 
-    function providerPositionsCount(address provider) external view returns (uint256);
+    function positionIdsCount(address provider) external view returns (uint256);
 
-    function providerPositions(address provider) external view returns (uint256[] memory);
+    function positionIds(address provider) external view returns (uint256[] memory);
 
-    function providerPosition(address provider, uint256 index) external view returns (uint256);
+    function positionId(address provider, uint256 index) external view returns (uint256);
 
     function updateLastClaimTime(address provider) external;
 

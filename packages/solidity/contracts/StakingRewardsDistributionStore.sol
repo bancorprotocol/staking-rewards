@@ -24,7 +24,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
     mapping(uint256 => Position) private _positions;
 
     // the mapping between providers and their respective position IDs
-    mapping(address => EnumerableSet.UintSet) private _providerPositions;
+    mapping(address => EnumerableSet.UintSet) private _positionIds;
 
     // the mapping between providers and their respective last claim times
     mapping(address => uint256) private _lastClaimTimes;
@@ -254,7 +254,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
         pos.poolToken = poolToken;
         pos.startTime = startTime;
 
-        _providerPositions[provider].add(id);
+        _positionIds[provider].add(id);
 
         if (newPosition) {
             emit PositionOpened(poolToken, provider, id, startTime);
@@ -276,7 +276,7 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
             Position memory p = _positions[id];
             require(p.provider != address(0), "ERR_INVALID_ID");
 
-            _providerPositions[p.provider].remove(id);
+            _positionIds[p.provider].remove(id);
 
             emit PositionClosed(p.poolToken, p.provider, id);
 
@@ -336,8 +336,8 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
      *
      * @return the total number of provider's positions
      */
-    function providerPositionsCount(address provider) external view override returns (uint256) {
-        return _providerPositions[provider].length();
+    function positionIdsCount(address provider) external view override returns (uint256) {
+        return _positionIds[provider].length();
     }
 
     /**
@@ -347,8 +347,8 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
      *
      * @return the all provider's positions
      */
-    function providerPositions(address provider) external view override returns (uint256[] memory) {
-        EnumerableSet.UintSet storage positions = _providerPositions[provider];
+    function positionIds(address provider) external view override returns (uint256[] memory) {
+        EnumerableSet.UintSet storage positions = _positionIds[provider];
         uint256 length = positions.length();
         uint256[] memory list = new uint256[](length);
         for (uint256 i = 0; i < length; ++i) {
@@ -365,8 +365,8 @@ contract StakingRewardsDistributionStore is IStakingRewardsDistributionStore, Ac
      *
      * @return the position at the specified index
      */
-    function providerPosition(address provider, uint256 index) external view override returns (uint256) {
-        return _providerPositions[provider].at(index);
+    function positionId(address provider, uint256 index) external view override returns (uint256) {
+        return _positionIds[provider].at(index);
     }
 
     /**

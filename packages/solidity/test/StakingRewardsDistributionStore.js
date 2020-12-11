@@ -8,7 +8,7 @@ const StakingRewardsDistributionStore = contract.fromArtifact('TestStakingReward
 
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 
-describe('StakingRewardsDistributionStore', () => {
+describe.only('StakingRewardsDistributionStore', () => {
     let store;
     const owner = defaultSender;
     const nonOwner = accounts[1];
@@ -257,17 +257,17 @@ describe('StakingRewardsDistributionStore', () => {
         });
 
         it('should allow adding positions', async () => {
-            const providerPositions = {};
+            const positionIds = {};
             for (let i = 0; i < providers.length; i++) {
                 const provider = providers[i];
                 const id = ids[i];
                 expect(await store.positionExists.call(id)).to.be.false();
 
-                if (!providerPositions[provider]) {
-                    providerPositions[provider] = [];
+                if (!positionIds[provider]) {
+                    positionIds[provider] = [];
                 }
 
-                providerPositions[provider].push(id);
+                positionIds[provider].push(id);
             }
 
             const res = await store.addPositions(poolToken, providers, ids, startTimes, { from: owner });
@@ -284,16 +284,16 @@ describe('StakingRewardsDistributionStore', () => {
                 expect(position[1]).to.eql(poolToken);
                 expect(position[2]).to.be.bignumber.equal(startTime);
 
-                expect(await store.providerPositionsCount.call(provider)).to.be.bignumber.equal(
-                    new BN(providerPositions[provider].length)
+                expect(await store.positionIdsCount.call(provider)).to.be.bignumber.equal(
+                    new BN(positionIds[provider].length)
                 );
-                const positions = await store.providerPositions.call(provider);
-                expect(positions.length).to.be.eql(providerPositions[provider].length);
+                const positions = await store.positionIds.call(provider);
+                expect(positions.length).to.be.eql(positionIds[provider].length);
 
-                for (let j = 0; j < providerPositions[provider].length; j++) {
-                    expect(positions[j]).to.be.bignumber.equal(new BN(providerPositions[provider][j]));
-                    expect(await store.providerPosition(provider, j)).to.be.bignumber.equal(
-                        new BN(providerPositions[provider][j])
+                for (let j = 0; j < positionIds[provider].length; j++) {
+                    expect(positions[j]).to.be.bignumber.equal(new BN(positionIds[provider][j]));
+                    expect(await store.positionId.call(provider, j)).to.be.bignumber.equal(
+                        new BN(positionIds[provider][j])
                     );
                 }
             }
@@ -335,8 +335,8 @@ describe('StakingRewardsDistributionStore', () => {
                     expect(await store.positionExists.call(id)).to.be.false();
                     await expectRevert(store.position.call(id), 'ERR_INVALID_ID');
 
-                    expect(await store.providerPositionsCount.call(provider)).to.be.bignumber.equal(new BN(0));
-                    const positions = await store.providerPositions.call(provider);
+                    expect(await store.positionIdsCount.call(provider)).to.be.bignumber.equal(new BN(0));
+                    const positions = await store.positionIds.call(provider);
                     expect(positions.length).to.eql(0);
                 }
             });

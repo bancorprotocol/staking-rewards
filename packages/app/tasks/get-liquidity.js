@@ -360,6 +360,8 @@ const main = async () => {
 
         process.exit(0);
     } catch (e) {
+        error(e);
+
         process.exit(1);
     }
 };

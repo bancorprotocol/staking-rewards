@@ -24,7 +24,7 @@ const settings = require('../settings.json');
 const { web3Provider } = settings;
 
 let web3;
-let contracts;
+let contracts = {};
 
 const setup = async () => {
     const { externalContracts } = settings;

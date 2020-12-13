@@ -47,13 +47,10 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     // the maximum pending rewards that the contract can distribute
     uint256 private _maxRewards;
 
-    // the maximum pending rewards that the contract can distribute per an update
-    uint256 private _maxRewardsPerUpdate;
-
-    // the current total amount of pending rewards
+    // the current total amount of pending and distributed rewards
     uint256 private _totalRewards;
 
-    // the mapping between position IDs and rewards data
+    // the mapping between position IDs and remaining claimable rewards
     mapping(uint256 => uint256) private _rewards;
 
     // the mapping between positions and their total claimed rewards
@@ -101,7 +98,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @param networkTokenGovernance the permissioned wrapper around the network token
      * @param lastRemoveTimes the checkpoint store recording last protected position removal times
      * @param maxRewards the maximum pending rewards that the contract can distribute
-     * @param maxRewardsPerUpdate the maximum pending rewards that the contract can distribute per an update
      * @param registry address of a contract registry contract
      */
     constructor(
@@ -109,7 +105,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         ITokenGovernance networkTokenGovernance,
         ICheckpointStore lastRemoveTimes,
         uint256 maxRewards,
-        uint256 maxRewardsPerUpdate,
         IContractRegistry registry
     )
         public
@@ -118,13 +113,10 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         validAddress(address(lastRemoveTimes))
         ContractRegistryClient(registry)
     {
-        require(maxRewardsPerUpdate <= maxRewards, "ERR_INVALID_VALUE");
-
         _store = store;
         _networkTokenGovernance = networkTokenGovernance;
         _lastRemoveTimes = lastRemoveTimes;
         _maxRewards = maxRewards;
-        _maxRewardsPerUpdate = maxRewardsPerUpdate;
 
         // Set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
@@ -156,38 +148,27 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @dev adds or updates rewards
      *
      * @param ids IDs of the positions
-     * @param amounts reward amounts
-     * @param prevTotalAmounts previous total reward amounts
+     * @param amounts new total reward amounts
      */
-    function setRewards(
-        uint256[] calldata ids,
-        uint256[] calldata amounts,
-        uint256[] calldata prevTotalAmounts
-    ) external onlyRewardsDistributor {
+    function setRewards(uint256[] calldata ids, uint256[] calldata amounts) external onlyRewardsDistributor {
         uint256 length = ids.length;
-        require(length == amounts.length && amounts.length == prevTotalAmounts.length, "ERR_INVALID_LENGTH");
+        require(length == amounts.length, "ERR_INVALID_LENGTH");
 
         uint256 totalRewards = _totalRewards;
-        uint256 totalUpdateRewards = 0;
 
         for (uint256 i = 0; i < length; ++i) {
             uint256 id = ids[i];
             uint256 amount = amounts[i];
-            uint256 prevTotalAmount = prevTotalAmounts[i];
             require(_store.positionExists(id), "ERR_INVALID_ID");
 
-            uint256 totalAmount = _rewards[id];
-            require(totalAmount == prevTotalAmount, "ERR_INVALID_AMOUNT");
+            uint256 prevAmount = _rewards[id];
+            totalRewards = totalRewards.add(amount).sub(prevAmount);
 
-            _rewards[id] = prevTotalAmount.add(amount);
-
-            totalRewards = totalRewards.add(amount);
-            totalUpdateRewards = totalUpdateRewards.add(amount);
+            _rewards[id] = amount;
 
             emit RewardsUpdated(id, amount);
         }
 
-        require(totalUpdateRewards <= _maxRewardsPerUpdate, "ERR_MAX_REWARDS_PER_UPDATE");
         require(totalRewards <= _maxRewards, "ERR_MAX_REWARDS");
 
         _totalRewards = totalRewards;
@@ -199,8 +180,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @param maxRewards the maximum pending rewards that the contract can distributes
      */
     function setMaxRewards(uint256 maxRewards) external onlySupervisor {
-        require(maxRewards >= _maxRewardsPerUpdate, "ERR_INVALID_VALUE");
-
         _maxRewards = maxRewards;
     }
 
@@ -211,26 +190,6 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      */
     function maxRewards() external view returns (uint256) {
         return _maxRewards;
-    }
-
-    /**
-     * @dev sets the maximum pending rewards that the contract can distribute per an update
-     *
-     * @param maxRewardsPerUpdate the maximum pending rewards that the contract can distribute per an update
-     */
-    function setMaxRewardsPerUpdate(uint256 maxRewardsPerUpdate) external onlySupervisor {
-        require(maxRewardsPerUpdate <= _maxRewards, "ERR_INVALID_VALUE");
-
-        _maxRewardsPerUpdate = maxRewardsPerUpdate;
-    }
-
-    /**
-     * @dev returns the maximum pending rewards that the contract can distribute per an update
-     *
-     * @return the maximum pending rewards that the contract can distribute per an update
-     */
-    function maxRewardsPerUpdate() external view returns (uint256) {
-        return _maxRewardsPerUpdate;
     }
 
     /**
@@ -318,15 +277,22 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         for (uint256 i = 0; i < length; ++i) {
             uint256 id = ids[i];
 
+            // check for duplicate ids
+            for (uint256 j = i + 1; j < length; ++j) {
+                require(id != ids[j], "ERR_DUPLICATE_ID");
+            }
+
             uint256 reward = _rewards[id];
-            amount = amount.add(reward);
+            uint256 claimed = _claimedPositionRewards[id];
+
+            // make sure to exclude already claimed rewards
+            amount = amount.add(reward.sub(claimed));
 
             if (claim) {
                 // it should be possible to query other provider's rewards, but obviously not to claim them
                 require(position(id).provider == msg.sender, "ERR_ACCESS_DENIED");
 
-                _rewards[id] = 0;
-                _claimedPositionRewards[id] = _claimedPositionRewards[id].add(reward);
+                _claimedPositionRewards[id] = reward;
             }
         }
 
@@ -393,6 +359,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * or removed
      *
      * @param ids the position ids to retrieve the rewards multiplier for
+     *
      * @return the rewards multiplier
      */
     function rewardsMultipliers(uint256[] calldata ids) external view returns (uint32[] memory) {
@@ -435,5 +402,24 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         // * for 3 <= x <= 4 weeks: 175% PPM
         // * for x > 4 weeks: 200% PPM
         return PPM_RESOLUTION + MULTIPLIER_INCREMENT * uint32(Math.min(effectiveStakingDuration.div(1 weeks), 4));
+    }
+
+    /**
+     * @dev checks whether a list of IDs contains duplicates
+     *
+     * @param ids the position ids to check
+     * @return whether a list of IDs contains duplicates
+     */
+    function duplicatesExist(uint256[] calldata ids) private pure returns (bool) {
+        uint256 length = ids.length;
+        for (uint256 i = 0; i < length; ++i) {
+            for (uint256 j = i + 1; j < ids.length; ++j) {
+                if (ids[i] == ids[j]) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }

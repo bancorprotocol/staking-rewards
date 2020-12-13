@@ -11,19 +11,8 @@ contract TestStakingRewardsDistribution is StakingRewardsDistribution, TestTime 
         ITokenGovernance networkTokenGovernance,
         ICheckpointStore lastRemoveTimes,
         uint256 maxRewards,
-        uint256 maxRewardsPerUpdate,
         IContractRegistry registry
-    )
-        public
-        StakingRewardsDistribution(
-            store,
-            networkTokenGovernance,
-            lastRemoveTimes,
-            maxRewards,
-            maxRewardsPerUpdate,
-            registry
-        )
-    {}
+    ) public StakingRewardsDistribution(store, networkTokenGovernance, lastRemoveTimes, maxRewards, registry) {}
 
     function time() internal view override(Time, TestTime) returns (uint256) {
         return TestTime.time();

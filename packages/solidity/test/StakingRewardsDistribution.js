@@ -23,7 +23,6 @@ const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
 const ROLE_REWARDS_DISTRIBUTOR = web3.utils.keccak256('ROLE_REWARDS_DISTRIBUTOR');
 
 const MAX_REWARDS = new BN(1000000000).mul(new BN(10).pow(new BN(18)));
-const MAX_REWARDS_PER_UPDATE = MAX_REWARDS.div(new BN(10));
 
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
@@ -78,7 +77,6 @@ describe('StakingRewardsDistribution', () => {
             networkTokenGovernance.address,
             checkpointStore.address,
             MAX_REWARDS,
-            MAX_REWARDS_PER_UPDATE,
             contractRegistry.address
         );
 
@@ -100,7 +98,6 @@ describe('StakingRewardsDistribution', () => {
             expect(await staking.hasRole.call(ROLE_REWARDS_DISTRIBUTOR, supervisor)).to.be.false();
 
             expect(await staking.maxRewards.call()).to.be.bignumber.equal(MAX_REWARDS);
-            expect(await staking.maxRewardsPerUpdate.call()).to.be.bignumber.equal(MAX_REWARDS_PER_UPDATE);
         });
 
         it('should revert if initialized with a zero address store', async () => {
@@ -110,7 +107,6 @@ describe('StakingRewardsDistribution', () => {
                     networkTokenGovernance.address,
                     checkpointStore.address,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_UPDATE,
                     contractRegistry.address
                 ),
                 'ERR_INVALID_ADDRESS'
@@ -124,7 +120,6 @@ describe('StakingRewardsDistribution', () => {
                     ZERO_ADDRESS,
                     checkpointStore.address,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_UPDATE,
                     contractRegistry.address
                 ),
                 'ERR_INVALID_ADDRESS'
@@ -138,24 +133,9 @@ describe('StakingRewardsDistribution', () => {
                     networkTokenGovernance.address,
                     ZERO_ADDRESS,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_UPDATE,
                     contractRegistry.address
                 ),
                 'ERR_INVALID_ADDRESS'
-            );
-        });
-
-        it('should revert if initialized with invalid max rewards restrictions', async () => {
-            await expectRevert(
-                StakingRewardsDistribution.new(
-                    store.address,
-                    networkTokenGovernance.address,
-                    checkpointStore.address,
-                    MAX_REWARDS,
-                    MAX_REWARDS.add(new BN(1)),
-                    contractRegistry.address
-                ),
-                'ERR_INVALID_VALUE'
             );
         });
 
@@ -166,7 +146,6 @@ describe('StakingRewardsDistribution', () => {
                     networkTokenGovernance.address,
                     checkpointStore.address,
                     MAX_REWARDS,
-                    MAX_REWARDS_PER_UPDATE,
                     ZERO_ADDRESS
                 ),
                 'ERR_INVALID_ADDRESS'
@@ -181,37 +160,10 @@ describe('StakingRewardsDistribution', () => {
             await expectRevert(staking.setMaxRewards(MAX_REWARDS, { from: nonSupervisor }), 'ERR_ACCESS_DENIED');
         });
 
-        it('should revert when setting the max rewards to be below max rewards per an update', async () => {
-            await expectRevert(
-                staking.setMaxRewards(MAX_REWARDS_PER_UPDATE.sub(new BN(1)), { from: supervisor }),
-                'ERR_INVALID_VALUE'
-            );
-        });
-
         it('should allow setting the max rewards', async () => {
             const maxRewards = MAX_REWARDS.add(new BN(1000));
             await staking.setMaxRewards(maxRewards, { from: supervisor });
             expect(await staking.maxRewards.call()).to.be.bignumber.equal(maxRewards);
-        });
-
-        it('should revert if a non-supervisor attempts to set the max rewards per an update', async () => {
-            await expectRevert(
-                staking.setMaxRewardsPerUpdate(MAX_REWARDS_PER_UPDATE, { from: nonSupervisor }),
-                'ERR_ACCESS_DENIED'
-            );
-        });
-
-        it('should revert when setting the max rewards per an update to be above the max rewards', async () => {
-            await expectRevert(
-                staking.setMaxRewardsPerUpdate(MAX_REWARDS.add(new BN(1)), { from: supervisor }),
-                'ERR_INVALID_VALUE'
-            );
-        });
-
-        it('should allow setting the max rewards per an update', async () => {
-            const maxRewardsPerUpdate = MAX_REWARDS_PER_UPDATE.add(new BN(1000));
-            await staking.setMaxRewardsPerUpdate(maxRewardsPerUpdate, { from: supervisor });
-            expect(await staking.maxRewardsPerUpdate.call()).to.be.bignumber.equal(maxRewardsPerUpdate);
         });
     });
 
@@ -230,22 +182,26 @@ describe('StakingRewardsDistribution', () => {
             await store.addPositions(poolToken, providers, ids, startTimes);
         });
 
-        const testSetRewards = async (ids, amounts, prevTotalAmounts) => {
+        const testSetRewards = async (ids, amounts) => {
             let totalRewards = await staking.totalRewards.call();
-            for (const amount of amounts) {
-                totalRewards = totalRewards.add(amount);
-            }
 
-            const res = await staking.setRewards(ids, amounts, prevTotalAmounts, { from: distributor });
-
-            const rewards = {};
             for (let i = 0; i < ids.length; ++i) {
                 const id = ids[i];
                 const amount = amounts[i];
 
-                rewards[id] = amount;
+                const prevReward = await staking.rewards.call([id]);
+                totalRewards = totalRewards.add(amount).sub(prevReward);
+            }
+
+            const res = await staking.setRewards(ids, amounts, { from: distributor });
+
+            for (let i = 0; i < ids.length; ++i) {
+                const id = ids[i];
+                const amount = amounts[i];
 
                 expectEvent(res, 'RewardsUpdated', { id, amount });
+
+                expect(await staking.rewards.call([id])).to.be.bignumber.equal(amount);
             }
 
             expect(await staking.totalRewards.call()).be.bignumber.equal(totalRewards);
@@ -253,7 +209,7 @@ describe('StakingRewardsDistribution', () => {
 
         it('should revert when a non-distributor attempts to set rewards', async () => {
             await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(200)], [new BN(0), new BN(0)], {
+                staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(200)], {
                     from: nonDistributor
                 }),
                 'ERR_ACCESS_DENIED'
@@ -262,102 +218,58 @@ describe('StakingRewardsDistribution', () => {
 
         it('should revert when setting rewards for non-existing positions', async () => {
             await expectRevert(
-                staking.setRewards([ids[0], new BN(50000)], [new BN(10), new BN(200)], [new BN(0), new BN(0)], {
+                staking.setRewards([ids[0], new BN(50000)], [new BN(10), new BN(200)], {
                     from: distributor
                 }),
                 'ERR_INVALID_ID'
             );
         });
 
-        it('should revert when a setting more than the max per update rewards', async () => {
-            await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(10), MAX_REWARDS_PER_UPDATE], [new BN(0), new BN(0)], {
-                    from: distributor
-                }),
-                'ERR_MAX_REWARDS_PER_UPDATE'
-            );
-        });
-
         it('should revert when a setting more than the global max rewards', async () => {
             await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(10), MAX_REWARDS], [new BN(0), new BN(0)], {
+                staking.setRewards([ids[0], ids[1]], [new BN(10), MAX_REWARDS], {
                     from: distributor
                 }),
-                'ERR_MAX_REWARDS_PER_UPDATE'
-            );
-
-            let i;
-            let prevAmount = new BN(0);
-            for (i = new BN(0); i.lt(MAX_REWARDS.div(MAX_REWARDS_PER_UPDATE)); i = i.add(new BN(1))) {
-                await staking.setRewards([ids[0]], [MAX_REWARDS_PER_UPDATE], [i.mul(MAX_REWARDS_PER_UPDATE)], {
-                    from: distributor
-                });
-            }
-
-            await expectRevert(
-                staking.setRewards([ids[0]], [new BN(1)], [MAX_REWARDS], { from: distributor }),
                 'ERR_MAX_REWARDS'
             );
+
+            await staking.setRewards([ids[0]], [MAX_REWARDS], { from: distributor });
+            await expectRevert(staking.setRewards([ids[1]], [new BN(1)], { from: distributor }), 'ERR_MAX_REWARDS');
         });
 
         it('should revert when a setting rewards with invalid lengths', async () => {
             await expectRevert(
-                staking.setRewards([ids[0]], [new BN(10), new BN(10)], [new BN(0), new BN(0)], { from: distributor }),
+                staking.setRewards([ids[0]], [new BN(10), new BN(10)], { from: distributor }),
                 'ERR_INVALID_LENGTH'
             );
 
             await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(10)], [new BN(0), new BN(0)], { from: distributor }),
+                staking.setRewards([ids[0], ids[1]], [new BN(10)], { from: distributor }),
                 'ERR_INVALID_LENGTH'
-            );
-
-            await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(10)], [new BN(0), new BN(0)], { from: distributor }),
-                'ERR_INVALID_LENGTH'
-            );
-        });
-
-        it('should revert when a setting rewards with incorrect previous amounts', async () => {
-            await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(10)], [new BN(0), new BN(1)], {
-                    from: distributor
-                }),
-                'ERR_INVALID_AMOUNT'
-            );
-
-            await staking.setRewards([ids[0], ids[1]], [new BN(10), new BN(10)], [new BN(0), new BN(0)], {
-                from: distributor
-            });
-
-            await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(200), new BN(100)], [new BN(0), new BN(10)], {
-                    from: distributor
-                }),
-                'ERR_INVALID_AMOUNT'
-            );
-
-            await expectRevert(
-                staking.setRewards([ids[0], ids[1]], [new BN(200), new BN(100)], [new BN(10), new BN(0)], {
-                    from: distributor
-                }),
-                'ERR_INVALID_AMOUNT'
             );
         });
 
         it('should allow setting multiple rewards', async () => {
-            await testSetRewards(
-                [ids[0], ids[1], ids[2]],
-                [new BN(1000), new BN(2000), new BN(3000)],
-                [new BN(0), new BN(0), new BN(0)]
-            );
-
-            await testSetRewards([ids[0], ids[2]], [new BN(10000), new BN(30000)], [new BN(1000), new BN(3000)]);
-
+            await testSetRewards([ids[0], ids[1], ids[2]], [new BN(1000), new BN(2000), new BN(3000)]);
+            await testSetRewards([ids[0], ids[2]], [new BN(10000), new BN(30000)]);
             await testSetRewards(
                 [ids[2], ids[0], ids[1], ids[3]],
-                [new BN(10000), new BN(30000), new BN(0), new BN(1)],
-                [new BN(33000), new BN(11000), new BN(2000), new BN(0)]
+                [new BN(10000), new BN(30000), new BN(0), new BN(1)]
             );
+        });
+
+        it('should allow setting rewards for the same position twice', async () => {
+            await staking.setRewards([ids[0], ids[1], ids[0]], [new BN(10000), new BN(20000), new BN(0)], {
+                from: distributor
+            });
+            expect(await staking.rewards.call([ids[0]])).to.be.bignumber.equal(new BN(0));
+            expect(await staking.rewards.call([ids[1]])).to.be.bignumber.equal(new BN(20000));
+
+            await staking.setRewards([ids[1], ids[1], ids[0]], [new BN(10000), new BN(30000), new BN(111)], {
+                from: distributor
+            });
+            expect(await staking.rewards.call([ids[0]])).to.be.bignumber.equal(new BN(111));
+            expect(await staking.rewards.call([ids[1]])).to.be.bignumber.equal(new BN(30000));
         });
     });
 
@@ -497,56 +409,15 @@ describe('StakingRewardsDistribution', () => {
         });
 
         context('with pending rewards', async () => {
-            const rewards = [
-                {
-                    [ids[0]]: new BN(1000),
-                    [ids[1]]: new BN(2000),
-                    [ids[2]]: new BN(3000),
-                    [ids[3]]: new BN(30000)
-                },
-                {
-                    [ids[0]]: new BN(100000),
-                    [ids[1]]: new BN(200000),
-                    [ids[2]]: new BN(300000),
-                    [ids[3]]: new BN(888888)
-                },
-                {
-                    [ids[0]]: new BN(100000)
-                },
-                {
-                    [ids[1]]: new BN(500000)
-                },
-                {
-                    [ids[2]]: new BN(700000)
-                },
-                {
-                    [ids[0]]: new BN(1),
-                    [ids[1]]: new BN(2),
-                    [ids[2]]: new BN(3),
-                    [ids[3]]: new BN(4)
-                },
-                {
-                    [ids[0]]: new BN(100),
-                    [ids[1]]: new BN(1000),
-                    [ids[2]]: new BN(10000),
-                    [ids[3]]: new BN(100000)
-                }
-            ];
+            const rewards = {
+                [ids[0]]: new BN(100000),
+                [ids[1]]: new BN(200000),
+                [ids[2]]: new BN(300000),
+                [ids[3]]: new BN(888888)
+            };
 
             const testRewards = async (ids, provider, stake = false) => {
-                const totalPositionRewards = new BN(0);
-                let totalRewards = new BN(0);
-                for (const data of rewards) {
-                    for (const [id, amount] of Object.entries(data)) {
-                        if (amount) {
-                            totalRewards = totalRewards.add(amount);
-                            if (!totalPositionRewards[id]) {
-                                totalPositionRewards[id] = new BN(0);
-                            }
-                            totalPositionRewards[id] = totalPositionRewards[id].add(amount);
-                        }
-                    }
-                }
+                const totalRewards = ids.reduce((res, id) => res.add(rewards[id]), new BN(0));
 
                 expect(await staking.rewards.call(ids)).to.be.bignumber.equal(totalRewards);
 
@@ -600,26 +471,35 @@ describe('StakingRewardsDistribution', () => {
                 expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(totalRewards);
 
                 for (const id of ids) {
-                    expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(
-                        totalPositionRewards[id]
-                    );
+                    expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(rewards[id]);
                 }
 
                 expect(await staking.rewards.call(ids)).to.be.bignumber.equal(new BN(0));
             };
 
             beforeEach(async () => {
-                for (const data of rewards) {
-                    const ids = Object.keys(data);
-                    const amounts = Object.values(data);
+                await staking.setRewards(
+                    ids,
+                    ids.map((id) => rewards[id]),
+                    { from: distributor }
+                );
+            });
 
-                    const prevAmounts = [];
-                    for (const id of ids) {
-                        prevAmounts.push(await staking.rewards.call([id]));
-                    }
+            it('should return claimable rewards per positions', async () => {
+                for (const indexes of [[0], [0, 1, 2, 3], [1, 3], [3, 2, 1, 0], [3, 2]]) {
+                    const totalRewards = indexes.reduce((res, index) => res.add(rewards[ids[index]]), new BN(0));
 
-                    await staking.setRewards(ids, amounts, prevAmounts, { from: distributor });
+                    expect(await staking.rewards.call(indexes.map((index) => ids[index]))).to.be.bignumber.equal(
+                        totalRewards
+                    );
                 }
+            });
+
+            it('should revert when querying for duplicated ids', async () => {
+                await expectRevert(staking.rewards.call([ids[0], ids[0]]), 'ERR_DUPLICATE_ID');
+                await expectRevert(staking.rewards.call([ids[0], ids[1], ids[0]]), 'ERR_DUPLICATE_ID');
+                await expectRevert(staking.rewards.call([ids[1], ids[1], ids[1]]), 'ERR_DUPLICATE_ID');
+                await expectRevert(staking.rewards.call([ids[0], ids[1], ids[2], ids[0]]), 'ERR_DUPLICATE_ID');
             });
 
             it('should claim all pending rewards', async () => {
@@ -631,49 +511,73 @@ describe('StakingRewardsDistribution', () => {
                 await expectRevert(staking.claimRewards(ids, { from: provider }), 'ERR_NO_REWARDS');
             });
 
+            it('should revert when claiming the same id twice', async () => {
+                await expectRevert(staking.claimRewards([ids[0], ids[0]], { from: provider }), 'ERR_DUPLICATE_ID');
+            });
+
             it('should claim and stake all pending rewards', async () => {
                 await testRewards(ids, provider, true);
             });
 
-            it('should revert when claiming and staking rewards twice', async () => {
-                await testRewards(ids, provider, true);
-                await expectRevert(staking.stakeRewards(ids, poolToken2, { from: provider }), 'ERR_NO_REWARDS');
+            it('should revert when claiming and staking the same id twice', async () => {
+                await expectRevert(
+                    staking.stakeRewards([ids[0], ids[0]], poolToken2, { from: provider }),
+                    'ERR_DUPLICATE_ID'
+                );
             });
 
             it('should update total position claimed rewards when claiming', async () => {
                 const id = ids[0];
 
                 await staking.claimRewards([id], { from: provider });
-                const claimed = await staking.claimedPositionRewards.call(id);
+                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(rewards[id]);
 
                 const reward = new BN(999999999999);
-                await staking.setRewards([id], [reward], [new BN(0)], { from: distributor });
+                await staking.setRewards([id], [reward], { from: distributor });
                 await staking.claimRewards([id], { from: provider });
-                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(claimed.add(reward));
+                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(reward);
             });
 
             it('should update total position claimed rewards when staking', async () => {
                 const id = ids[0];
 
                 await staking.stakeRewards([id], poolToken2, { from: provider });
-                const claimed = await staking.claimedPositionRewards.call(id);
+                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(rewards[id]);
 
                 const reward = new BN(999999999999);
-                await staking.setRewards([id], [reward], [new BN(0)], { from: distributor });
+                await staking.setRewards([id], [reward], { from: distributor });
                 await staking.stakeRewards([id], poolToken2, { from: provider });
-                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(claimed.add(reward));
+                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(reward);
             });
 
             it('should update total provider claimed rewards when claiming', async () => {
                 const id = ids[0];
 
+                const prevReward = await staking.rewards.call([id]);
                 await staking.claimRewards([id], { from: provider });
                 const claimed = await staking.claimedProviderRewards.call(provider);
 
                 const reward = new BN(999999999999);
-                await staking.setRewards([id], [reward], [new BN(0)], { from: distributor });
+                await staking.setRewards([id], [reward], { from: distributor });
                 await staking.claimRewards([id], { from: provider });
-                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(claimed.add(reward));
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(
+                    claimed.add(reward.sub(prevReward))
+                );
+            });
+
+            it('should update total provider claimed rewards when staking', async () => {
+                const id = ids[0];
+
+                const prevReward = await staking.rewards.call([id]);
+                await staking.stakeRewards([id], poolToken2, { from: provider });
+                const claimed = await staking.claimedProviderRewards.call(provider);
+
+                const reward = new BN(999999999999);
+                await staking.setRewards([id], [reward], { from: distributor });
+                await staking.stakeRewards([id], poolToken2, { from: provider });
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(
+                    claimed.add(reward.sub(prevReward))
+                );
             });
         });
     });

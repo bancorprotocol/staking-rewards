@@ -6,16 +6,8 @@ const { info, error, arg } = require('../utils/logger');
 const main = async () => {
     const { settings, web3, contracts, BN } = await setup();
 
-    try {
-        // TODO: remove
-        const block = await web3.eth.getBlock(11271014);
-        console.log(block.timestamp);
-
-        //process.exit(0);
-
-        const {
-            rewards: { pools }
-        } = settings;
+    const setPools = async (pools) => {
+        info('Adding pools');
 
         for (const pool of pools) {
             const { poolToken, startTime, endTime, weeklyRewards } = pool;
@@ -33,7 +25,9 @@ const main = async () => {
                 .addPoolProgram(poolToken, startTime, endTime, weeklyRewards)
                 .send();
         }
+    };
 
+    const verifyPools = async (pools) => {
         info('Verifying pools');
 
         for (const pool of pools) {
@@ -55,6 +49,21 @@ const main = async () => {
                 error("Pool weekly rewards times don't match", arg('expected', weeklyRewards), arg('actual', data[2]));
             }
         }
+    };
+
+    try {
+        // TODO: remove
+        const block = await web3.eth.getBlock(11271014);
+        console.log(block.timestamp);
+
+        process.exit(0);
+
+        const {
+            rewards: { pools }
+        } = settings;
+
+        await setPools(pools);
+        await verifyPools(pools);
 
         process.exit(0);
     } catch (e) {

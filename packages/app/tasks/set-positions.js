@@ -4,25 +4,8 @@ const { info, trace, error, arg } = require('../utils/logger');
 const main = async () => {
     const { contracts, BN } = await setup();
 
-    try {
-        const dbDir = path.resolve(__dirname, '../data');
-        const positionsDbPath = path.join(dbDir, 'positions.json');
-        if (!fs.existsSync(positionsDbPath)) {
-            error('Unable to locate', arg('db', positionsDbPath));
-        }
-
-        const positionsData = JSON.parse(fs.readFileSync(positionsDbPath));
-
-        let lastAddedPosition;
-        if (!positionsData.lastAddedPosition) {
-            warning('DB last added position ID is missing. Starting from the beginning');
-            lastAddedPosition = 0;
-        } else {
-            lastAddedPosition = positionsData.lastAddedPosition;
-        }
-
-        const { positions } = positionsData;
-        const groupedPositions = Object.entries(positions).reduce((res, [id, data]) => {
+    const groupPositions = (positions, lastAddedPosition) => {
+        return Object.entries(positions).reduce((res, [id, data]) => {
             if (new BN(id).lte(new BN(lastAddedPosition))) {
                 return res;
             }
@@ -31,7 +14,9 @@ const main = async () => {
             (res[poolToken] = res[poolToken] || []).push({ [id]: data });
             return res;
         }, {});
+    };
 
+    const setPositions = async (groupedPositions, lastAddedPosition) => {
         const batchSize = 200;
         const lastId = lastAddedPosition;
 
@@ -74,7 +59,9 @@ const main = async () => {
                 lastId = currentLastId;
             }
         }
+    };
 
+    const verifyPositions = (groupedPositions) => {
         info('Verifying positions');
 
         for (const [poolToken, positions] of groupedPositions) {
@@ -98,6 +85,28 @@ const main = async () => {
                 }
             }
         }
+    }
+
+    try {
+        const dbDir = path.resolve(__dirname, '../data');
+        const positionsDbPath = path.join(dbDir, 'positions.json');
+        if (!fs.existsSync(positionsDbPath)) {
+            error('Unable to locate', arg('db', positionsDbPath));
+        }
+
+        const positionsData = JSON.parse(fs.readFileSync(positionsDbPath));
+
+        let lastAddedPosition;
+        if (!positionsData.lastAddedPosition) {
+            warning('DB last added position ID is missing. Starting from the beginning');
+            lastAddedPosition = 0;
+        } else {
+            lastAddedPosition = positionsData.lastAddedPosition;
+        }
+
+        const groupedPositions = groupPositions(positions, lastAddedPosition);
+        await setPositions(groupedPositions, lastAddedPosition);
+        await verifyPositions(groupedPositions);
 
         positionsData.lastAddedPosition = lastId;
 

@@ -93,7 +93,6 @@ const setup = async () => {
                 TokenGovernanceSettings.address,
                 externalContracts.CheckpointStore.address,
                 new BN(2).pow(new BN(256)).sub(new BN(1)),
-                new BN(2).pow(new BN(256)).sub(new BN(1)),
                 externalContracts.ContractRegistry.address
             ]
         }).send();

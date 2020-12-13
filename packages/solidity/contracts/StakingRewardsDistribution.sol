@@ -76,7 +76,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @param ids the IDs of the positions
      * @param amount the total rewards amount
      */
-    event RewardsClaimed(uint256[] ids, uint256 amount);
+    event RewardsClaimed(address indexed provider, uint256[] ids, uint256 amount);
 
     /**
      * @dev triggered when pending rewards are being added or updated
@@ -86,7 +86,13 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
      * @param amount the reward amount
      * @param newId the ID of the new position
      */
-    event RewardsStaked(uint256[] ids, IERC20 indexed poolToken, uint256 amount, uint256 indexed newId);
+    event RewardsStaked(
+        address indexed provider,
+        uint256[] ids,
+        IERC20 indexed poolToken,
+        uint256 amount,
+        uint256 indexed newId
+    );
 
     /**
      * @dev initializes a new StakingRewardsDistribution contract
@@ -348,7 +354,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
 
         _networkTokenGovernance.mint(msg.sender, amount);
 
-        emit RewardsClaimed(ids, amount);
+        emit RewardsClaimed(msg.sender, ids, amount);
 
         return amount;
     }
@@ -377,7 +383,7 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
         // please note, that in order to incentivize restaking, we won't be updating the time of the last claim, thus
         // preserving the rewards bonus multiplier
 
-        emit RewardsStaked(ids, poolToken, amount, newId);
+        emit RewardsStaked(msg.sender, ids, poolToken, amount, newId);
 
         return (amount, newId);
     }

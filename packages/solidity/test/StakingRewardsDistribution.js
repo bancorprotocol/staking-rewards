@@ -561,6 +561,7 @@ describe('StakingRewardsDistribution', () => {
 
                     const event = res.logs[0];
                     expect(event.event).to.eql('RewardsClaimed');
+                    expect(event.args.provider).to.eql(provider);
                     expectEqualArrays(event.args.ids, ids);
                     expect(event.args.amount).to.be.bignumber.equal(totalRewards);
 
@@ -578,6 +579,7 @@ describe('StakingRewardsDistribution', () => {
                     const res = await staking.stakeRewards(ids, poolToken2, { from: provider });
                     const event = res.logs[0];
                     expect(event.event).to.eql('RewardsStaked');
+                    expect(event.args.provider).to.eql(provider);
                     expectEqualArrays(event.args.ids, ids);
                     expect(event.args.poolToken).to.eql(poolToken2);
                     expect(event.args.amount).to.be.bignumber.equal(totalRewards);

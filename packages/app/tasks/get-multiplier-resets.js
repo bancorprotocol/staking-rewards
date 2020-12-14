@@ -186,6 +186,10 @@ const main = async () => {
         }
 
         const latestBlock = await web3.eth.getBlockNumber();
+        if (latestBlock === 0) {
+            error('Node is out of sync. Please try again later');
+        }
+
         const toBlock = latestBlock - REORG_OFFSET;
         if (toBlock - fromBlock < REORG_OFFSET) {
             error(

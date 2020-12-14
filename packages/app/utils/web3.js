@@ -131,7 +131,7 @@ const setup = async () => {
         }
     }
 
-    return { settings, web3, contracts, BN };
+    return { settings, web3, contracts, BN, Contract };
 };
 
 module.exports = setup;

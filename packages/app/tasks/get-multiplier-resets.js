@@ -10,6 +10,21 @@ const REORG_OFFSET = 500;
 const main = async () => {
     const { settings, web3, contracts, BN } = await setup();
 
+    const addSnapshot = (snapshots, timestamp, blockNumber) => {
+        const snapshot = {
+            timestamp,
+            blockNumber
+        };
+        const existing = snapshots.findIndex(
+            (i) => new BN(i.timestamp).eq(new BN(timestamp)) && new BN(i.blockNumber).eq(new BN(blockNumber))
+        );
+        if (existing !== -1) {
+            snapshots[existing] = snapshot;
+        } else {
+            snapshots.push(snapshot);
+        }
+    };
+
     const getPositionChanges = async (multiplierResets, fromBlock, toBlock) => {
         const batchSize = 5000;
         let eventCount = 0;
@@ -26,7 +41,7 @@ const main = async () => {
                 'blocks'
             );
 
-            const events = await contracts.StakingRewardsDistribution.getPastEvents('allEvents', {
+            const events = await contracts.LiquidityProtectionStore.getPastEvents('allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
@@ -48,7 +63,11 @@ const main = async () => {
                             arg('tx', transactionHash)
                         );
 
-                        multiplierResets[provider] = BN.max(multiplierResets[provider] || new BN(0), new BN(timestamp));
+                        if (!multiplierResets[provider]) {
+                            multiplierResets[provider] = { snapshots: [] };
+                        }
+
+                        addSnapshot(multiplierResets[provider].snapshots, timestamp, blockNumber);
 
                         eventCount++;
 
@@ -66,7 +85,11 @@ const main = async () => {
                             arg('tx', transactionHash)
                         );
 
-                        multiplierResets[provider] = BN.max(multiplierResets[provider] || new BN(0), new BN(timestamp));
+                        if (!multiplierResets[provider]) {
+                            multiplierResets[provider] = { snapshots: [] };
+                        }
+
+                        addSnapshot(multiplierResets[provider].snapshots, timestamp, blockNumber);
 
                         eventCount++;
 
@@ -80,13 +103,19 @@ const main = async () => {
     };
 
     const getClaimedRewards = async (multiplierResets, fromBlock, toBlock) => {
+        if (!contracts.StakingRewardsDistribution) {
+            warning('Unable to query reward claim events. StakingRewardsDistribution is missing');
+
+            return;
+        }
+
         const batchSize = 5000;
         let eventCount = 0;
         for (let i = fromBlock; i < toBlock; i += batchSize) {
             const endBlock = Math.min(i + batchSize - 1, toBlock);
 
             info(
-                'Querying from reward claim events from',
+                'Querying reward claim events from',
                 arg('startBlock', i),
                 'to',
                 arg('endBlock', endBlock),
@@ -120,7 +149,23 @@ const main = async () => {
                     arg('tx', transactionHash)
                 );
 
-                multiplierResets[provider] = BN.max(multiplierResets[provider] || new BN(0), new BN(timestamp));
+                if (!multiplierResets[provider]) {
+                    multiplierResets[provider] = { snapshots: [] };
+                }
+
+                const snapshot = {
+                    timestamp,
+                    blockNumber
+                };
+                const { snapshots } = multiplierResets[provider];
+                const existing = snapshots.findIndex(
+                    (i) => new BN(i.timestamp).eq(new BN(timestamp)) && new BN(i.blockNumber).eq(new BN(blockNumber))
+                );
+                if (existing !== -1) {
+                    snapshots[existing] = snapshot;
+                } else {
+                    snapshots.push(snapshot);
+                }
 
                 eventCount++;
 
@@ -134,22 +179,63 @@ const main = async () => {
     const verifyMultiplierResets = async (multiplierResets, toBlock) => {
         info('Verifying all multiplier resets at', arg('blockNumber', toBlock));
 
-        for (const [provider, timestamp] of Object.entries(multiplierResets)) {
+        for (const [provider, data] of Object.entries(multiplierResets)) {
             trace('Verifying multiplier resets for', arg('provider', provider));
 
-            const lastRemoveTime = contracts.CheckpointStore.checkpoint(provider).call();
-            const lastClaimTime = contracts.StakingRewardsDistributionStore.lastClaimTime(provider).call();
-            const actualTime = BN.max(new BN(lastRemoveTime), new BN(lastClaimTime));
+            const { snapshots } = data;
+            for (const snapshot of snapshots) {
+                const { blockNumber, timestamp } = snapshot;
 
-            if (!new BN(timestamp).eq(expectedTime)) {
-                error(
-                    'Wrong multiplier reset time for',
-                    arg('provider', provider),
-                    '[',
-                    arg('expected', timestamp),
-                    arg('actual', actualTime),
-                    ']'
+                const lastRemoveTime = contracts.CheckpointStore.checkpoint(provider).call({}, blockNumber);
+                const lastClaimTime = contracts.StakingRewardsDistributionStore.lastClaimTime(provider).call(
+                    {},
+                    blockNumber
                 );
+                const actualTime = BN.max(new BN(lastRemoveTime), new BN(lastClaimTime));
+
+                // Verify snapshot values.
+                if (!new BN(timestamp).eq(actualTime)) {
+                    error(
+                        'Wrong snapshot multiplier reset',
+                        arg('provider', provider),
+                        arg('blockNumber', blockNumber),
+                        arg('timestamp', reserveToken),
+                        '[',
+                        arg('expected', timestamp),
+                        arg('actual', actualTime),
+                        ']'
+                    );
+                }
+
+                // Verify snapshot timestamps.
+                const block = await web3.eth.getBlock(blockNumber);
+                const { timestamp: blockTimeStamp } = block;
+                if (!new BN(timestamp).eq(new BN(blockTimeStamp))) {
+                    error(
+                        'Wrong snapshot timestamp',
+                        arg('provider', provider),
+                        arg('blockNumber', blockNumber),
+                        arg('timestamp', reserveToken),
+                        '[',
+                        arg('expected', timestamp),
+                        arg('actual', blockTimeStamp),
+                        ']'
+                    );
+                }
+            }
+
+            // Verify that the snapshots array is sorted in an ascending order.
+            for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
+                const snapshot1 = snapshots[i];
+                const snapshot2 = snapshots[i + 1];
+                if (!new BN(snapshot1.timestamp).lte(new BN(snapshot2.timestamp))) {
+                    error(
+                        'Wrong snapshots order',
+                        arg('provider', provider),
+                        arg('snapshot1', snapshot1),
+                        arg('snapshot2', snapshot2)
+                    );
+                }
             }
         }
     };
@@ -162,7 +248,9 @@ const main = async () => {
         await getPositionChanges(data.multiplierResets, fromBlock, toBlock);
         await getClaimedRewards(data.multiplierResets, fromBlock, toBlock);
 
-        await verifyMultiplierResets(data.multiplierResets, toBlock);
+        // TODO: re-enable verification after CheckpointStore is up to date
+        // await verifyMultiplierResets(data.multiplierResets, toBlock);
+        warning('Unable to verify multiplier resets without an up to date CheckpointStore contract');
 
         data.lastBlockNumber = toBlock;
     };

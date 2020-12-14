@@ -23,6 +23,22 @@ const main = async () => {
         };
     };
 
+    const addSnapshot = (snapshots, timestamp, blockNumber, amount) => {
+        const snapshot = {
+            timestamp,
+            blockNumber,
+            amount
+        };
+        const existing = snapshots.findIndex(
+            (i) => new BN(i.timestamp).eq(new BN(timestamp)) && new BN(i.blockNumber).eq(new BN(blockNumber))
+        );
+        if (existing !== -1) {
+            snapshots[existing] = snapshot;
+        } else {
+            snapshots.push(snapshot);
+        }
+    };
+
     const getPositionChanges = async (positions, fromBlock, toBlock) => {
         const batchSize = 5000;
         let eventCount = 0;
@@ -226,22 +242,7 @@ const main = async () => {
                         position.poolAmount = new BN(newPoolAmount).toString();
                         position.reserveAmount = new BN(newReserveAmount).toString();
 
-                        const snapshot = {
-                            timestamp,
-                            blockNumber,
-                            amount: position.reserveAmount
-                        };
-                        const { snapshots } = position;
-                        const existing = snapshots.findIndex(
-                            (i) =>
-                                new BN(i.timestamp).eq(new BN(timestamp)) &&
-                                new BN(i.blockNumber).eq(new BN(blockNumber))
-                        );
-                        if (existing !== -1) {
-                            snapshots[existing] = snapshot;
-                        } else {
-                            snapshots.push(snapshot);
-                        }
+                        addSnapshot(position.snapshots, timestamp, blockNumber, position.reserveAmount);
 
                         eventCount++;
 
@@ -330,22 +331,7 @@ const main = async () => {
                         position.poolAmount = 0;
                         position.reserveAmount = 0;
 
-                        const snapshot = {
-                            timestamp,
-                            blockNumber,
-                            amount: position.reserveAmount
-                        };
-                        const { snapshots } = position;
-                        const existing = snapshots.findIndex(
-                            (i) =>
-                                new BN(i.timestamp).eq(new BN(timestamp)) &&
-                                new BN(i.blockNumber).eq(new BN(blockNumber))
-                        );
-                        if (existing !== -1) {
-                            snapshots[existing] = snapshot;
-                        } else {
-                            snapshots.push(snapshot);
-                        }
+                        addSnapshot(position.snapshots, timestamp, blockNumber, position.reserveAmount);
 
                         eventCount++;
 
@@ -364,16 +350,20 @@ const main = async () => {
         for (const [id, data] of Object.entries(positions)) {
             trace('Verifying position historical reserve amounts', arg('id', id));
 
-            const { snapshots } = data;
+            const { poolToken, reserveToken, snapshots } = data;
             for (const snapshot of snapshots) {
                 const { blockNumber, timestamp, amount } = snapshot;
+
+                // Verify snapshot values.
                 const pos = await getPosition(id, blockNumber);
                 if (!new BN(amount).eq(new BN(pos.reserveAmount))) {
                     error(
-                        'Historic position reserve amount does not match for',
+                        'Wrong snapshot reserve amount',
                         arg('id', id),
-                        arg('poolToken', data.poolToken),
-                        arg('reserveToken', data.reserveToken),
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken),
+                        arg('blockNumber', blockNumber),
+                        arg('timestamp', reserveToken),
                         '[',
                         arg('expected', amount),
                         arg('actual', pos.reserveAmount),
@@ -381,18 +371,37 @@ const main = async () => {
                     );
                 }
 
+                // Verify snapshot timestamps.
                 const block = await web3.eth.getBlock(blockNumber);
                 const { timestamp: blockTimeStamp } = block;
                 if (!new BN(timestamp).eq(new BN(blockTimeStamp))) {
                     error(
-                        'Historic position timestamp does not match for',
+                        'Wrong snapshot timestamp',
                         arg('id', id),
-                        arg('poolToken', data.poolToken),
-                        arg('reserveToken', data.reserveToken),
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken),
+                        arg('blockNumber', blockNumber),
+                        arg('timestamp', reserveToken),
                         '[',
                         arg('expected', timestamp),
                         arg('actual', blockTimeStamp),
                         ']'
+                    );
+                }
+            }
+
+            // Verify that the snapshots array is sorted in an ascending order.
+            for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
+                const snapshot1 = snapshots[i];
+                const snapshot2 = snapshots[i + 1];
+                if (new BN(snapshot1.timestamp).gt(new BN(snapshot2.timestamp))) {
+                    error(
+                        'Wrong snapshots order',
+                        arg('id', id),
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken),
+                        arg('snapshot1', snapshot1),
+                        arg('snapshot2', snapshot2)
                     );
                 }
             }

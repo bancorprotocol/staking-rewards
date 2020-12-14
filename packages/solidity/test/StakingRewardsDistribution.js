@@ -273,6 +273,108 @@ describe('StakingRewardsDistribution', () => {
         });
     });
 
+    describe('updating claimed rewards', () => {
+        const distributor = accounts[1];
+        const nonDistributor = accounts[2];
+        const poolToken = accounts[3];
+
+        const providers = [accounts[1], accounts[2], accounts[3], accounts[4]];
+        const ids = [new BN(123), new BN(2), new BN(3), new BN(10)];
+        const providersByIds = {
+            [ids[0]]: providers[0],
+            [ids[1]]: providers[1],
+            [ids[2]]: providers[2],
+            [ids[3]]: providers[3]
+        };
+        const startTimes = [new BN(0), new BN(0), new BN(0), new BN(0)];
+        beforeEach(async () => {
+            await staking.grantRole(ROLE_REWARDS_DISTRIBUTOR, distributor);
+
+            await store.addPoolProgram(poolToken, now, now.add(REWARDS_DURATION), WEEKLY_REWARDS);
+            await store.addPositions(poolToken, providers, ids, startTimes);
+        });
+
+        const testUpdateClaimRewards = async (ids, amounts) => {
+            const prevClaimedRewards = await staking.claimedPositionRewards.call(ids);
+            const prevProviderRewards = {};
+            for (let i = 0; i < ids.length; ++i) {
+                const id = ids[i];
+                const provider = providersByIds[id];
+
+                prevProviderRewards[provider] = await staking.claimedProviderRewards.call(provider);
+            }
+
+            const res = await staking.updateClaimedRewards(ids, amounts, { from: distributor });
+
+            for (let i = 0; i < ids.length; ++i) {
+                const id = ids[i];
+                const amount = amounts[i];
+                const provider = providersByIds[id];
+
+                expectEvent(res, 'ClaimedRewardsUpdated', { id, amount });
+
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(
+                    prevProviderRewards[provider].add(amount).sub(prevClaimedRewards[i])
+                );
+            }
+
+            expectEqualArrays(await staking.claimedPositionRewards.call(ids), amounts);
+        };
+
+        it('should revert when a non-distributor attempts to update claimed rewards', async () => {
+            await expectRevert(
+                staking.updateClaimedRewards([ids[0], ids[1]], [new BN(10), new BN(200)], {
+                    from: nonDistributor
+                }),
+                'ERR_ACCESS_DENIED'
+            );
+        });
+
+        it('should revert when updating claimed rewards for non-existing positions', async () => {
+            await expectRevert(
+                staking.updateClaimedRewards([ids[0], new BN(50000)], [new BN(10), new BN(200)], {
+                    from: distributor
+                }),
+                'ERR_INVALID_ID'
+            );
+        });
+
+        it('should revert when a updating claimed rewards with invalid lengths', async () => {
+            await expectRevert(
+                staking.updateClaimedRewards([ids[0]], [new BN(10), new BN(10)], { from: distributor }),
+                'ERR_INVALID_LENGTH'
+            );
+
+            await expectRevert(
+                staking.updateClaimedRewards([ids[0], ids[1]], [new BN(10)], { from: distributor }),
+                'ERR_INVALID_LENGTH'
+            );
+        });
+
+        it('should allow update multiple claimed rewards', async () => {
+            await testUpdateClaimRewards([ids[0], ids[1], ids[2]], [new BN(1000), new BN(2000), new BN(3000)]);
+            await testUpdateClaimRewards([ids[0], ids[2]], [new BN(10000), new BN(30000)]);
+            await testUpdateClaimRewards(
+                [ids[2], ids[0], ids[1], ids[3]],
+                [new BN(10000), new BN(30000), new BN(0), new BN(1)]
+            );
+        });
+
+        it('should allow updated claimed rewards for the same position twice', async () => {
+            await staking.updateClaimedRewards([ids[0], ids[1], ids[0]], [new BN(10000), new BN(20000), new BN(0)], {
+                from: distributor
+            });
+            expect((await staking.claimedPositionRewards.call([ids[0]]))[0]).to.be.bignumber.equal(new BN(0));
+            expect((await staking.claimedPositionRewards.call([ids[1]]))[0]).to.be.bignumber.equal(new BN(20000));
+
+            await staking.updateClaimedRewards([ids[1], ids[1], ids[0]], [new BN(10000), new BN(30000), new BN(111)], {
+                from: distributor
+            });
+            expect((await staking.claimedPositionRewards.call([ids[0]]))[0]).to.be.bignumber.equal(new BN(111));
+            expect((await staking.claimedPositionRewards.call([ids[1]]))[0]).to.be.bignumber.equal(new BN(30000));
+        });
+    });
+
     const getRewardsMultipliers = (stakingDurations) => {
         const multipliers = [];
 
@@ -470,9 +572,8 @@ describe('StakingRewardsDistribution', () => {
 
                 expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(totalRewards);
 
-                for (const id of ids) {
-                    expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(rewards[id]);
-                }
+                const orderedRewards = ids.map((id) => rewards[id]);
+                expectEqualArrays(await staking.claimedPositionRewards.call(ids), orderedRewards);
 
                 expect(await staking.rewards.call(ids)).to.be.bignumber.equal(new BN(0));
             };
@@ -530,24 +631,24 @@ describe('StakingRewardsDistribution', () => {
                 const id = ids[0];
 
                 await staking.claimRewards([id], { from: provider });
-                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(rewards[id]);
+                expect((await staking.claimedPositionRewards.call([id]))[0]).to.be.bignumber.equal(rewards[id]);
 
                 const reward = new BN(999999999999);
                 await staking.setRewards([id], [reward], { from: distributor });
                 await staking.claimRewards([id], { from: provider });
-                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(reward);
+                expect((await staking.claimedPositionRewards.call([id]))[0]).to.be.bignumber.equal(reward);
             });
 
             it('should update total position claimed rewards when staking', async () => {
                 const id = ids[0];
 
                 await staking.stakeRewards([id], poolToken2, { from: provider });
-                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(rewards[id]);
+                expect((await staking.claimedPositionRewards.call([id]))[0]).to.be.bignumber.equal(rewards[id]);
 
                 const reward = new BN(999999999999);
                 await staking.setRewards([id], [reward], { from: distributor });
                 await staking.stakeRewards([id], poolToken2, { from: provider });
-                expect(await staking.claimedPositionRewards.call(id)).to.be.bignumber.equal(reward);
+                expect((await staking.claimedPositionRewards.call([id]))[0]).to.be.bignumber.equal(reward);
             });
 
             it('should update total provider claimed rewards when claiming', async () => {
@@ -577,6 +678,42 @@ describe('StakingRewardsDistribution', () => {
                 await staking.stakeRewards([id], poolToken2, { from: provider });
                 expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(
                     claimed.add(reward.sub(prevReward))
+                );
+            });
+
+            it('should allow updating the claimed rewards after claiming', async () => {
+                const id = ids[0];
+                const provider = providers[0];
+
+                await testRewards(ids, provider);
+                const claimedRewards = await staking.claimedPositionRewards.call([id]);
+                const claimedProviderRewards = await staking.claimedProviderRewards.call(provider);
+                expect(claimedRewards[0]).to.be.bignumber.gt(new BN(0));
+                expect(claimedProviderRewards).to.be.bignumber.gt(new BN(0));
+
+                const reward = new BN(999999999999);
+                await staking.updateClaimedRewards([id], [reward], { from: distributor });
+                expect((await staking.claimedPositionRewards.call([id]))[0]).to.be.bignumber.equal(reward);
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(
+                    claimedProviderRewards.add(reward).sub(claimedRewards[0])
+                );
+            });
+
+            it('should allow updating the claimed rewards after claiming', async () => {
+                const id = ids[0];
+                const provider = providers[0];
+
+                await testRewards(ids, provider, true);
+                const claimedRewards = await staking.claimedPositionRewards.call([id]);
+                const claimedProviderRewards = await staking.claimedProviderRewards.call(provider);
+                expect(claimedRewards[0]).to.be.bignumber.gt(new BN(0));
+                expect(claimedProviderRewards).to.be.bignumber.gt(new BN(0));
+
+                const reward = new BN(999999999999);
+                await staking.updateClaimedRewards([id], [reward], { from: distributor });
+                expect((await staking.claimedPositionRewards.call([id]))[0]).to.be.bignumber.equal(reward);
+                expect(await staking.claimedProviderRewards.call(provider)).to.be.bignumber.equal(
+                    claimedProviderRewards.add(reward).sub(claimedRewards[0])
                 );
             });
         });

@@ -7,6 +7,18 @@ const { trace, info, error, warning, arg } = require('../utils/logger');
 
 const REORG_OFFSET = 500;
 
+const REMOVE_LIQUIDITY_SELECTOR = '0x782ed90c';
+const REMOVE_LIQUIDITY_ABI = [
+    {
+        type: 'uint256',
+        name: 'id'
+    },
+    {
+        type: 'uint32',
+        name: 'portion'
+    }
+];
+
 const main = async () => {
     const { settings, web3, contracts, BN } = await setup();
 
@@ -197,7 +209,7 @@ const main = async () => {
                         );
 
                         // Try to find the position ID in a previous block.
-                        // Please note that we are assuming that a single position wasn't added and removed in the
+                        // Please note that we are ignore the case when a single position was added and removed in the
                         // same block.
                         const matches = [];
                         const ids = await contracts.LiquidityProtectionStore.methods
@@ -239,6 +251,17 @@ const main = async () => {
                             );
                         }
 
+                        trace(
+                            'Position updated',
+                            arg('id', id),
+                            arg('provider', position.provider),
+                            arg('poolToken', position.poolToken),
+                            arg('reserveToken', position.reserveToken),
+                            arg('poolAmount', position.poolAmount),
+                            arg('reserveAmount', position.reserveAmount),
+                            arg('timestamp', position.timestamp)
+                        );
+
                         position.poolAmount = new BN(newPoolAmount).toString();
                         position.reserveAmount = new BN(newReserveAmount).toString();
 
@@ -269,9 +292,9 @@ const main = async () => {
                         );
 
                         // Try to find the position ID that existed in the previous block, but doesn't exist now.
-                        // Please note that we are assuming that a single position wasn't added and removed in the
+                        // Please note that we are ignore the case when a single position was added and removed in the
                         // same block.
-                        const matches = [];
+                        let matches = [];
                         const currentBlockIds = await contracts.LiquidityProtectionStore.methods
                             .protectedLiquidityIds(provider)
                             .call({}, blockNumber);
@@ -305,7 +328,21 @@ const main = async () => {
                             }
                         }
 
-                        if (matches.length !== 1) {
+                        if (matches.length > 1) {
+                            warning('Found too many matching position IDs. Attempting to decode the ID from tx data');
+
+                            const tx = await web3.eth.getTransaction(transactionHash);
+                            const { input } = tx;
+
+                            if (!input.startsWith(REMOVE_LIQUIDITY_SELECTOR)) {
+                                error('Failed to decode transaction', arg('tx', transactionHash));
+                            }
+
+                            const rawParams = input.slice(REMOVE_LIQUIDITY_SELECTOR.length);
+                            const params = web3.eth.abi.decodeParameters(REMOVE_LIQUIDITY_ABI, `0x${rawParams}`);
+
+                            matches = [params.id];
+                        } else if (matches.length !== 1) {
                             error(
                                 'Failed to fully match position ID. Expected to find a single match, but found',
                                 arg('matches', matches.length)
@@ -327,6 +364,17 @@ const main = async () => {
                                 ']'
                             );
                         }
+
+                        trace(
+                            'Position removed',
+                            arg('id', id),
+                            arg('provider', position.provider),
+                            arg('poolToken', position.poolToken),
+                            arg('reserveToken', position.reserveToken),
+                            arg('poolAmount', position.poolAmount),
+                            arg('reserveAmount', position.reserveAmount),
+                            arg('timestamp', position.timestamp)
+                        );
 
                         position.poolAmount = 0;
                         position.reserveAmount = 0;

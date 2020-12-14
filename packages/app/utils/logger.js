@@ -33,7 +33,7 @@ const trace = (...data) => {
     }
 };
 
-const arg = (message, value) => `${chalk.green(message)}=${value}`;
+const arg = (message, value) => `\n  ${chalk.green(message)}=${value}`;
 
 module.exports = {
     error,

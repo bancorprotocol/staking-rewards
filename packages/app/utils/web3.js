@@ -5,15 +5,18 @@ const fs = require('fs');
 const ganache = require('ganache-core');
 const Web3 = require('web3');
 const Contract = require('web3-eth-contract');
+const memdown = require('memdown');
 
-const { info, warning, arg } = require('./logger');
+const { info, error, warning, arg } = require('./logger');
 
 const { argv } = yargs(hideBin(process.argv))
     .option('test', {
+        alias: 't',
         type: 'boolean',
         description: 'Run in test mode'
     })
     .option('init', {
+        alias: 'i',
         type: 'boolean',
         description: 'Deploy new contracts for testing (during test mode only)'
     });
@@ -21,117 +24,158 @@ const { argv } = yargs(hideBin(process.argv))
 const { test, init } = argv;
 
 const settings = require('../settings.json');
-const { web3Provider } = settings;
 
 let web3;
 let contracts = {};
+let defaultAccount;
 
 const setup = async () => {
-    const { externalContracts } = settings;
+    const { externalContracts, systemContracts, web3Provider } = settings;
     const { TokenGovernance: TokenGovernanceSettings } = externalContracts;
 
-    if (!test) {
-        info('Running against mainnet');
+    try {
+        if (!test) {
+            info('Running against mainnet');
 
-        web3 = new Web3(settings.web3Provider);
+            web3 = new Web3(web3Provider);
 
-        const { privateKey } = require('../credentials.json');
-        const account = web3.eth.accounts.privateKeyToAccount(privateKey);
-        web3.eth.accounts.wallet.add(account);
-        web3.eth.defaultAccount = account.address;
+            const { privateKey } = require('../credentials.json');
+            const account = web3.eth.accounts.privateKeyToAccount(privateKey);
+            web3.eth.accounts.wallet.add(account);
 
-        Contract.setProvider(settings.web3Provider);
-    } else {
-        info('Running against a mainnet fork (via Ganache)');
+            defaultAccount = account.address;
 
-        const defaultAccount = '0x0000000000000000000000000000000000000001';
-        const provider = ganache.provider({
-            default_balance_ether: 10000000000000000000,
-            fork: web3Provider,
-            unlocked_accounts: [defaultAccount, TokenGovernanceSettings.governor]
-        });
+            web3.eth.defaultAccount = defaultAccount;
 
-        web3 = new Web3(provider);
-        web3.eth.defaultAccount = defaultAccount;
-        Contract.setProvider(provider);
-    }
+            Contract.setProvider(web3Provider);
+            Contract.defaultAccount = defaultAccount;
+        } else {
+            info('Running against a mainnet fork (via Ganache)');
 
-    const { BN, keccak256 } = web3.utils;
+            const provider = ganache.provider({
+                fork: web3Provider,
+                ws: true,
+                network_id: 1,
+                db: memdown(),
+                default_balance_ether: 10000000000000000000,
+                unlocked_accounts: [TokenGovernanceSettings.governor]
+            });
 
-    const { abi, address } = externalContracts.LiquidityProtectionStore;
-    contracts.LiquidityProtectionStore = new Contract(abi, address);
+            info('Started forking the mainnet');
 
-    if (init) {
-        info('Deploying new system contracts');
+            web3 = new Web3(provider);
 
-        const systemContractsDir = path.resolve(__dirname, '../../solidity/build');
+            defaultAccount = (await web3.eth.getAccounts())[0];
 
-        info('Deploying StakingRewardsDistributionStore');
+            info('Finished forking the mainnet');
 
-        let rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsDistributionStore.json'));
-        let { abi, bytecode } = JSON.parse(rawData);
+            web3.eth.defaultAccount = defaultAccount;
 
-        const StakingRewardsDistributionStore = new Contract(abi);
-        let instance = await StakingRewardsDistributionStore.deploy({ data: bytecode }).send();
+            Contract.setProvider(provider);
+            Contract.defaultAccount = defaultAccount;
+        }
 
-        let { address } = instance.options;
+        const { BN, keccak256 } = web3.utils;
 
-        info('Deployed new StakingRewardsDistributionStore to', arg('address', address));
+        let { abi, address } = externalContracts.LiquidityProtectionStore;
+        contracts.LiquidityProtectionStore = new Contract(abi, address);
 
-        contracts.StakingRewardsDistributionStore = new Contract(abi, address);
+        if (init) {
+            info('Deploying new system contracts');
 
-        info('Deploying StakingRewardsDistribution');
+            const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
-        rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsDistribution.json'));
-        ({ abi, bytecode } = JSON.parse(rawData));
+            info('Deploying StakingRewardsDistributionStore');
 
-        const StakingRewardsDistribution = new Contract(abi);
-        instance = await StakingRewardsDistribution.deploy({
-            data: bytecode,
-            arguments: [
-                contracts.StakingRewardsDistributionStore.address,
+            let rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsDistributionStore.json'));
+            let { abi, bytecode } = JSON.parse(rawData);
+
+            const StakingRewardsDistributionStore = new Contract(abi);
+            let gas = await StakingRewardsDistributionStore.deploy({ data: bytecode }).estimateGas();
+            let instance = await StakingRewardsDistributionStore.deploy({ data: bytecode }).send({
+                from: defaultAccount,
+                gas
+            });
+
+            const { address: stakingStoreAddress } = instance.options;
+
+            info('Deployed new StakingRewardsDistributionStore to', arg('address', stakingStoreAddress));
+
+            contracts.StakingRewardsDistributionStore = new Contract(abi, stakingStoreAddress);
+
+            info('Deploying StakingRewardsDistribution');
+
+            const {
+                rewards: { maxRewards }
+            } = settings;
+
+            rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsDistribution.json'));
+            ({ abi, bytecode } = JSON.parse(rawData));
+
+            const StakingRewardsDistribution = new Contract(abi);
+            const arguments = [
+                stakingStoreAddress,
                 TokenGovernanceSettings.address,
                 externalContracts.CheckpointStore.address,
-                new BN(2).pow(new BN(256)).sub(new BN(1)),
+                maxRewards,
                 externalContracts.ContractRegistry.address
-            ]
-        }).send();
+            ];
 
-        ({ address } = instance.options);
+            gas = await StakingRewardsDistribution.deploy({ data: bytecode, arguments }).estimateGas();
+            instance = await StakingRewardsDistribution.deploy({ data: bytecode, arguments }).send({
+                from: defaultAccount,
+                gas
+            });
 
-        info('Deployed new StakingRewardsDistribution to', arg('address', address));
+            const { address: stakingAddress } = instance.options;
 
-        contracts.StakingRewardsDistribution = new Contract(abi, address);
+            info('Deployed new StakingRewardsDistribution to', arg('address', stakingAddress));
 
-        info('Granting requires permissions to StakingRewardsDistribution');
+            contracts.StakingRewardsDistribution = new Contract(abi, stakingAddress);
 
-        const ROLE_OWNER = keccak256('ROLE_OWNER');
-        const ROLE_MINTER = keccak256('ROLE_MINTER');
+            info('Granting requires permissions to StakingRewardsDistribution');
 
-        await contracts.StakingRewardsDistributionStore.methods.grantRole(ROLE_OWNER, address).send();
+            const ROLE_OWNER = keccak256('ROLE_OWNER');
+            const ROLE_MINTER = keccak256('ROLE_MINTER');
 
-        await contracts.TokenGovernance.methods
-            .grantRole(ROLE_MINTER, address)
-            .send({ from: TokenGovernanceSettings.governor });
-    } else {
-        const { systemContracts } = settings;
+            gas = await contracts.StakingRewardsDistributionStore.methods
+                .grantRole(ROLE_OWNER, stakingAddress)
+                .estimateGas({ from: defaultAccount });
+            await contracts.StakingRewardsDistributionStore.methods
+                .grantRole(ROLE_OWNER, stakingAddress)
+                .send({ from: defaultAccount, gas });
 
-        let { abi, address } = systemContracts.StakingRewardsDistributionStore;
-        if (abi && address) {
-            contracts.StakingRewardsDistributionStore = new Contract(abi, address);
+            ({ abi, address } = externalContracts.TokenGovernance);
+            contracts.TokenGovernance = new Contract(abi, address);
+
+            gas = await contracts.TokenGovernance.methods
+                .grantRole(ROLE_MINTER, stakingAddress)
+                .estimateGas({ from: TokenGovernanceSettings.governor });
+            await contracts.TokenGovernance.methods
+                .grantRole(ROLE_MINTER, stakingAddress)
+                .send({ from: TokenGovernanceSettings.governor, gas });
         } else {
-            warning('Unable to retrieve StakingRewardsDistributionStore settings');
+            let { abi, address } = systemContracts.StakingRewardsDistributionStore;
+            if (abi && address) {
+                contracts.StakingRewardsDistributionStore = new Contract(abi, address);
+            } else {
+                warning('Unable to retrieve StakingRewardsDistributionStore settings');
+            }
+
+            ({ abi, address } = systemContracts.StakingRewardsDistribution);
+            if (abi && address) {
+                contracts.StakingRewardsDistribution = new Contract(abi, address);
+            } else {
+                warning('Unable to retrieve StakingRewardsDistribution settings');
+            }
         }
 
-        ({ abi, address } = systemContracts.StakingRewardsDistribution);
-        if (abi && address) {
-            contracts.StakingRewardsDistribution = new Contract(abi, address);
-        } else {
-            warning('Unable to retrieve StakingRewardsDistribution settings');
-        }
+        return { settings, web3, contracts, defaultAccount, BN, Contract };
+    } catch (e) {
+        error(e);
+
+        process.exit(-1);
     }
-
-    return { settings, web3, contracts, BN, Contract };
 };
 
 module.exports = setup;

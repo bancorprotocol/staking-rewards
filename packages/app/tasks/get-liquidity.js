@@ -6,6 +6,7 @@ const setup = require('../utils/web3');
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
 const REORG_OFFSET = 500;
+const BATCH_SIZE = 5000;
 const ETH_RESERVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
 
@@ -62,10 +63,9 @@ const main = async () => {
     };
 
     const getProtectionLiquidityChanges = async (liquidity, fromBlock, toBlock) => {
-        const batchSize = 5000;
         let eventCount = 0;
-        for (let i = fromBlock; i < toBlock; i += batchSize) {
-            const endBlock = Math.min(i + batchSize - 1, toBlock);
+        for (let i = fromBlock; i < toBlock; i += BATCH_SIZE) {
+            const endBlock = Math.min(i + BATCH_SIZE - 1, toBlock);
 
             info(
                 'Querying all protection change events from',
@@ -73,7 +73,7 @@ const main = async () => {
                 'to',
                 arg('endBlock', endBlock),
                 'in batches of',
-                arg('batchSize', batchSize),
+                arg('batchSize', BATCH_SIZE),
                 'blocks'
             );
 

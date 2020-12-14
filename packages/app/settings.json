@@ -410,7 +410,7 @@
             "address": "0x52Ae12ABe5D8BD778BD5397F99cA900624CfADD4"
         },
         "CheckpointStore": {
-            "address": "0x0000000000000000000000000000000000000001"
+            "address": "0xF8a2FB650e25a26CE839D64bE8a0aBbCb0b87B32"
         },
         "ERC20": {
             "abi": [

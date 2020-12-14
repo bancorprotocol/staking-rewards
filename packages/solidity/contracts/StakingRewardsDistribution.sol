@@ -76,6 +76,14 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     event RewardsClaimed(address indexed provider, uint256[] ids, uint256 amount);
 
     /**
+     * @dev triggered when claimed rewards are being updated
+     *
+     * @param id the ID of the position
+     * @param amount the new claimed rewards amount
+     */
+    event ClaimedRewardsUpdated(uint256 indexed id, uint256 amount);
+
+    /**
      * @dev triggered when pending rewards are being added or updated
      *
      * @param ids the IDs of the positions
@@ -175,6 +183,33 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     }
 
     /**
+     * @dev updates claimed rewards
+     *
+     * @param ids IDs of the positions
+     * @param amounts new claimed reward amounts
+     */
+    function updateClaimedRewards(uint256[] calldata ids, uint256[] calldata amounts) external onlyRewardsDistributor {
+        uint256 length = ids.length;
+        require(length == amounts.length, "ERR_INVALID_LENGTH");
+
+        for (uint256 i = 0; i < length; ++i) {
+            uint256 id = ids[i];
+            uint256 amount = amounts[i];
+
+            Position memory pos = position(id);
+            address provider = pos.provider;
+            require(provider != address(0), "ERR_INVALID_ID");
+
+            uint256 prevAmount = _claimedPositionRewards[id];
+
+            _claimedPositionRewards[id] = amount;
+            _claimedProviderRewards[provider] = _claimedProviderRewards[provider].add(amount).sub(prevAmount);
+
+            emit ClaimedRewardsUpdated(id, amount);
+        }
+    }
+
+    /**
      * @dev sets the maximum pending rewards that the contract can distribute
      *
      * @param maxRewards the maximum pending rewards that the contract can distributes
@@ -202,14 +237,20 @@ contract StakingRewardsDistribution is AccessControl, Time, Utils, ContractRegis
     }
 
     /**
-     * @dev returns the total claimed rewards for a specific position
+     * @dev returns the total claimed rewards for specific positions
      *
-     * @param id the ID of the position
+     * @param ids IDs of the positions
      *
-     * @return the total claimed rewards
+     * @return claimed rewards
      */
-    function claimedPositionRewards(uint256 id) external view returns (uint256) {
-        return _claimedPositionRewards[id];
+    function claimedPositionRewards(uint256[] calldata ids) external view returns (uint256[] memory) {
+        uint256 length = ids.length;
+        uint256[] memory claimedRewards = new uint256[](length);
+        for (uint256 i = 0; i < length; ++i) {
+            claimedRewards[i] = _claimedPositionRewards[ids[i]];
+        }
+
+        return claimedRewards;
     }
 
     /**

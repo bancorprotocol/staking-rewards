@@ -1,73 +1,93 @@
+const fs = require('fs');
+const path = require('path');
 const setup = require('../utils/web3');
-const { info, trace, error, arg } = require('../utils/logger');
+const { info, warning, trace, error, arg } = require('../utils/logger');
+
+const BATCH_SIZE = 500;
 
 const main = async () => {
-    const { contracts, BN } = await setup();
+    const { contracts, BN, defaultAccount } = await setup();
 
-    const groupPositions = (positions, lastAddedPosition) => {
+    const groupPositions = (positions) => {
         return Object.entries(positions).reduce((res, [id, data]) => {
-            if (new BN(id).lte(new BN(lastAddedPosition))) {
-                return res;
-            }
-
             const { poolToken } = data;
-            (res[poolToken] = res[poolToken] || []).push({ [id]: data });
+            (res[poolToken] = res[poolToken] || []).push({ id, ...data });
             return res;
         }, {});
     };
 
-    const setPositions = async (groupedPositions, lastAddedPosition) => {
-        const batchSize = 200;
-        const lastId = lastAddedPosition;
+    const setPositions = async (positions) => {
+        info('Adding positions');
 
-        for (const [poolToken, positions] of groupedPositions) {
-            const currentLastId = positions[positions.length - 1].id;
+        const groupedPositions = groupPositions(positions);
 
-            info(
-                'Adding positions',
-                arg('poolToken', poolToken),
-                arg('from', positions[0].id),
-                arg('to', currentLastId),
-                'in batches of',
-                arg('batchSize', batchSize)
-            );
 
-            for (let i = 0; i < positions.length; i += batchSize) {
-                const tempPositions = positions.slice(i, i + batchSize);
+        for (const [poolToken, poolTokenPositions] of Object.entries(groupedPositions)) {
+            const participating = await contracts.StakingRewardsDistributionStore.methods
+                .isPoolParticipating(poolToken)
+                .call();
+            if (!participating) {
+                warning('Skipping non-participating pool', arg('poolToken', poolToken));
+
+                continue;
+            }
+
+            info('Adding positions for', arg('poolToken', poolToken), 'in batches of', arg('batchSize', BATCH_SIZE));
+
+            for (let i = 0; i < poolTokenPositions.length; i += BATCH_SIZE) {
+                const tempPositions = poolTokenPositions.slice(i, i + BATCH_SIZE);
                 for (const position of tempPositions) {
-                    const { id, provider, startTime } = position;
-                    trace('Adding position', arg('id', id), arg('provider', provider), arg('startTime', startTime));
+                    const { id, provider, timestamp } = position;
+
+                    trace('Adding position', arg('id', id), arg('provider', provider), arg('timestamp', timestamp));
                 }
 
                 const providers = [];
                 const ids = [];
                 const startTimes = [];
                 for (const position of tempPositions) {
-                    const { id, provider, startTime } = position;
+                    const { id, provider, timestamp } = position;
+
+                    const exists = await contracts.StakingRewardsDistributionStore.methods.positionExists(id).call();
+                    if (exists) {
+                        trace('Skipping existing position', arg('id', id));
+
+                        continue;
+                    }
 
                     ids.push(id);
                     providers.push(provider);
-                    startTimes.push(startTime);
+                    startTimes.push(timestamp);
                 }
 
+                const gas = await contracts.StakingRewardsDistributionStore.methods
+                    .addPositions(poolToken, providers, ids, startTimes)
+                    .estimateGas({ from: defaultAccount });
                 await contracts.StakingRewardsDistributionStore.methods
-                    .addPositions(poolToken, data.providers, data.ids, data.startTimes)
-                    .send();
-            }
-
-            if (new BN(lastId).lt(new BN(currentLastId))) {
-                lastId = currentLastId;
+                    .addPositions(poolToken, providers, ids, startTimes)
+                    .send({ from: defaultAccount, gas });
             }
         }
     };
 
-    const verifyPositions = (groupedPositions) => {
+    const verifyPositions = async (positions) => {
         info('Verifying positions');
 
-        for (const [poolToken, positions] of groupedPositions) {
+        const groupedPositions = groupPositions(positions);
+
+        for (const [poolToken, poolTokenPositions] of Object.entries(groupedPositions)) {
+            const participating = await contracts.StakingRewardsDistributionStore.methods
+                .isPoolParticipating(poolToken)
+                .call();
+            if (!participating) {
+                warning('Skipping verification for non non-participating pool', arg('poolToken', poolToken));
+
+                continue;
+            }
+
             info('Verifying positions for', arg('poolToken', poolToken));
 
-            for (const position of positions) {
+            for (const position of poolTokenPositions) {
                 const { id, provider, startTime } = position;
 
                 const data = await contracts.StakingRewardsDistributionStore.methods.position(id).call();
@@ -85,7 +105,7 @@ const main = async () => {
                 }
             }
         }
-    }
+    };
 
     try {
         const dbDir = path.resolve(__dirname, '../data');
@@ -94,23 +114,10 @@ const main = async () => {
             error('Unable to locate', arg('db', positionsDbPath));
         }
 
-        const positionsData = JSON.parse(fs.readFileSync(positionsDbPath));
+        const { positions } = JSON.parse(fs.readFileSync(positionsDbPath));
 
-        let lastAddedPosition;
-        if (!positionsData.lastAddedPosition) {
-            warning('DB last added position ID is missing. Starting from the beginning');
-            lastAddedPosition = 0;
-        } else {
-            lastAddedPosition = positionsData.lastAddedPosition;
-        }
-
-        const groupedPositions = groupPositions(positions, lastAddedPosition);
-        await setPositions(groupedPositions, lastAddedPosition);
-        await verifyPositions(groupedPositions);
-
-        positionsData.lastAddedPosition = lastId;
-
-        fs.writeFileSync(positionsDbPath, JSON.stringify(positionsData, null, 2));
+        await setPositions(positions);
+        await verifyPositions(positions);
 
         process.exit(0);
     } catch (e) {

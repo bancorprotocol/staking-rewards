@@ -341,7 +341,20 @@ const main = async () => {
                             const rawParams = input.slice(REMOVE_LIQUIDITY_SELECTOR.length);
                             const params = web3.eth.abi.decodeParameters(REMOVE_LIQUIDITY_ABI, `0x${rawParams}`);
 
-                            matches = [params.id];
+                            const { id } = params;
+                            const position = positions[id];
+
+                            if (
+                                provider === position.provider &&
+                                new BN(position.poolToken).eq(new BN(poolToken)) &&
+                                new BN(position.reserveToken).eq(new BN(reserveToken)) &&
+                                new BN(position.poolAmount).eq(new BN(poolAmount)) &&
+                                new BN(position.reserveAmount).eq(new BN(reserveAmount))
+                            ) {
+                                matches = [id];
+                            } else {
+                                error('Failed to match the decoded ID to the event', arg('id', id));
+                            }
                         } else if (matches.length !== 1) {
                             error(
                                 'Failed to fully match position ID. Expected to find a single match, but found',

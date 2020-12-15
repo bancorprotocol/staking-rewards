@@ -410,14 +410,7 @@ const getLiquidityTask = async (env) => {
         );
     }
 
-    info(
-        'Getting protected liquidity from',
-        arg('fromBlock', fromBlock),
-        'to',
-        arg('toBlock', toBlock),
-        '(excluding)',
-        arg('reorgOffset', reorgOffset)
-    );
+    info('Getting protected liquidity from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
     await getProtectedLiquidity(data, fromBlock, toBlock);
 

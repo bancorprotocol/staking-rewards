@@ -1,12 +1,11 @@
 const fs = require('fs');
 const path = require('path');
-const setup = require('../utils/web3');
 const { info, warning, trace, error, arg } = require('../utils/logger');
 
 const BATCH_SIZE = 500;
 
-const main = async () => {
-    const { contracts, BN, defaultAccount } = await setup();
+const setPositionsTask = async (env) => {
+    const { contracts, BN, defaultAccount } = env;
 
     const groupPositions = (positions) => {
         return Object.entries(positions).reduce((res, [id, data]) => {
@@ -20,7 +19,6 @@ const main = async () => {
         info('Adding positions');
 
         const groupedPositions = groupPositions(positions);
-
 
         for (const [poolToken, poolTokenPositions] of Object.entries(groupedPositions)) {
             const participating = await contracts.StakingRewardsDistributionStore.methods
@@ -107,24 +105,16 @@ const main = async () => {
         }
     };
 
-    try {
-        const dbDir = path.resolve(__dirname, '../data');
-        const positionsDbPath = path.join(dbDir, 'positions.json');
-        if (!fs.existsSync(positionsDbPath)) {
-            error('Unable to locate', arg('db', positionsDbPath));
-        }
-
-        const { positions } = JSON.parse(fs.readFileSync(positionsDbPath));
-
-        await setPositions(positions);
-        await verifyPositions(positions);
-
-        process.exit(0);
-    } catch (e) {
-        error(e);
-
-        process.exit(-1);
+    const dbDir = path.resolve(__dirname, '../data');
+    const positionsDbPath = path.join(dbDir, 'positions.json');
+    if (!fs.existsSync(positionsDbPath)) {
+        error('Unable to locate', arg('db', positionsDbPath));
     }
+
+    const { positions } = JSON.parse(fs.readFileSync(positionsDbPath));
+
+    await setPositions(positions);
+    await verifyPositions(positions);
 };
 
-main();
+module.exports = setPositionsTask;

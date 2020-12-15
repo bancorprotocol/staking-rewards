@@ -1,5 +1,3 @@
-const yargs = require('yargs/yargs');
-const { hideBin } = require('yargs/helpers');
 const path = require('path');
 const fs = require('fs');
 const ganache = require('ganache-core');
@@ -9,19 +7,7 @@ const memdown = require('memdown');
 
 const { info, error, warning, arg } = require('./logger');
 
-const { argv } = yargs(hideBin(process.argv))
-    .option('test', {
-        alias: 't',
-        type: 'boolean',
-        description: 'Run in test mode'
-    })
-    .option('init', {
-        alias: 'i',
-        type: 'boolean',
-        description: 'Deploy new contracts for testing (during test mode only)'
-    });
-
-const { test, init } = argv;
+const { test, init } = require('./yargs');
 
 const settings = require('../settings.json');
 
@@ -133,10 +119,12 @@ const setup = async () => {
 
             contracts.StakingRewardsDistribution = new Contract(abi, stakingAddress);
 
-            info('Granting requires permissions to StakingRewardsDistribution');
+            info('Granting required permissions');
 
             const ROLE_OWNER = keccak256('ROLE_OWNER');
             const ROLE_MINTER = keccak256('ROLE_MINTER');
+
+            info('Granting StakingRewardsDistributionStore ownership to StakingRewardsDistribution');
 
             gas = await contracts.StakingRewardsDistributionStore.methods
                 .grantRole(ROLE_OWNER, stakingAddress)
@@ -147,6 +135,8 @@ const setup = async () => {
 
             ({ abi, address } = externalContracts.TokenGovernance);
             contracts.TokenGovernance = new Contract(abi, address);
+
+            info('Granting TokenGovernance minting permissions to StakingRewardsDistribution');
 
             gas = await contracts.TokenGovernance.methods
                 .grantRole(ROLE_MINTER, stakingAddress)

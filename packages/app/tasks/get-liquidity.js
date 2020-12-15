@@ -1,8 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const mkdirp = require('mkdirp');
 
-const setup = require('../utils/web3');
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
 const REORG_OFFSET = 500;
@@ -10,9 +8,7 @@ const BATCH_SIZE = 5000;
 const ETH_RESERVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
 
-const main = async () => {
-    const { settings, web3, contracts, BN, Contract } = await setup();
-
+const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
         const position = await contracts.LiquidityProtectionStore.methods.protectedLiquidity(id).call({}, blockNumber);
 
@@ -383,57 +379,50 @@ const main = async () => {
         data.lastBlockNumber = toBlock;
     };
 
-    try {
-        const dbDir = path.resolve(__dirname, '../data');
-        await mkdirp(dbDir);
-        const dbPath = path.join(dbDir, 'liquidity.json');
-        let data = {};
-        if (fs.existsSync(dbPath)) {
-            const rawData = fs.readFileSync(dbPath);
-            data = JSON.parse(rawData);
-        }
+    const { settings, web3, contracts, BN, Contract } = env;
 
-        let fromBlock;
-        if (!data.lastBlockNumber) {
-            warning('DB last block number is missing. Starting from the beginning');
-            fromBlock = settings.genesisBlock;
-        } else {
-            fromBlock = data.lastBlockNumber + 1;
-        }
-
-        const latestBlock = await web3.eth.getBlockNumber();
-        if (latestBlock === 0) {
-            error('Node is out of sync. Please try again later');
-        }
-
-        const toBlock = latestBlock - REORG_OFFSET;
-        if (toBlock - fromBlock < REORG_OFFSET) {
-            error(
-                'Unable to satisfy the reorg window. Please wait for additional',
-                arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
-                'to pass'
-            );
-        }
-
-        info(
-            'Getting protected liquidity from',
-            arg('fromBlock', fromBlock),
-            'to',
-            arg('toBlock', toBlock),
-            '(excluding)',
-            arg('reorgOffset', REORG_OFFSET)
-        );
-
-        await getProtectedLiquidity(data, fromBlock, toBlock);
-
-        fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
-
-        process.exit(0);
-    } catch (e) {
-        error(e);
-
-        process.exit(1);
+    const dbDir = path.resolve(__dirname, '../data');
+    const dbPath = path.join(dbDir, 'liquidity.json');
+    let data = {};
+    if (fs.existsSync(dbPath)) {
+        const rawData = fs.readFileSync(dbPath);
+        data = JSON.parse(rawData);
     }
+
+    let fromBlock;
+    if (!data.lastBlockNumber) {
+        warning('DB last block number is missing. Starting from the beginning');
+        fromBlock = settings.genesisBlock;
+    } else {
+        fromBlock = data.lastBlockNumber + 1;
+    }
+
+    const latestBlock = await web3.eth.getBlockNumber();
+    if (latestBlock === 0) {
+        error('Node is out of sync. Please try again later');
+    }
+
+    const toBlock = latestBlock - REORG_OFFSET;
+    if (toBlock - fromBlock < REORG_OFFSET) {
+        error(
+            'Unable to satisfy the reorg window. Please wait for additional',
+            arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
+            'to pass'
+        );
+    }
+
+    info(
+        'Getting protected liquidity from',
+        arg('fromBlock', fromBlock),
+        'to',
+        arg('toBlock', toBlock),
+        '(excluding)',
+        arg('reorgOffset', REORG_OFFSET)
+    );
+
+    await getProtectedLiquidity(data, fromBlock, toBlock);
+
+    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 };
 
-main();
+module.exports = getLiquidityTask;

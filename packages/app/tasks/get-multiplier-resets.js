@@ -1,15 +1,13 @@
 const fs = require('fs');
 const path = require('path');
-const mkdirp = require('mkdirp');
 
-const setup = require('../utils/web3');
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
 const REORG_OFFSET = 500;
 const BATCH_SIZE = 5000;
 
-const main = async () => {
-    const { settings, web3, contracts, BN } = await setup();
+const getMultiplierResetsTask = async (env) => {
+    const { settings, web3, contracts, BN } = env;
 
     const addSnapshot = (snapshots, timestamp, blockNumber) => {
         const snapshot = {
@@ -255,50 +253,41 @@ const main = async () => {
         data.lastBlockNumber = toBlock;
     };
 
-    try {
-        const dbDir = path.resolve(__dirname, '../data');
-        await mkdirp(dbDir);
-        const dbPath = path.join(dbDir, 'multiplier-resets.json');
-        let data = {};
-        if (fs.existsSync(dbPath)) {
-            const rawData = fs.readFileSync(dbPath);
-            data = JSON.parse(rawData);
-        }
-
-        let fromBlock;
-        if (!data.lastBlockNumber) {
-            warning('DB last block number is missing. Starting from the beginning');
-            fromBlock = settings.genesisBlock;
-        } else {
-            fromBlock = data.lastBlockNumber + 1;
-        }
-
-        const latestBlock = await web3.eth.getBlockNumber();
-        if (latestBlock === 0) {
-            error('Node is out of sync. Please try again later');
-        }
-
-        const toBlock = latestBlock - REORG_OFFSET;
-        if (toBlock - fromBlock < REORG_OFFSET) {
-            error(
-                'Unable to satisfy the reorg window. Please wait for additional',
-                arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
-                'to pass'
-            );
-        }
-
-        info('Getting multiplier resets', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
-
-        await getMultiplierResets(data, fromBlock, toBlock);
-
-        fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
-
-        process.exit(0);
-    } catch (e) {
-        error(e);
-
-        process.exit(-1);
+    const dbDir = path.resolve(__dirname, '../data');
+    const dbPath = path.join(dbDir, 'multiplier-resets.json');
+    let data = {};
+    if (fs.existsSync(dbPath)) {
+        const rawData = fs.readFileSync(dbPath);
+        data = JSON.parse(rawData);
     }
+
+    let fromBlock;
+    if (!data.lastBlockNumber) {
+        warning('DB last block number is missing. Starting from the beginning');
+        fromBlock = settings.genesisBlock;
+    } else {
+        fromBlock = data.lastBlockNumber + 1;
+    }
+
+    const latestBlock = await web3.eth.getBlockNumber();
+    if (latestBlock === 0) {
+        error('Node is out of sync. Please try again later');
+    }
+
+    const toBlock = latestBlock - REORG_OFFSET;
+    if (toBlock - fromBlock < REORG_OFFSET) {
+        error(
+            'Unable to satisfy the reorg window. Please wait for additional',
+            arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
+            'to pass'
+        );
+    }
+
+    info('Getting multiplier resets', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
+
+    await getMultiplierResets(data, fromBlock, toBlock);
+
+    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 };
 
-main();
+module.exports = getMultiplierResetsTask;

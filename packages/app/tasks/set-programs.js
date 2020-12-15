@@ -1,10 +1,9 @@
 const humanizeDuration = require('humanize-duration');
 
-const setup = require('../utils/web3');
-const { info, error, arg } = require('../utils/logger')
+const { info, error, arg } = require('../utils/logger');
 
-const main = async () => {
-    const { settings, contracts, BN, defaultAccount } = await setup();
+const setProgramsTask = async (env) => {
+    const { settings, contracts, BN, defaultAccount } = env;
 
     const setPools = async (pools) => {
         info('Adding pools');
@@ -54,20 +53,12 @@ const main = async () => {
         }
     };
 
-    try {
-        const {
-            rewards: { pools }
-        } = settings;
+    const {
+        rewards: { pools }
+    } = settings;
 
-        await setPools(pools);
-        await verifyPools(pools);
-
-        process.exit(0);
-    } catch (e) {
-        error(e);
-
-        process.exit(-1);
-    }
+    await setPools(pools);
+    await verifyPools(pools);
 };
 
-main();
+module.exports = setProgramsTask;

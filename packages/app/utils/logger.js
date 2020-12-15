@@ -1,13 +1,7 @@
 const chalk = require('chalk');
-const yargs = require('yargs/yargs');
-const { hideBin } = require('yargs/helpers');
 const moment = require('moment');
 
-const { verbose } = yargs(hideBin(process.argv)).option('verbose', {
-    alias: 'v',
-    type: 'boolean',
-    description: 'Run with verbose logging'
-}).argv;
+const { verbose } = require('./yargs');
 
 const now = () => {
     return `[${moment().format('DD-MM|HH:mm:ss')}]`;
@@ -29,7 +23,7 @@ const info = (...data) => {
 
 const trace = (...data) => {
     if (verbose) {
-        console.log(chalk.gray('TRACE'), now(), ...data);
+        console.log(chalk.cyan('TRACE'), now(), ...data);
     }
 };
 

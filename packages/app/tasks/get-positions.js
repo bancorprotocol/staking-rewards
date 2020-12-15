@@ -475,7 +475,7 @@ const getPositionsTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, reorgOffset, vweb3, contracts, BN } = env;
+    const { settings, reorgOffset, web3, contracts, BN } = env;
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'positions.json');

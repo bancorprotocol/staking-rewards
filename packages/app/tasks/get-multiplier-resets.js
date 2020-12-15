@@ -3,11 +3,10 @@ const path = require('path');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
-const REORG_OFFSET = 500;
 const BATCH_SIZE = 5000;
 
 const getMultiplierResetsTask = async (env) => {
-    const { settings, web3, contracts, BN } = env;
+    const { settings, reorgOffset, web3, contracts, BN } = env;
 
     const addSnapshot = (snapshots, timestamp, blockNumber) => {
         const snapshot = {
@@ -274,11 +273,11 @@ const getMultiplierResetsTask = async (env) => {
         error('Node is out of sync. Please try again later');
     }
 
-    const toBlock = latestBlock - REORG_OFFSET;
-    if (toBlock - fromBlock < REORG_OFFSET) {
+    const toBlock = latestBlock - reorgOffset;
+    if (toBlock - fromBlock < reorgOffset) {
         error(
             'Unable to satisfy the reorg window. Please wait for additional',
-            arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
+            arg('blocks', reorgOffset - (toBlock - fromBlock + 1)),
             'to pass'
         );
     }

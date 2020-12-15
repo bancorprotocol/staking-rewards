@@ -1,10 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const setup = require('../utils/web3');
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
-const REORG_OFFSET = 500;
 const BATCH_SIZE = 5000;
 
 const REMOVE_LIQUIDITY_SELECTOR = '0x782ed90c';
@@ -477,7 +475,7 @@ const getPositionsTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, web3, contracts, BN } = env;
+    const { settings, reorgOffset, vweb3, contracts, BN } = env;
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'positions.json');
@@ -500,11 +498,11 @@ const getPositionsTask = async (env) => {
         error('Node is out of sync. Please try again later');
     }
 
-    const toBlock = latestBlock - REORG_OFFSET;
-    if (toBlock - fromBlock < REORG_OFFSET) {
+    const toBlock = latestBlock - reorgOffset;
+    if (toBlock - fromBlock < reorgOffset) {
         error(
             'Unable to satisfy the reorg window. Please wait for additional',
-            arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
+            arg('blocks', reorgOffset - (toBlock - fromBlock + 1)),
             'to pass'
         );
     }

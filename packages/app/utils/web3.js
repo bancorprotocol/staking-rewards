@@ -7,7 +7,7 @@ const memdown = require('memdown');
 
 const { info, error, warning, arg } = require('./logger');
 
-const { test, init } = require('./yargs');
+const { test, init, reorgOffset } = require('./yargs');
 
 const settings = require('../settings.json');
 
@@ -160,7 +160,7 @@ const setup = async () => {
             }
         }
 
-        return { settings, web3, contracts, defaultAccount, BN, Contract };
+        return { settings, web3, contracts, defaultAccount, BN, Contract, reorgOffset };
     } catch (e) {
         error(e);
 

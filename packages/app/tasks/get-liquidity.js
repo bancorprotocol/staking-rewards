@@ -3,7 +3,6 @@ const path = require('path');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
-const REORG_OFFSET = 500;
 const BATCH_SIZE = 5000;
 const ETH_RESERVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
@@ -379,7 +378,7 @@ const getLiquidityTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, web3, contracts, BN, Contract } = env;
+    const { settings, reorgOffset, web3, contracts, BN, Contract } = env;
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'liquidity.json');
@@ -402,11 +401,11 @@ const getLiquidityTask = async (env) => {
         error('Node is out of sync. Please try again later');
     }
 
-    const toBlock = latestBlock - REORG_OFFSET;
-    if (toBlock - fromBlock < REORG_OFFSET) {
+    const toBlock = latestBlock - reorgOffset;
+    if (toBlock - fromBlock < reorgOffset) {
         error(
             'Unable to satisfy the reorg window. Please wait for additional',
-            arg('blocks', REORG_OFFSET - (toBlock - fromBlock + 1)),
+            arg('blocks', reorgOffset - (toBlock - fromBlock + 1)),
             'to pass'
         );
     }
@@ -417,7 +416,7 @@ const getLiquidityTask = async (env) => {
         'to',
         arg('toBlock', toBlock),
         '(excluding)',
-        arg('reorgOffset', REORG_OFFSET)
+        arg('reorgOffset', reorgOffset)
     );
 
     await getProtectedLiquidity(data, fromBlock, toBlock);

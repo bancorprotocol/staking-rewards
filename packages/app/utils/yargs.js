@@ -22,6 +22,12 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Deploy new contracts for testing (test mode only)'
     })
+    .option('reorg-offset', {
+        alias: 'r',
+        type: 'number',
+        default: 500,
+        description: 'Reorg blocks offset to take into account'
+    })
     .option('get-all', {
         type: 'boolean',
         description: 'Get all data'

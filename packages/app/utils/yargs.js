@@ -7,6 +7,11 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Run with verbose logging'
     })
+    .option('multiline', {
+        alias: 'm',
+        type: 'boolean',
+        description: 'Format log arguments in multiple lines'
+    })
     .option('test', {
         alias: 't',
         type: 'boolean',

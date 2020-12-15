@@ -1,7 +1,7 @@
 const chalk = require('chalk');
 const moment = require('moment');
 
-const { verbose } = require('./yargs');
+const { verbose, multiline } = require('./yargs');
 
 const now = () => {
     return `[${moment().format('DD-MM|HH:mm:ss')}]`;
@@ -27,7 +27,7 @@ const trace = (...data) => {
     }
 };
 
-const arg = (message, value) => `\n  ${chalk.green(message)}=${value}`;
+const arg = (message, value) => `${multiline ? '\n  ' : ''}${chalk.green(message)}=${value}`;
 
 module.exports = {
     error,

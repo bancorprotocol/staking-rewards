@@ -6,16 +6,12 @@ const { trace, info, error, warning, arg } = require('../utils/logger');
 const BATCH_SIZE = 5000;
 
 const getMultiplierResetsTask = async (env) => {
-    const { settings, reorgOffset, web3, contracts, BN } = env;
-
     const addSnapshot = (snapshots, timestamp, blockNumber) => {
         const snapshot = {
             timestamp,
             blockNumber
         };
-        const existing = snapshots.findIndex(
-            (i) => new BN(i.timestamp).eq(new BN(timestamp)) && new BN(i.blockNumber).eq(new BN(blockNumber))
-        );
+        const existing = snapshots.findIndex((i) => i.timestamp == timestamp && i.blockNumber == blockNumber);
         if (existing !== -1) {
             snapshots[existing] = snapshot;
         } else {
@@ -150,19 +146,7 @@ const getMultiplierResetsTask = async (env) => {
                     multiplierResets[provider] = { snapshots: [] };
                 }
 
-                const snapshot = {
-                    timestamp,
-                    blockNumber
-                };
-                const { snapshots } = multiplierResets[provider];
-                const existing = snapshots.findIndex(
-                    (i) => new BN(i.timestamp).eq(new BN(timestamp)) && new BN(i.blockNumber).eq(new BN(blockNumber))
-                );
-                if (existing !== -1) {
-                    snapshots[existing] = snapshot;
-                } else {
-                    snapshots.push(snapshot);
-                }
+                addSnapshot(multiplierResets[provider].snapshots, timestamp, blockNumber);
 
                 eventCount++;
 
@@ -188,10 +172,10 @@ const getMultiplierResetsTask = async (env) => {
                     {},
                     blockNumber
                 );
-                const actualTime = BN.max(new BN(lastRemoveTime), new BN(lastClaimTime));
+                const actualTime = Math.max(lastRemoveTime.toNumber(), lastClaimTime.toNumber());
 
                 // Verify snapshot values.
-                if (!new BN(timestamp).eq(actualTime)) {
+                if (timestamp == actualTime) {
                     error(
                         'Wrong snapshot multiplier reset',
                         arg('provider', provider),
@@ -207,7 +191,7 @@ const getMultiplierResetsTask = async (env) => {
                 // Verify snapshot timestamps.
                 const block = await web3.eth.getBlock(blockNumber);
                 const { timestamp: blockTimeStamp } = block;
-                if (!new BN(timestamp).eq(new BN(blockTimeStamp))) {
+                if (timestamp != blockTimeStamp) {
                     error(
                         'Wrong snapshot timestamp',
                         arg('provider', provider),
@@ -225,7 +209,7 @@ const getMultiplierResetsTask = async (env) => {
             for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
                 const snapshot1 = snapshots[i];
                 const snapshot2 = snapshots[i + 1];
-                if (!new BN(snapshot1.timestamp).lte(new BN(snapshot2.timestamp))) {
+                if (snapshot1.timestamp > snapshot2.timestamp) {
                     error(
                         'Wrong snapshots order',
                         arg('provider', provider),
@@ -251,6 +235,12 @@ const getMultiplierResetsTask = async (env) => {
 
         data.lastBlockNumber = toBlock;
     };
+
+    const { settings, reorgOffset, web3, contracts, test } = env;
+
+    if (test) {
+        warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
+    }
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'multiplier-resets.json');

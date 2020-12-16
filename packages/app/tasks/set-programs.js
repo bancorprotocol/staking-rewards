@@ -39,11 +39,11 @@ const setProgramsTask = async (env) => {
 
             const data = await contracts.StakingRewardsDistributionStore.methods.poolProgram(poolToken).call();
 
-            if (!new BN(data[0]).eq(new BN(startTime))) {
+            if (data[0] != startTime) {
                 error("Pool start times don't match", arg('expected', startTime), arg('actual', data[0]));
             }
 
-            if (!new BN(data[1]).eq(new BN(endTime))) {
+            if (data[1] != endTime) {
                 error("Pool end times don't match", arg('expected', endTime), arg('actual', data[1]));
             }
 

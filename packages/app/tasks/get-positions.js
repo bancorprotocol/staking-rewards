@@ -37,9 +37,7 @@ const getPositionsTask = async (env) => {
             blockNumber,
             amount
         };
-        const existing = snapshots.findIndex(
-            (i) => new BN(i.timestamp).eq(new BN(timestamp)) && new BN(i.blockNumber).eq(new BN(blockNumber))
-        );
+        const existing = snapshots.findIndex((i) => i.timestamp == timestamp && i.blockNumber == blockNumber);
         if (existing !== -1) {
             snapshots[existing] = snapshot;
         } else {
@@ -125,7 +123,7 @@ const getPositionsTask = async (env) => {
                             ) {
                                 // If the creation time is different, then we're handling an obsoleted transfer
                                 // liquidity event.
-                                if (!new BN(position.timestamp).eq(new BN(timestamp))) {
+                                if (position.timestamp != timestamp) {
                                     warning('Potentially unexpected transfer liquidity event');
                                 }
 
@@ -430,7 +428,7 @@ const getPositionsTask = async (env) => {
                 // Verify snapshot timestamps.
                 const block = await web3.eth.getBlock(blockNumber);
                 const { timestamp: blockTimeStamp } = block;
-                if (!new BN(timestamp).eq(new BN(blockTimeStamp))) {
+                if (timestamp != blockTimeStamp) {
                     error(
                         'Wrong snapshot timestamp',
                         arg('id', id),
@@ -450,7 +448,7 @@ const getPositionsTask = async (env) => {
             for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
                 const snapshot1 = snapshots[i];
                 const snapshot2 = snapshots[i + 1];
-                if (new BN(snapshot1.timestamp).gt(new BN(snapshot2.timestamp))) {
+                if (snapshot1.timestamp > snapshot2.timestamp) {
                     error(
                         'Wrong snapshots order',
                         arg('id', id),
@@ -475,7 +473,11 @@ const getPositionsTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, reorgOffset, web3, contracts, BN } = env;
+    const { settings, reorgOffset, web3, contracts, BN, test } = env;
+
+    if (test) {
+        warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
+    }
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'positions.json');

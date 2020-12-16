@@ -98,7 +98,7 @@ const setPositionsTask = async (env) => {
                     error("Position pool tokens don't match", arg('expected', provider), arg('actual', data[1]));
                 }
 
-                if (!new BN(data[2]).eq(startTime)) {
+                if (data[2] != startTime) {
                     error("Position start times don't match", arg('expected', startTime), arg('actual', data[2]));
                 }
             }

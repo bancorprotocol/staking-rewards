@@ -160,7 +160,7 @@ const setup = async () => {
             }
         }
 
-        return { settings, web3, contracts, defaultAccount, BN, Contract, reorgOffset };
+        return { settings, web3, contracts, defaultAccount, BN, Contract, reorgOffset, test };
     } catch (e) {
         error(e);
 

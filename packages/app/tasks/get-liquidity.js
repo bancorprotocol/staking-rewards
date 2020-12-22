@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const BN = require('bn.js');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
@@ -376,7 +377,7 @@ const getLiquidityTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, reorgOffset, web3, contracts, BN, Contract, test } = env;
+    const { settings, reorgOffset, web3, contracts, Contract, test } = env;
 
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');

@@ -61,7 +61,7 @@ const setup = async () => {
             Contract.defaultAccount = defaultAccount;
         }
 
-        const { BN, keccak256 } = web3.utils;
+        const { keccak256 } = web3.utils;
 
         let { abi, address } = externalContracts.LiquidityProtectionStore;
         contracts.LiquidityProtectionStore = new Contract(abi, address);
@@ -160,7 +160,7 @@ const setup = async () => {
             }
         }
 
-        return { settings, web3, contracts, defaultAccount, BN, Contract, reorgOffset, test };
+        return { settings, web3, contracts, defaultAccount, Contract, reorgOffset, test };
     } catch (e) {
         error(e);
 

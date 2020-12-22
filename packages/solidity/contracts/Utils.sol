@@ -15,4 +15,15 @@ contract Utils {
     function _validAddress(address _address) internal pure {
         require(_address != address(0), "ERR_INVALID_ADDRESS");
     }
+
+    // validates an external address - currently only checks that it isn't null or this
+    modifier validExternalAddress(address _address) {
+        _validExternalAddress(_address);
+        _;
+    }
+
+    // error message binary size optimization
+    function _validExternalAddress(address _address) internal view {
+        require(_address != address(0) && _address != address(this), "ERR_INVALID_EXTERNAL_ADDRESS");
+    }
 }

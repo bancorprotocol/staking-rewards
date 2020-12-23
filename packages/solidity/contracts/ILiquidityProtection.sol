@@ -15,6 +15,6 @@ interface ILiquidityProtection {
         address owner,
         IERC20 poolToken,
         IERC20 reserveToken,
-        uint256 amount
+        uint256 reserveAmount
     ) external payable returns (uint256);
 }

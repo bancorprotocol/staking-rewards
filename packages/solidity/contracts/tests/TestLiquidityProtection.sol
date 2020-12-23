@@ -13,6 +13,10 @@ contract TestLiquidityProtection is ILiquidityProtection {
     IERC20 private _reserveToken;
     uint256 private _amount;
 
+    function store() external view override returns (ILiquidityProtectionTotalAmountsStore) {
+        return ILiquidityProtectionTotalAmountsStore(0x0);
+    }
+
     function addLiquidityFor(
         address owner,
         IERC20 poolToken,

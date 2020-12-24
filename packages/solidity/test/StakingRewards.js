@@ -40,6 +40,31 @@ const expectEqualArrays = (arr1, arr2) => {
     expect(arr1.map((x) => x.toString())).to.be.equalTo(arr2.map((x) => x.toString()));
 };
 
+const getRewardsMultiplier = (stakingDuration) => {
+    // For 0 <= x <= 1 weeks: 100% PPM
+    if (stakingDuration.gte(duration.weeks(0)) && stakingDuration.lt(duration.weeks(1))) {
+        return PPM_RESOLUTION;
+    }
+
+    // For 1 <= x <= 2 weeks: 125% PPM
+    if (stakingDuration.gte(duration.weeks(1)) && stakingDuration.lt(duration.weeks(2))) {
+        return PPM_RESOLUTION.add(MULTIPLIER_INCREMENT);
+    }
+
+    // For 2 <= x <= 3 weeks: 150% PPM
+    if (stakingDuration.gte(duration.weeks(2)) && stakingDuration.lt(duration.weeks(3))) {
+        return PPM_RESOLUTION.add(MULTIPLIER_INCREMENT.mul(new BN(2)));
+    }
+
+    // For 3 <= x < 4 weeks: 175% PPM
+    if (stakingDuration.gte(duration.weeks(3)) && stakingDuration.lt(duration.weeks(4))) {
+        return PPM_RESOLUTION.add(MULTIPLIER_INCREMENT.mul(new BN(3)));
+    }
+
+    // For x >= 4 weeks: 200% PPM
+    return PPM_RESOLUTION.mul(new BN(2));
+};
+
 describe('StakingRewards', () => {
     let now;
     let contractRegistry;
@@ -174,7 +199,7 @@ describe('StakingRewards', () => {
         });
     });
 
-    describe.only('notifications', async () => {
+    describe('notifications', async () => {
         const provider = accounts[1];
         const provider2 = accounts[2];
         const id = new BN(123);
@@ -362,168 +387,83 @@ describe('StakingRewards', () => {
             let programEndTime;
 
             beforeEach(async () => {
-                programStartTime = now;
+                await setTime(now);
+
+                programStartTime = now.add(duration.weeks(1));
                 programEndTime = programStartTime.add(REWARDS_DURATION);
 
                 await store.addPoolProgram(poolToken.address, programStartTime, programEndTime, BIG_POOL_REWARD_RATE);
-
-                await store.addPoolProgram(
-                    poolToken2.address,
-                    programStartTime,
-                    programEndTime,
-                    SMALL_POOL_REWARD_RATE
-                );
             });
 
             context('single provider', async () => {
                 const provider = accounts[1];
-                const provider2 = accounts[2];
 
                 it.only('should grant all staking rewards', async () => {
+                    const reserverAmount = new BN(1000);
+                    let totalReserveAmount = new BN(0);
+
                     await liquidityProtection.addLiquidity(
                         provider,
                         poolToken.address,
                         reserveToken.address,
-                        new BN(1000)
+                        reserverAmount
                     );
 
-                    await liquidityProtection.addLiquidity(
-                        provider2,
-                        poolToken.address,
-                        reserveToken.address,
-                        new BN(5000)
-                    );
+                    totalReserveAmount = totalReserveAmount.add(reserverAmount);
 
-                    const providerReserveAmount = await staking.providerReserveAmount.call(
-                        provider,
-                        poolToken.address,
-                        reserveToken.address
-                    );
-                    const provider2ReserveAmount = await staking.providerReserveAmount.call(
-                        provider2,
-                        poolToken.address,
-                        reserveToken.address
-                    );
-
-                    const totalReserveAmount = await staking.totalReserveAmount.call(
-                        poolToken.address,
-                        reserveToken.address
-                    );
-                    const totalReserve2Amount = await staking.totalReserveAmount.call(
-                        poolToken.address,
-                        reserveToken2.address
-                    );
-
-                    console.log('providerReserveAmount', providerReserveAmount.toString());
-                    console.log('provider2ReserveAmount', provider2ReserveAmount.toString());
-                    console.log('totalReserveAmount', totalReserveAmount.toString());
-                    console.log('totalReserve2Amount', totalReserve2Amount.toString());
-
-                    // providerReserveAmount(
-                    //     address provider,
-                    //     IERC20 poolToken,
-                    //     IERC20 reserveToken
-                    // ) public view returns (uint256) {
-                    //     return _totalProtectedReserveAmountsByProvider[provider][poolToken][reserveToken];
-                    // }
-
-                    // function totalReserveAmount
-
+                    // Should return no rewards before the program has started.
                     let reward = await staking.rewards.call({ from: provider });
                     expect(reward).to.be.bignumber.equal(new BN(0));
 
-                    let reward2 = await staking.rewards.call({ from: provider2 });
-                    expect(reward2).to.be.bignumber.equal(new BN(0));
+                    // Should return no rewards immediately when the program has started.
+                    await setTime(programStartTime);
 
-                    // let providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken.address);
-                    // let rewardPerToken = await staking.rewardPerToken.call(poolToken.address, reserveToken.address);
-                    // console.log('rewardPerToken 1', rewardPerToken.toString());
-
-                    // console.log('providerRewards.rewardPerToken 1', providerRewards.rewardPerToken.toString());
-                    // console.log('providerRewards.pendingBaseRewards 1', providerRewards.pendingBaseRewards.toString());
-                    // console.log(
-                    //     'providerRewards.effectiveStakingTime 1',
-                    //     providerRewards.effectiveStakingTime.toString()
-                    // );
-
-                    await setTime(now.add(new BN(1)));
-
-                    // providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken.address);
-
-                    // console.log('rewardPerToken 2', rewardPerToken.toString());
-                    // console.log('providerRewards.rewardPerToken 2', providerRewards.rewardPerToken.toString());
-                    // console.log('providerRewards.pendingBaseRewards 2', providerRewards.pendingBaseRewards.toString());
-                    // console.log(
-                    //     'providerRewards.effectiveStakingTime 2',
-                    //     providerRewards.effectiveStakingTime.toString()
-                    // );
-
-                    const expectedReward1 = new BN(1000).mul(BIG_POOL_REWARD_RATE.div(new BN(6000)));
-                    const expectedReward2 = new BN(5000).mul(BIG_POOL_REWARD_RATE.div(new BN(6000)));
-
-                    console.log('expectedReward1', expectedReward1.toString());
-                    console.log('expectedReward2', expectedReward2.toString());
                     reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1);
+                    expect(reward).to.be.bignumber.equal(new BN(0));
 
-                    let rewardPerToken = await staking.rewardPerToken.call(poolToken.address, reserveToken.address);
-                    console.log('rewardPerToken 2', rewardPerToken.toString());
-                    reward2 = await staking.rewards.call({ from: provider2 });
-                    expect(reward2).to.be.bignumber.equal(expectedReward2);
+                    // Should return all rewards for one second.
+                    await setTime(now.add(duration.seconds(1)));
 
-                    // await staking.claimRewards({ from: provider });
+                    expectedReward = reserverAmount.mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount));
+                    reward = await staking.rewards.call({ from: provider });
+                    expect(reward).to.be.bignumber.equal(expectedReward);
 
-                    // reward = await staking.rewards.call({ from: provider });
-                    // expect(reward).to.be.bignumber.equal(new BN(0));
+                    // Should return all rewards for a single day.
+                    await setTime(programStartTime.add(duration.days(1)));
 
-                    // console.log('Hi!');
+                    expectedReward = reserverAmount.mul(
+                        duration.days(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
+                    );
+                    reward = await staking.rewards.call({ from: provider });
+                    expect(reward).to.be.bignumber.equal(expectedReward);
 
-                    // await setTime(now.add(new BN(1)));
-                    // rewardPerToken = await staking.rewardPerToken.call(poolToken.address, reserveToken.address);
-                    // console.log('rewardPerToken 3', rewardPerToken.toString());
+                    // Should return all weekly rewards + second week's retroactive multiplier.
+                    await setTime(programStartTime.add(duration.weeks(1)));
 
-                    // reward = await staking.rewards.call({ from: provider });
-                    // expect(reward).to.be.bignumber.equal(expectedReward.mul(new BN(2)));
+                    expectedReward = reserverAmount
+                        .mul(duration.weeks(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
+                        .mul(getRewardsMultiplier(duration.weeks(1)))
+                        .div(PPM_RESOLUTION);
+                    reward = await staking.rewards.call({ from: provider });
+                    expect(reward).to.be.bignumber.equal(expectedReward);
 
-                    // Before ending time
-                    // await setTime(programEndTime.sub(new BN(1)));
-                    // reward = await staking.rewards.call({ from: provider });
-                    // //console.log('reward PRE', reward.toString());
+                    // Should return all program rewards + max retroactive multipliers.
+                    await setTime(programEndTime);
 
-                    // // At ending time
+                    const programDuration = programEndTime.sub(programStartTime);
+                    expectedReward = reserverAmount
+                        .mul(programDuration.mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
+                        .mul(getRewardsMultiplier(duration.weeks(4)))
+                        .div(PPM_RESOLUTION);
+                    reward = await staking.rewards.call({ from: provider });
+                    expect(reward).to.be.bignumber.equal(expectedReward);
 
-                    // await setTime(programEndTime);
-
-                    // let poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
-                    // console.log('poolRewards.lastUpdateTime 1', poolRewards.lastUpdateTime.toString());
-                    // console.log('poolRewards.rewardPerToken 1', poolRewards.rewardPerToken.toString());
-
-                    // rewardPerToken = await staking.rewardPerToken.call(poolToken.address, reserveToken.address);
-                    // // console.log('programStartTime', programStartTime.toString());
-                    // // console.log('programEndTime', programEndTime.toString());
-                    // console.log('BIG_POOL_REWARD_RATE', BIG_POOL_REWARD_RATE.toString());
-                    // console.log('BIG_POOL_REWARD_RATE', BIG_POOL_REWARD_RATE.toString());
-                    // console.log('REWARDS_DURATION', REWARDS_DURATION.toString());
-                    // console.log('rewardPerToken 1', rewardPerToken.toString());
-
-                    // console.log('provider pools', await staking.providerPools.call(provider));
-
-                    // const expectedReward2 = new BN(1000)
-                    //     .mul(REWARDS_DURATION.sub(new BN(1)).mul(BIG_POOL_REWARD_RATE).div(new BN(1000)))
-                    //     .mul(REWARDS_DURATION.sub(new BN(1)).mul(BIG_POOL_REWARD_RATE).div(new BN(1000)))
-                    //     .mul(new BN(2));
-                    // console.log('expectedReward2', expectedReward2.toString());
-                    // reward = await staking.rewards.call({ from: provider });
-                    // expect(reward).to.be.bignumber.equal(expectedReward2);
-
-                    // // After ending time
-                    // await setTime(programEndTime.add(new BN(1000)));
-                    // reward = await staking.rewards.call({ from: provider });
-                    // console.log('reward YYY', reward.toString());
+                    // Should not affect rewards after the ending of the program.
+                    await setTime(programEndTime.add(duration.days(1)));
+                    const reward2 = await staking.rewards.call({ from: provider });
+                    expect(reward2).to.be.bignumber.equal(reward);
                 });
             });
         });
-
-        // multiple pool
     });
 });

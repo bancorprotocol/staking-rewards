@@ -339,7 +339,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             return rewardsData.rewardPerToken;
         }
 
-        uint256 stakingEndTime = Math.min(time(), program.endTime);
+        uint256 currentTime = time();
+        if (currentTime < program.startTime) {
+            return 0;
+        }
+
+        uint256 stakingEndTime = Math.min(currentTime, program.endTime);
         uint256 stakingStartTime = Math.max(program.startTime, rewardsData.lastUpdateTime);
 
         return
@@ -391,7 +396,18 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ) private view returns (uint32) {
         uint256 effectiveStakingEndTime = Math.min(time(), program.endTime);
         uint256 effectiveStakingStartTime =
-            Math.max(stakingStartTime, Math.max(_lastRemoveTimes.checkpoint(provider), _store.lastClaimTime(provider)));
+            Math.max( // take the latest of actual staking start time and the latest multiplier reset
+                Math.max(stakingStartTime, program.startTime), // don't count staking before the start of the program
+                Math.max(_lastRemoveTimes.checkpoint(provider), _store.lastClaimTime(provider)) // get the latest multiplier reset timestamp
+            );
+
+        // check that the staking range is valid. for example, it can be invalid when calculating the multiplier when
+        // the staking has started berore the start of the program, in which case the effective staking start time will
+        // be in the future, compared to the effective staking end time (which will be the time of the current block).
+        if (effectiveStakingStartTime >= effectiveStakingEndTime) {
+            return PPM_RESOLUTION;
+        }
+
         uint256 effectiveStakingDuration = effectiveStakingEndTime.sub(effectiveStakingStartTime);
 
         // given x representing the staking duration (in seconds), the resulting multiplier (in PPM) is:

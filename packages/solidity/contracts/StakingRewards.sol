@@ -43,9 +43,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the role is used to govern retroactive rewards distribution.
     bytes32 public constant ROLE_REWARDS_DISTRIBUTOR = keccak256("ROLE_REWARDS_DISTRIBUTOR");
 
-    // the roles is used to restrict who is allowed to publish liquidity protection event
-    bytes32 public constant ROLE_PUBLISHER = keccak256("ROLE_PUBLISHER");
-
     uint32 public constant PPM_RESOLUTION = 1000000;
 
     // the weekly 25% increase of the rewards multiplier (in units of PPM)
@@ -140,15 +137,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         require(hasRole(ROLE_REWARDS_DISTRIBUTOR, msg.sender), "ERR_ACCESS_DENIED");
     }
 
-    modifier onlyPublisher() {
-        _onlyPublisher();
-        _;
-    }
-
-    function _onlyPublisher() internal view {
-        require(hasRole(ROLE_PUBLISHER, msg.sender), "ERR_ACCESS_DENIED");
-    }
-
     modifier poolWhitelisted(IERC20 poolToken) {
         _poolWhitelisted(poolToken);
         _;
@@ -168,7 +156,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     )
         external
         override
-        onlyPublisher
+        only(LIQUIDITY_PROTECTION)
         poolWhitelisted(poolToken)
         validExternalAddress(provider)
         validExternalAddress(address(reserveToken))
@@ -196,7 +184,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     )
         external
         override
-        onlyPublisher
+        only(LIQUIDITY_PROTECTION)
         poolWhitelisted(poolToken)
         validExternalAddress(provider)
         validExternalAddress(address(reserveToken))
@@ -214,7 +202,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     )
         external
         override
-        onlyPublisher
+        only(LIQUIDITY_PROTECTION)
         poolWhitelisted(poolToken)
         validExternalAddress(provider)
         validExternalAddress(address(reserveToken))

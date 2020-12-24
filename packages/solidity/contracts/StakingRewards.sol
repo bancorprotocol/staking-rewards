@@ -232,14 +232,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         return rewards(provider, false);
     }
 
-    function rewards(IERC20[] calldata poolTokens) external returns (uint256) {
-        return rewards(msg.sender, poolTokens, false);
-    }
-
-    function rewards(address provider, IERC20[] calldata poolTokens) external returns (uint256) {
-        return rewards(provider, poolTokens, false);
-    }
-
     function rewards(address provider, bool claim) private returns (uint256) {
         if (claim) {
             require(provider == msg.sender, "ERR_ACCESS_DENIED");
@@ -306,10 +298,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             poolTokens[i] = IERC20(providerPools.at(i));
         }
 
-        return claimRewards(msg.sender, poolTokens);
-    }
-
-    function claimRewards(IERC20[] calldata poolTokens) external returns (uint256) {
         return claimRewards(msg.sender, poolTokens);
     }
 

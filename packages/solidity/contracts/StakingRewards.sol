@@ -26,12 +26,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     using SafeERC20 for IERC20;
 
     struct ProviderRewards {
+        bool initialized;
         uint256 rewardPerToken;
         uint256 pendingBaseRewards;
         uint256 effectiveStakingTime;
     }
 
     struct Rewards {
+        bool initialized;
         uint256 lastUpdateTime;
         uint256 rewardPerToken;
         mapping(address => ProviderRewards) providerRewards;
@@ -58,13 +60,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ICheckpointStore private immutable _lastRemoveTimes;
 
     // the mapping between pools, reserve tokens, and their rewards
-    mapping(IERC20 => mapping(IERC20 => Rewards)) private _rewards;
+    mapping(IERC20 => mapping(IERC20 => Rewards)) internal _rewards;
 
     // the mapping between pools and their (non-network) base reserve tokens
-    mapping(IERC20 => IERC20[2]) private _reserveTokensByPools;
+    mapping(IERC20 => IERC20[]) private _reserveTokensByPools;
 
     // the mapping between providers and the pools they are participating in
-    mapping(address => EnumerableSet.AddressSet) private _poolsByProvider;
+    mapping(address => EnumerableSet.AddressSet) internal _poolsByProvider;
 
     mapping(IERC20 => mapping(IERC20 => uint256)) private _totalProtectedReserveAmounts;
     mapping(address => mapping(IERC20 => mapping(IERC20 => uint256))) private _totalProtectedReserveAmountsByProvider;
@@ -119,15 +121,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         _setupRole(ROLE_SUPERVISOR, _msgSender());
     }
 
-    modifier onlySupervisor() {
-        _onlySupervisor();
-        _;
-    }
-
-    function _onlySupervisor() internal view {
-        require(hasRole(ROLE_SUPERVISOR, msg.sender), "ERR_ACCESS_DENIED");
-    }
-
     modifier onlyRewardsDistributor() {
         _onlyRewardsDistributor();
         _;
@@ -161,43 +154,32 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         validExternalAddress(provider)
         validExternalAddress(address(reserveToken))
     {
-        updateProviderReward(provider, poolToken, reserveToken);
+        // initilize the data for this pool on the first time
+        ProviderRewards storage providerRewards = initProviderData(provider, poolToken, reserveToken);
+
+        updateRewards(provider, poolToken, reserveToken);
 
         // if this is the first liquidity provision, record its time as the effective staking time for future reward
         // multiplier calculations.
-        uint256 currentReserveAmount = providerReserveAmount(provider, poolToken, reserveToken);
-        if (currentReserveAmount == 0) {
-            ProviderRewards storage providerRewards = _rewards[poolToken][reserveToken].providerRewards[provider];
+        uint256 prevProviderAmount = providerReserveAmount(provider, poolToken, reserveToken);
+        if (prevProviderAmount == 0) {
             providerRewards.effectiveStakingTime = time();
         }
 
-        updateProviderLiquidity(provider, poolToken, reserveToken, currentReserveAmount.add(reserveAmount));
-    }
+        _totalProtectedReserveAmountsByProvider[provider][poolToken][reserveToken] = prevProviderAmount.add(
+            reserveAmount
+        );
 
-    function updateLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256, /*newPoolAmount*/
-        uint256 newReserveAmount,
-        uint256 /*id*/
-    )
-        external
-        override
-        only(LIQUIDITY_PROTECTION)
-        poolWhitelisted(poolToken)
-        validExternalAddress(provider)
-        validExternalAddress(address(reserveToken))
-    {
-        updateProviderReward(provider, poolToken, reserveToken);
-
-        updateProviderLiquidity(provider, poolToken, reserveToken, newReserveAmount);
+        uint256 prevPoolAmount = totalReserveAmount(poolToken, reserveToken);
+        _totalProtectedReserveAmounts[poolToken][reserveToken] = prevPoolAmount.add(reserveAmount);
     }
 
     function removeLiquidity(
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
+        uint256, /* removedPoolAmount */
+        uint256 removedReserveAmount,
         uint256 /* id */
     )
         external
@@ -207,16 +189,42 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         validExternalAddress(provider)
         validExternalAddress(address(reserveToken))
     {
-        updateProviderReward(provider, poolToken, reserveToken);
+        updateRewards(provider, poolToken, reserveToken);
 
-        updateProviderLiquidity(provider, poolToken, reserveToken, 0);
+        uint256 prevProviderAmount = providerReserveAmount(provider, poolToken, reserveToken);
+        _totalProtectedReserveAmountsByProvider[provider][poolToken][reserveToken] = prevProviderAmount.sub(
+            removedReserveAmount
+        );
+
+        uint256 prevPoolAmount = totalReserveAmount(poolToken, reserveToken);
+        _totalProtectedReserveAmounts[poolToken][reserveToken] = prevPoolAmount.sub(removedReserveAmount);
+    }
+
+    function initProviderData(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken
+    ) private returns (ProviderRewards storage providerRewards) {
+        Rewards storage rewardsData = _rewards[poolToken][reserveToken];
+        if (!rewardsData.initialized) {
+            _reserveTokensByPools[poolToken].push(reserveToken);
+
+            rewardsData.initialized = true;
+        }
+
+        providerRewards = rewardsData.providerRewards[provider];
+        if (!providerRewards.initialized) {
+            _poolsByProvider[provider].add(address(poolToken));
+
+            providerRewards.initialized = true;
+        }
     }
 
     function rewards() external returns (uint256) {
         return rewards(msg.sender, false);
     }
 
-    function rewards(address provider) external returns (uint256) {
+    function rewardsOf(address provider) external returns (uint256) {
         return rewards(provider, false);
     }
 
@@ -254,13 +262,15 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ) private returns (uint256) {
         uint256 reward = 0;
 
-        IERC20[2] memory reserveTokens = _reserveTokensByPools[poolToken];
-        for (uint8 j = 0; j < 2; ++j) {
-            IERC20 reserveToken = reserveTokens[j];
+        IERC20[] memory reserveTokens = _reserveTokensByPools[poolToken];
+        uint256 length = reserveTokens.length;
+
+        for (uint8 i = 0; i < length; ++i) {
+            IERC20 reserveToken = reserveTokens[i];
 
             // update all provider's pending rewards, in order to take into account reward multipliers
             if (claim) {
-                updateProviderReward(provider, poolToken, reserveToken);
+                updateRewards(provider, poolToken, reserveToken);
             }
 
             reward = reward.add(fullRewards(provider, poolToken, reserveToken));
@@ -324,7 +334,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         PoolProgram memory program,
         Rewards memory rewardsData,
         uint256 totalReserveAmount
-    ) private view returns (uint256) {
+    ) internal view returns (uint256) {
         if (totalReserveAmount == 0) {
             return rewardsData.rewardPerToken;
         }
@@ -356,7 +366,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         return providerRewards.pendingBaseRewards.add(baseReward.mul(multiplier).div(PPM_RESOLUTION));
     }
 
-    function updateProviderReward(
+    function updateRewards(
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken
@@ -410,23 +420,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
     function totalReserveAmount(IERC20 poolToken, IERC20 reserveToken) public view returns (uint256) {
         return _totalProtectedReserveAmounts[poolToken][reserveToken];
-    }
-
-    function updateProviderLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 newReserveAmount
-    ) private {
-        uint256 prevProviderAmount = providerReserveAmount(provider, poolToken, reserveToken);
-        _totalProtectedReserveAmountsByProvider[provider][poolToken][reserveToken] = prevProviderAmount
-            .add(newReserveAmount)
-            .sub(prevProviderAmount);
-
-        uint256 prevPoolAmount = totalReserveAmount(poolToken, reserveToken);
-        _totalProtectedReserveAmounts[poolToken][reserveToken] = prevPoolAmount.add(newReserveAmount).sub(
-            prevPoolAmount
-        );
     }
 
     function liquidityProtection() private view returns (ILiquidityProtection) {

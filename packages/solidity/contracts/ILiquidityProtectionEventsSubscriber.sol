@@ -16,19 +16,12 @@ interface ILiquidityProtectionEventsSubscriber {
         uint256 id
     ) external;
 
-    function updateLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 newPoolAmount,
-        uint256 newReserveAmount,
-        uint256 id
-    ) external;
-
     function removeLiquidity(
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
+        uint256 removedPoolAmount,
+        uint256 removedReserveAmount,
         uint256 id
     ) external;
 }

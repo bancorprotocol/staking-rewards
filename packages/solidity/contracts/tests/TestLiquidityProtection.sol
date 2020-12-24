@@ -31,23 +31,13 @@ contract TestLiquidityProtection is ILiquidityProtection {
         return 0;
     }
 
-    function updateLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 newReserveAmount
-    ) external payable returns (uint256) {
-        _stakingRewards.updateLiquidity(provider, poolToken, reserveToken, 0, newReserveAmount, 0);
-
-        return 0;
-    }
-
     function removeLiquidity(
         address provider,
         IERC20 poolToken,
-        IERC20 reserveToken
+        IERC20 reserveToken,
+        uint256 reserveAmount
     ) external payable returns (uint256) {
-        _stakingRewards.removeLiquidity(provider, poolToken, reserveToken, 0);
+        _stakingRewards.removeLiquidity(provider, poolToken, reserveToken, 0, reserveAmount, 0);
 
         return 0;
     }

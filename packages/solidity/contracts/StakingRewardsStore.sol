@@ -4,6 +4,8 @@ pragma solidity 0.6.12;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 import "./IStakingRewardsStore.sol";
+import "./IOwned.sol";
+import "./IConverter.sol";
 import "./Utils.sol";
 import "./Time.sol";
 
@@ -128,6 +130,13 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.endTime = endTime;
         program.rewardRate = rewardRate;
 
+        IConverter converter = IConverter(IOwned(address(poolToken)).owner());
+        uint256 length = converter.connectorTokenCount();
+        require(length == 2, "ERR_POOL_NOT_SUPPORTED");
+
+        program.reserveTokens[0] = converter.connectorTokens(0);
+        program.reserveTokens[1] = converter.connectorTokens(1);
+
         if (newProgram) {
             emit PoolProgramAdded(poolToken, startTime, endTime, rewardRate);
         } else {
@@ -157,6 +166,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         override
         onlyParticipating(poolToken)
         returns (
+            IERC20[2] memory,
             uint256,
             uint256,
             uint256
@@ -165,7 +175,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         PoolProgram memory program = _programs[poolToken];
         require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
 
-        return (program.startTime, program.endTime, program.rewardRate);
+        return (program.reserveTokens, program.startTime, program.endTime, program.rewardRate);
     }
 
     /**

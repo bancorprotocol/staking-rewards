@@ -17,10 +17,18 @@ contract TestStakingRewards is StakingRewards, TestTime {
         return TestTime.time();
     }
 
-    function poolRewards(IERC20 poolToken, IERC20 reserveToken) external view returns (uint256, uint256) {
+    function poolRewards(IERC20 poolToken, IERC20 reserveToken)
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         Rewards memory data = _rewards[poolToken][reserveToken];
 
-        return (data.lastUpdateTime, data.rewardPerToken);
+        return (data.lastUpdateTime, data.rewardPerToken, data.totalReserveAmount);
     }
 
     function providerRewards(
@@ -33,20 +41,20 @@ contract TestStakingRewards is StakingRewards, TestTime {
         returns (
             uint256,
             uint256,
+            uint256,
             uint256
         )
     {
-        ProviderRewards memory data = _rewards[poolToken][reserveToken].providerRewards[provider];
+        ProviderRewards memory data = _providerRewards[provider][poolToken][reserveToken];
 
-        return (data.rewardPerToken, data.pendingBaseRewards, data.effectiveStakingTime);
+        return (data.rewardPerToken, data.pendingBaseRewards, data.reserveAmount, data.effectiveStakingTime);
     }
 
     function rewardPerToken(IERC20 poolToken, IERC20 reserveToken) external view returns (uint256) {
-        Rewards storage rewardsData = _rewards[poolToken][reserveToken];
+        Rewards memory rewardsData = _rewards[poolToken][reserveToken];
         PoolProgram memory program = poolProgram(poolToken);
 
-        uint256 totalAmount = totalReserveAmount(poolToken, reserveToken);
-        return rewardPerToken(program, rewardsData, totalAmount);
+        return rewardPerToken(program, rewardsData);
     }
 
     function providerPools(address provider) external view returns (IERC20[] memory) {

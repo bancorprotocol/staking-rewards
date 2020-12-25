@@ -7,6 +7,7 @@ struct PoolProgram {
     uint256 startTime;
     uint256 endTime;
     uint256 rewardRate;
+    IERC20[2] reserveTokens;
 }
 
 struct Position {
@@ -31,6 +32,7 @@ interface IStakingRewardsStore {
         external
         view
         returns (
+            IERC20[2] memory,
             uint256,
             uint256,
             uint256

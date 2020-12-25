@@ -7,6 +7,8 @@ const { ZERO_ADDRESS } = constants;
 const { duration } = time;
 
 const TestERC20Token = contract.fromArtifact('TestERC20Token');
+const TestConverter = contract.fromArtifact('TestConverter');
+const TestPoolToken = contract.fromArtifact('TestPoolToken');
 const CheckpointStore = contract.fromArtifact('TestCheckpointStore');
 const TokenGovernance = contract.fromArtifact('TestTokenGovernance');
 const LiquidityProtection = contract.fromArtifact('TestLiquidityProtection');
@@ -63,7 +65,7 @@ const getRewardsMultiplier = (stakingDuration) => {
     return PPM_RESOLUTION.mul(new BN(2));
 };
 
-describe.only('StakingRewards', () => {
+describe('StakingRewards', () => {
     let now;
     let prevNow;
     let contractRegistry;
@@ -90,14 +92,38 @@ describe.only('StakingRewards', () => {
         }
     };
 
+    const getProviderRewards = async (provider, poolToken, reserveToken) => {
+        const data = await staking.providerRewards.call(provider, poolToken, reserveToken);
+        return {
+            rewardPerToken: data[0],
+            pendingBaseRewards: data[1],
+            reserveAmount: data[2],
+            effectiveStakingTime: data[3]
+        };
+    };
+
+    const getPoolRewards = async (poolToken, reserveToken) => {
+        const data = await staking.poolRewards.call(poolToken, reserveToken);
+        return {
+            lastUpdateTime: data[0],
+            rewardPerToken: data[1],
+            totalReserveAmount: data[2]
+        };
+    };
+
     beforeEach(async () => {
         contractRegistry = await ContractRegistry.new();
 
         networkToken = await TestERC20Token.new('TKN1', 'TKN1');
         reserveToken = await TestERC20Token.new('RSV1', 'RSV1');
 
-        poolToken = await TestERC20Token.new('POOL1', 'POOL1');
-        poolToken2 = await TestERC20Token.new('POOL2', 'POOL2');
+        poolToken = await TestPoolToken.new('POOL1', 'POOL1');
+        const converter = await TestConverter.new(poolToken.address, networkToken.address, reserveToken.address);
+        await poolToken.setOwner(converter.address);
+
+        poolToken2 = await TestPoolToken.new('POOL2', 'POOL2');
+        const converter2 = await TestConverter.new(poolToken2.address, networkToken.address, reserveToken.address);
+        await poolToken2.setOwner(converter2.address);
 
         networkTokenGovernance = await TokenGovernance.new(networkToken.address);
         await networkTokenGovernance.grantRole(ROLE_GOVERNOR, supervisor);
@@ -256,17 +282,14 @@ describe.only('StakingRewards', () => {
             );
         });
 
-        it('should reflect on provider and total reserve amounts', async () => {
+        it('should reflect on stored reserve amounts', async () => {
             // Check the initial state.
-            expect(
-                await staking.providerReserveAmount.call(provider, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
-            expect(
-                await staking.providerReserveAmount.call(provider2, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
-            expect(
-                await staking.totalReserveAmount.call(poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
+            let providerRewards1 = await getProviderRewards(provider, poolToken.address, reserveToken.address);
+            let providerRewards2 = await getProviderRewards(provider2, poolToken.address, reserveToken.address);
+            let poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
+            expect(providerRewards1.reserveAmount).to.be.bignumber.equal(new BN(0));
+            expect(providerRewards2.reserveAmount).to.be.bignumber.equal(new BN(0));
+            expect(poolRewards.totalReserveAmount).to.be.bignumber.equal(new BN(0));
 
             // Add some liquidity for the first provider.
             const amount = new BN(1000);
@@ -274,15 +297,12 @@ describe.only('StakingRewards', () => {
                 from: liquidityProtectionProxy
             });
 
-            expect(
-                await staking.providerReserveAmount.call(provider, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount);
-            expect(
-                await staking.providerReserveAmount.call(provider2, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
-            expect(
-                await staking.totalReserveAmount.call(poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount);
+            providerRewards1 = await getProviderRewards(provider, poolToken.address, reserveToken.address);
+            providerRewards2 = await getProviderRewards(provider2, poolToken.address, reserveToken.address);
+            poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
+            expect(providerRewards1.reserveAmount).to.be.bignumber.equal(amount);
+            expect(providerRewards2.reserveAmount).to.be.bignumber.equal(new BN(0));
+            expect(poolRewards.totalReserveAmount).to.be.bignumber.equal(amount);
 
             // Add some liquidity for the second provider.
             const amount2 = new BN(12345);
@@ -290,15 +310,12 @@ describe.only('StakingRewards', () => {
                 from: liquidityProtectionProxy
             });
 
-            expect(
-                await staking.providerReserveAmount.call(provider, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount);
-            expect(
-                await staking.providerReserveAmount.call(provider2, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount2);
-            expect(
-                await staking.totalReserveAmount.call(poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount.add(amount2));
+            providerRewards1 = await getProviderRewards(provider, poolToken.address, reserveToken.address);
+            providerRewards2 = await getProviderRewards(provider2, poolToken.address, reserveToken.address);
+            poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
+            expect(providerRewards1.reserveAmount).to.be.bignumber.equal(amount);
+            expect(providerRewards2.reserveAmount).to.be.bignumber.equal(amount2);
+            expect(poolRewards.totalReserveAmount).to.be.bignumber.equal(amount.add(amount2));
 
             // Remove some of first provider's liquidity.
             const removedAmount = new BN(5);
@@ -306,15 +323,12 @@ describe.only('StakingRewards', () => {
                 from: liquidityProtectionProxy
             });
 
-            expect(
-                await staking.providerReserveAmount.call(provider, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount.sub(removedAmount));
-            expect(
-                await staking.providerReserveAmount.call(provider2, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount2);
-            expect(
-                await staking.totalReserveAmount.call(poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount.sub(removedAmount).add(amount2));
+            providerRewards1 = await getProviderRewards(provider, poolToken.address, reserveToken.address);
+            providerRewards2 = await getProviderRewards(provider2, poolToken.address, reserveToken.address);
+            poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
+            expect(providerRewards1.reserveAmount).to.be.bignumber.equal(amount.sub(removedAmount));
+            expect(providerRewards2.reserveAmount).to.be.bignumber.equal(amount2);
+            expect(poolRewards.totalReserveAmount).to.be.bignumber.equal(amount.sub(removedAmount).add(amount2));
 
             // Remove first provider's full liquidity.
             await staking.removeLiquidity(
@@ -329,30 +343,24 @@ describe.only('StakingRewards', () => {
                 }
             );
 
-            expect(
-                await staking.providerReserveAmount.call(provider, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
-            expect(
-                await staking.providerReserveAmount.call(provider2, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount2);
-            expect(
-                await staking.totalReserveAmount.call(poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(amount2);
+            providerRewards1 = await getProviderRewards(provider, poolToken.address, reserveToken.address);
+            providerRewards2 = await getProviderRewards(provider2, poolToken.address, reserveToken.address);
+            poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
+            expect(providerRewards1.reserveAmount).to.be.bignumber.equal(new BN(0));
+            expect(providerRewards2.reserveAmount).to.be.bignumber.equal(amount2);
+            expect(poolRewards.totalReserveAmount).to.be.bignumber.equal(amount2);
 
             // Remove second provider's liquidity.
             await staking.removeLiquidity(provider2, poolToken.address, reserveToken.address, 0, amount2, id, {
                 from: liquidityProtectionProxy
             });
 
-            expect(
-                await staking.providerReserveAmount.call(provider, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
-            expect(
-                await staking.providerReserveAmount.call(provider2, poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
-            expect(
-                await staking.totalReserveAmount.call(poolToken.address, reserveToken.address)
-            ).to.be.bignumber.equal(new BN(0));
+            providerRewards1 = await getProviderRewards(provider, poolToken.address, reserveToken.address);
+            providerRewards2 = await getProviderRewards(provider2, poolToken.address, reserveToken.address);
+            poolRewards = await getPoolRewards(poolToken.address, reserveToken.address);
+            expect(providerRewards1.reserveAmount).to.be.bignumber.equal(new BN(0));
+            expect(providerRewards2.reserveAmount).to.be.bignumber.equal(new BN(0));
+            expect(poolRewards.totalReserveAmount).to.be.bignumber.equal(new BN(0));
         });
     });
 

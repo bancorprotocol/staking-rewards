@@ -9,10 +9,8 @@ const argv = require('./utils/yargs');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPositionsTask = require('./tasks/get-positions');
-const getMultiplierResetsTask = require('./tasks/get-multiplier-resets');
 
 const setProgramsTask = require('./tasks/set-programs');
-const setPositionsTask = require('./tasks/set-positions');
 
 const main = async () => {
     try {
@@ -31,7 +29,7 @@ const main = async () => {
         const env = await setup();
 
         // Handle all the tasks in the right order.
-        const { getAll, getLiquidity, getPositions, getMultiplierResets, setAll, setPrograms, setPositions } = argv;
+        const { getAll, getLiquidity, getPositions, setAll, setPrograms } = argv;
 
         if (getAll || getLiquidity) {
             await getLiquidityTask(env);
@@ -41,16 +39,8 @@ const main = async () => {
             await getPositionsTask(env);
         }
 
-        if (getAll || getMultiplierResets) {
-            await getMultiplierResetsTask(env);
-        }
-
         if (setAll || setPrograms) {
             await setProgramsTask(env);
-        }
-
-        if (setAll || setPositions) {
-            await setPositionsTask(env);
         }
 
         process.exit(0);

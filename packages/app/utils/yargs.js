@@ -40,10 +40,6 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Get all positions'
     })
-    .option('get-multiplier-resets', {
-        type: 'boolean',
-        description: 'Get all multiplier rests'
-    })
     .option('set-all', {
         type: 'boolean',
         description: 'Set all data'
@@ -51,10 +47,6 @@ const { argv } = yargs(hideBin(process.argv))
     .option('set-programs', {
         type: 'boolean',
         description: 'Set reward programs'
-    })
-    .option('set-positions', {
-        type: 'boolean',
-        description: 'Set all positions'
     });
 
 module.exports = argv;

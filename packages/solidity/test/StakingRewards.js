@@ -361,7 +361,7 @@ describe('StakingRewards', () => {
         });
     });
 
-    describe('rewards', async () => {
+    describe.only('rewards', async () => {
         const provider = accounts[1];
 
         let reserveAmounts;
@@ -471,7 +471,7 @@ describe('StakingRewards', () => {
         let programEndTime;
 
         const testStatic = () => {
-            it.only('should properly calculate all staking rewards', async () => {
+            it('should properly calculate all staking rewards', async () => {
                 // Should return no rewards before the program has started.
                 let reward = await staking.rewards.call({ from: provider });
                 expect(reward).to.be.bignumber.equal(new BN(0));
@@ -534,7 +534,6 @@ describe('StakingRewards', () => {
 
                 reward = await staking.rewards.call({ from: provider });
                 expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
-                console.log('reward', reward.toString());
 
                 let prevBalance = await networkToken.balanceOf.call(provider);
                 await staking.claimRewards({ from: provider });
@@ -596,7 +595,7 @@ describe('StakingRewards', () => {
             });
         };
 
-        context.only('single pool', async () => {
+        context('single pool', async () => {
             beforeEach(async () => {
                 await setTime(now);
 
@@ -608,7 +607,7 @@ describe('StakingRewards', () => {
                 await addLiquidity(provider, poolToken, reserveToken, new BN(1000).mul(new BN(10).pow(new BN(18))));
             });
 
-            context.only('single sided staking', async () => {
+            context('single sided staking', async () => {
                 testStatic();
             });
 

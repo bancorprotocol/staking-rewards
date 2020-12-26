@@ -163,6 +163,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         validExternalAddress(provider)
         validExternalAddress(address(reserveToken))
     {
+        // claim all pending rewards before removing the position
+        claimRewards(provider);
+
         _store.removeProviderLiquidity(provider, poolToken, reserveToken, removedReserveAmount);
 
         updateRewards(provider, poolToken, reserveToken);
@@ -217,6 +220,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
             uint256 baseRewards = baseRewards(reserveToken, rewards(poolToken, reserveToken), providerRewards, program);
 
+            // make sure that we aren't exceeding the reward rate for any reason
+            verifyBaseReward(baseRewards, providerRewards, program);
+
             // apply the rewards multiplier on all rewards
             reward = reward.add(
                 providerRewards
@@ -235,12 +241,18 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     function claimRewards() external returns (uint256) {
-        return claimRewards(msg.sender, _store.poolsByProvider(msg.sender));
+        return claimRewards(msg.sender);
+    }
+
+    function claimRewards(address provider) private returns (uint256) {
+        return claimRewards(provider, _store.poolsByProvider(provider));
     }
 
     function claimRewards(address provider, IERC20[] memory poolTokens) private returns (uint256) {
         uint256 amount = rewards(provider, poolTokens, true);
-        require(amount > 0, "ERR_NO_REWARDS");
+        if (amount == 0) {
+            return amount;
+        }
 
         // make sure to update the last claim time so that it'll be taken into effect when calculating the next rewards
         // multiplier
@@ -397,5 +409,24 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
     function liquidityProtection() private view returns (ILiquidityProtection) {
         return ILiquidityProtection(addressOf(LIQUIDITY_PROTECTION));
+    }
+
+    function verifyBaseReward(
+        uint256 baseReward,
+        ProviderRewards memory providerRewardsData,
+        PoolProgram memory program
+    ) private view {
+        uint256 currentTime = time();
+        if (currentTime < program.startTime) {
+            require(baseReward == 0, "ERR_REWARD_TOO_HIGH");
+
+            return;
+        }
+
+        uint256 stakingStartTime = Math.max(providerRewardsData.effectiveStakingTime, program.startTime);
+        uint256 stakingEndTime = Math.min(currentTime, program.endTime);
+
+        // make sure that we aren't exceeding the reward rate for any reason
+        require(baseReward <= program.rewardRate.mul(stakingEndTime.sub(stakingStartTime)), "ERR_REWARD_RATE_TOO_HIGH");
     }
 }

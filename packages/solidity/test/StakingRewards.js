@@ -26,6 +26,7 @@ const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
 
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
+const REWARD_RATE_FACTOR = new BN(10).pow(new BN(18));
 const REWARDS_DURATION = duration.weeks(12);
 const BIG_POOL_REWARD_RATE = new BN(200000)
     .div(new BN(2))
@@ -35,10 +36,6 @@ const SMALL_POOL_REWARD_RATE = new BN(20000)
     .div(new BN(2))
     .mul(new BN(10).pow(new BN(18)))
     .div(duration.weeks(1));
-
-const expectEqualArrays = (arr1, arr2) => {
-    expect(arr1.map((x) => x.toString())).to.be.equalTo(arr2.map((x) => x.toString()));
-};
 
 const getRewardsMultiplier = (stakingDuration) => {
     // For 0 <= x <= 1 weeks: 100% PPM
@@ -367,383 +364,309 @@ describe('StakingRewards', () => {
     describe('rewards', async () => {
         const provider = accounts[1];
 
+        let reserveAmounts;
+        let totalReserveAmounts;
+        let programs;
+        let providerPools;
+
+        beforeEach(async () => {
+            providerPools = {
+                [provider]: {
+                    poolTokens: [],
+                    reserveTokens: []
+                }
+            };
+
+            reserveAmounts = {
+                [poolToken.address]: {
+                    [reserveToken.address]: {
+                        [provider]: new BN(0)
+                    },
+                    [networkToken.address]: {
+                        [provider]: new BN(0)
+                    }
+                },
+                [poolToken2.address]: {
+                    [reserveToken.address]: {
+                        [provider]: new BN(0)
+                    },
+                    [networkToken.address]: {
+                        [provider]: new BN(0)
+                    }
+                }
+            };
+
+            totalReserveAmounts = {
+                [poolToken.address]: {
+                    [reserveToken.address]: new BN(0),
+                    [networkToken.address]: new BN(0)
+                },
+                [poolToken2.address]: {
+                    [reserveToken.address]: new BN(0),
+                    [networkToken.address]: new BN(0)
+                }
+            };
+
+            programs = {
+                [poolToken.address]: {},
+                [poolToken2.address]: {}
+            };
+        });
+
+        const addLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
+            if (!providerPools[provider].poolTokens.includes(poolToken.address)) {
+                providerPools[provider].poolTokens.push(poolToken.address);
+            }
+
+            if (!providerPools[provider].reserveTokens.includes(reserveToken.address)) {
+                providerPools[provider].reserveTokens.push(reserveToken.address);
+            }
+
+            reserveAmounts[poolToken.address][reserveToken.address][provider] = reserveAmounts[poolToken.address][
+                reserveToken.address
+            ][provider].add(reserveAmount);
+
+            totalReserveAmounts[poolToken.address][reserveToken.address] = totalReserveAmounts[poolToken.address][
+                reserveToken.address
+            ].add(reserveAmount);
+
+            await liquidityProtection.addLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount);
+        };
+
+        const addPoolProgram = async (poolToken, programStartTime, programEndTime, rewardRate) => {
+            programs[poolToken.address] = {
+                programStartTime,
+                programEndTime,
+                rewardRate
+            };
+
+            await store.addPoolProgram(poolToken.address, programStartTime, programEndTime, rewardRate);
+        };
+
+        const getExpectedRewards = (provider, duration, multiplierDuration = undefined) => {
+            let reward = new BN(0);
+
+            const { poolTokens, reserveTokens } = providerPools[provider];
+            for (const poolToken of poolTokens) {
+                for (const reserveToken of reserveTokens) {
+                    reward = reward.add(
+                        reserveAmounts[poolToken][reserveToken][provider]
+                            .mul(
+                                duration
+                                    .mul(programs[poolToken].rewardRate)
+                                    .mul(REWARD_RATE_FACTOR)
+                                    .div(totalReserveAmounts[poolToken][reserveToken])
+                            )
+                            .div(REWARD_RATE_FACTOR)
+                            .mul(getRewardsMultiplier(multiplierDuration || duration))
+                            .div(PPM_RESOLUTION)
+                    );
+                }
+            }
+
+            return reward;
+        };
+
         let programStartTime;
         let programEndTime;
 
-        beforeEach(async () => {
-            await setTime(now);
+        const testStatic = () => {
+            it.only('should properly calculate all staking rewards', async () => {
+                // Should return no rewards before the program has started.
+                let reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(new BN(0));
 
-            programStartTime = now.add(duration.weeks(1));
-            programEndTime = programStartTime.add(REWARDS_DURATION);
+                // Should return no rewards immediately when the program has started.
+                await setTime(programStartTime);
 
-            await store.addPoolProgram(poolToken.address, programStartTime, programEndTime, BIG_POOL_REWARD_RATE);
-        });
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(new BN(0));
 
-        context('single pool', async () => {
-            const reserveAmount = new BN(1000);
-            let totalReserveAmount;
+                // Should return all rewards for one second.
+                await setTime(now.add(duration.seconds(1)));
 
-            beforeEach(async () => {
-                await liquidityProtection.addLiquidity(
-                    provider,
-                    poolToken.address,
-                    reserveToken.address,
-                    reserveAmount
-                );
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, duration.seconds(1)));
 
-                totalReserveAmount = reserveAmount;
+                // Should return all rewards for a single day.
+                await setTime(programStartTime.add(duration.days(1)));
+
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, duration.days(1)));
+
+                // Should return all weekly rewards + second week's retroactive multiplier.
+                await setTime(programStartTime.add(duration.weeks(1)));
+
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, duration.weeks(1)));
+
+                // Should return all program rewards + max retroactive multipliers.
+                await setTime(programEndTime);
+
+                reward = await staking.rewards.call({ from: provider });
+                const programDuration = programEndTime.sub(programStartTime);
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, programDuration, duration.weeks(4)));
+
+                // Should not affect rewards after the ending time of the program.
+                await setTime(programEndTime.add(duration.days(1)));
+
+                const reward2 = await staking.rewards.call({ from: provider });
+                expect(reward2).to.be.bignumber.equal(reward);
             });
 
-            context('single sided staking', async () => {
-                it('should properly calculate all staking rewards', async () => {
-                    // Should return no rewards before the program has started.
-                    let reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
+            it('should claim all staking rewards', async () => {
+                // Should return no rewards before the program has started.
+                let reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(new BN(0));
 
-                    // Should return no rewards immediately when the program has started.
-                    await setTime(programStartTime);
+                await expectRevert(staking.claimRewards({ from: provider }), 'ERR_NO_REWARDS');
 
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
+                // Should return no rewards immediately when the program has started.
+                await setTime(programStartTime);
 
-                    // Should return all rewards for one second.
-                    await setTime(now.add(duration.seconds(1)));
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(new BN(0));
 
-                    let expectedReward = reserveAmount.mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount));
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+                await expectRevert(staking.claimRewards({ from: provider }), 'ERR_NO_REWARDS');
 
-                    // Should return all rewards for a single day.
-                    await setTime(programStartTime.add(duration.days(1)));
+                // Should grant all rewards for one second.
+                await setTime(now.add(duration.seconds(1)));
 
-                    expectedReward = reserveAmount.mul(
-                        duration.days(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
+                console.log('reward', reward.toString());
 
-                    // Should return all weekly rewards + second week's retroactive multiplier.
-                    await setTime(programStartTime.add(duration.weeks(1)));
+                let prevBalance = await networkToken.balanceOf.call(provider);
+                await staking.claimRewards({ from: provider });
+                expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
+                expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
 
-                    expectedReward = reserveAmount
-                        .mul(duration.weeks(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(1)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+                // Should return all rewards for a single day, excluding previously granted rewards.
+                await setTime(programStartTime.add(duration.days(1)));
 
-                    // Should return all program rewards + max retroactive multipliers.
-                    await setTime(programEndTime);
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
 
-                    const programDuration = programEndTime.sub(programStartTime);
-                    expectedReward = reserveAmount
-                        .mul(programDuration.mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(4)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+                prevBalance = await networkToken.balanceOf.call(provider);
+                await staking.claimRewards({ from: provider });
+                expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
+                expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
 
-                    // Should not affect rewards after the ending time of the program.
-                    await setTime(programEndTime.add(duration.days(1)));
+                // Should return all weekly rewards, excluding previously granted rewards, but without the
+                // multiplier bonus.
+                await setTime(programStartTime.add(duration.weeks(1)));
 
-                    const reward2 = await staking.rewards.call({ from: provider });
-                    expect(reward2).to.be.bignumber.equal(reward);
-                });
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
 
-                it('should claim all staking rewards', async () => {
-                    // Should return no rewards before the program has started.
-                    let reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
+                prevBalance = await networkToken.balanceOf.call(provider);
+                await staking.claimRewards({ from: provider });
+                expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
+                expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
 
-                    await expectRevert(staking.claimRewards({ from: provider }), 'ERR_NO_REWARDS');
+                // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
+                // two weeks rewards multiplier.
+                await setTime(programStartTime.add(duration.weeks(3)));
 
-                    // Should return no rewards immediately when the program has started.
-                    await setTime(programStartTime);
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow), duration.weeks(2)));
 
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
+                prevBalance = await networkToken.balanceOf.call(provider);
+                await staking.claimRewards({ from: provider });
+                expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
+                expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
 
-                    await expectRevert(staking.claimRewards({ from: provider }), 'ERR_NO_REWARDS');
+                // Should return all program rewards, excluding previously granted rewards + max retroactive
+                // multipliers.
+                await setTime(programEndTime);
 
-                    // Should grant all rewards for one second.
-                    await setTime(now.add(duration.seconds(1)));
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow), duration.weeks(4)));
 
-                    let expectedReward = reserveAmount.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount))
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+                prevBalance = await networkToken.balanceOf.call(provider);
+                await staking.claimRewards({ from: provider });
+                expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
+                expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
 
-                    let prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
+                // Should return no additional rewards after the ending time of the program.
+                await setTime(programEndTime.add(duration.days(1)));
 
-                    // Should return all rewards for a single day, excluding previously granted rewards.
-                    await setTime(programStartTime.add(duration.days(1)));
+                reward = await staking.rewards.call({ from: provider });
+                expect(reward).to.be.bignumber.equal(new BN(0));
+            });
+        };
 
-                    expectedReward = reserveAmount.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+        context.only('single pool', async () => {
+            beforeEach(async () => {
+                await setTime(now);
 
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
+                programStartTime = now.add(duration.weeks(1));
+                programEndTime = programStartTime.add(REWARDS_DURATION);
 
-                    // Should return all weekly rewards, excluding previously granted rewards, but without the
-                    // multiplier bonus.
-                    await setTime(programStartTime.add(duration.weeks(1)));
+                await addPoolProgram(poolToken, programStartTime, programEndTime, BIG_POOL_REWARD_RATE);
 
-                    expectedReward = reserveAmount.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
+                await addLiquidity(provider, poolToken, reserveToken, new BN(1000).mul(new BN(10).pow(new BN(18))));
+            });
 
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
-                    // two weeks rewards multiplier.
-                    await setTime(programStartTime.add(duration.weeks(3)));
-
-                    expectedReward = reserveAmount
-                        .mul(now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(2)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
-
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return all program rewards, excluding previously granted rewards + max retroactive
-                    // multipliers.
-                    await setTime(programEndTime);
-
-                    expectedReward = reserveAmount
-                        .mul(now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(4)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward);
-
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return no additional rewards after the ending time of the program.
-                    await setTime(programEndTime.add(duration.days(1)));
-
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
-                });
+            context.only('single sided staking', async () => {
+                testStatic();
             });
 
             context('double sided staking', async () => {
-                const reserveAmount2 = new BN(9999999);
-                let totalReserveAmount2;
-
                 beforeEach(async () => {
-                    await liquidityProtection.addLiquidity(
+                    await addLiquidity(
                         provider,
-                        poolToken.address,
-                        networkToken.address,
-                        reserveAmount2
+                        poolToken,
+                        networkToken,
+                        new BN(999999999).mul(new BN(10).pow(new BN(18)))
                     );
-
-                    totalReserveAmount2 = reserveAmount2;
                 });
 
-                it('should properly calculate all staking rewards', async () => {
-                    // Should return no rewards before the program has started.
-                    let reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
+                testStatic();
+            });
+        });
 
-                    // Should return no rewards immediately when the program has started.
-                    await setTime(programStartTime);
+        context('multiple pools', async () => {
+            beforeEach(async () => {
+                await setTime(now);
 
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
+                programStartTime = now.add(duration.weeks(1));
+                programEndTime = programStartTime.add(REWARDS_DURATION);
 
-                    // Should return all reserve tokens rewards for one second.
-                    await setTime(now.add(duration.seconds(1)));
+                await addPoolProgram(poolToken, programStartTime, programEndTime, BIG_POOL_REWARD_RATE);
+                await addPoolProgram(poolToken2, programStartTime, programEndTime, SMALL_POOL_REWARD_RATE);
 
-                    let expectedReward1 = reserveAmount.mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount));
-                    let expectedReward2 = reserveAmount2.mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount2));
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
+                await addLiquidity(provider, poolToken, reserveToken, new BN(65564).mul(new BN(10).pow(new BN(18))));
+                await addLiquidity(
+                    provider,
+                    poolToken2,
+                    reserveToken,
+                    new BN(11111111111).mul(new BN(10).pow(new BN(18)))
+                );
+            });
 
-                    // Should return all rewards for a single day.
-                    await setTime(programStartTime.add(duration.days(1)));
+            context('single sided staking', async () => {
+                testStatic();
+            });
 
-                    expectedReward1 = reserveAmount.mul(
-                        duration.days(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
+            context('double sided staking', async () => {
+                beforeEach(async () => {
+                    await addLiquidity(
+                        provider,
+                        poolToken,
+                        networkToken,
+                        new BN(999999999).mul(new BN(10).pow(new BN(18)))
                     );
-                    expectedReward2 = reserveAmount2.mul(
-                        duration.days(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2)
+
+                    await addLiquidity(
+                        provider,
+                        poolToken2,
+                        networkToken,
+                        new BN('324832904093249203').mul(new BN(10).pow(new BN(18)))
                     );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    // Should return all weekly rewards + second week's retroactive multiplier.
-                    await setTime(programStartTime.add(duration.weeks(1)));
-
-                    expectedReward1 = reserveAmount
-                        .mul(duration.weeks(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(1)))
-                        .div(PPM_RESOLUTION);
-                    expectedReward2 = reserveAmount2
-                        .mul(duration.weeks(1).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2))
-                        .mul(getRewardsMultiplier(duration.weeks(1)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    // Should return all program rewards + max retroactive multipliers.
-                    await setTime(programEndTime);
-
-                    const programDuration = programEndTime.sub(programStartTime);
-                    expectedReward1 = reserveAmount
-                        .mul(programDuration.mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(4)))
-                        .div(PPM_RESOLUTION);
-                    expectedReward2 = reserveAmount2
-                        .mul(programDuration.mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2))
-                        .mul(getRewardsMultiplier(duration.weeks(4)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    // Should not affect rewards after the ending time of the program.
-                    await setTime(programEndTime.add(duration.days(1)));
-
-                    const reward2 = await staking.rewards.call({ from: provider });
-                    expect(reward2).to.be.bignumber.equal(reward);
                 });
 
-                it('should claim all staking rewards', async () => {
-                    // Should return no rewards before the program has started.
-                    let reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
-
-                    await expectRevert(staking.claimRewards({ from: provider }), 'ERR_NO_REWARDS');
-
-                    // Should return no rewards immediately when the program has started.
-                    await setTime(programStartTime);
-
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
-
-                    await expectRevert(staking.claimRewards({ from: provider }), 'ERR_NO_REWARDS');
-
-                    // Should grant all rewards for one second.
-                    await setTime(now.add(duration.seconds(1)));
-
-                    let expectedReward1 = reserveAmount.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount))
-                    );
-                    let expectedReward2 = reserveAmount2.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE.div(totalReserveAmount2))
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    let prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return all rewards for a single day, excluding previously granted rewards.
-                    await setTime(programStartTime.add(duration.days(1)));
-
-                    expectedReward1 = reserveAmount.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
-                    );
-                    expectedReward2 = reserveAmount2.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2)
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return all weekly rewards, excluding previously granted rewards, but without the
-                    // multiplier bonus.
-                    await setTime(programStartTime.add(duration.weeks(1)));
-
-                    expectedReward1 = reserveAmount.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount)
-                    );
-
-                    expectedReward2 = reserveAmount2.mul(
-                        now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2)
-                    );
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
-                    // two weeks rewards multiplier.
-                    await setTime(programStartTime.add(duration.weeks(3)));
-
-                    expectedReward1 = reserveAmount
-                        .mul(now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(2)))
-                        .div(PPM_RESOLUTION);
-                    expectedReward2 = reserveAmount2
-                        .mul(now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2))
-                        .mul(getRewardsMultiplier(duration.weeks(2)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return all program rewards, excluding previously granted rewards + max retroactive
-                    // multipliers.
-                    await setTime(programEndTime);
-
-                    expectedReward1 = reserveAmount
-                        .mul(now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount))
-                        .mul(getRewardsMultiplier(duration.weeks(4)))
-                        .div(PPM_RESOLUTION);
-                    expectedReward2 = reserveAmount2
-                        .mul(now.sub(prevNow).mul(BIG_POOL_REWARD_RATE).div(totalReserveAmount2))
-                        .mul(getRewardsMultiplier(duration.weeks(4)))
-                        .div(PPM_RESOLUTION);
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(expectedReward1.add(expectedReward2));
-
-                    prevBalance = await networkToken.balanceOf.call(provider);
-                    await staking.claimRewards({ from: provider });
-                    expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
-                    expect(await staking.rewards.call({ from: provider })).to.be.bignumber.equal(new BN(0));
-
-                    // Should return no additional rewards after the ending time of the program.
-                    await setTime(programEndTime.add(duration.days(1)));
-
-                    reward = await staking.rewards.call({ from: provider });
-                    expect(reward).to.be.bignumber.equal(new BN(0));
-                });
+                testStatic();
             });
         });
     });

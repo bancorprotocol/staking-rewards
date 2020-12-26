@@ -45,10 +45,15 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the role is used to govern retroactive rewards distribution.
     bytes32 public constant ROLE_REWARDS_DISTRIBUTOR = keccak256("ROLE_REWARDS_DISTRIBUTOR");
 
-    uint32 public constant PPM_RESOLUTION = 1000000;
+    uint32 private constant PPM_RESOLUTION = 1000000;
 
     // the weekly 25% increase of the rewards multiplier (in units of PPM)
-    uint32 public constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4;
+    uint32 private constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4;
+
+    // since we will be dividing by the total amount of protected tokens in units of wei, we can encounter cases
+    // where the total amount in the denominator is higher than the product of the rewards rate and staking duration. In
+    // order to avoid this imprecision, we will amplify the reward rate by the units amount.
+    uint256 private constant REWARD_RATE_FACTOR = 1e18;
 
     // the staking rewards settings
     IStakingRewardsStore private immutable _store;
@@ -322,7 +327,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         return
             rewardsData.rewardPerToken.add(
-                stakingEndTime.sub(stakingStartTime).mul(program.rewardRate).div(rewardsData.totalReserveAmount)
+                stakingEndTime.sub(stakingStartTime).mul(program.rewardRate).mul(REWARD_RATE_FACTOR).div(
+                    rewardsData.totalReserveAmount
+                )
             );
     }
 
@@ -336,7 +343,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ProviderRewards memory providerRewards = _providerRewards[provider][poolToken][reserveToken];
 
         uint256 baseReward =
-            providerRewards.reserveAmount.mul(rewardPerToken(program, rewardsData).sub(providerRewards.rewardPerToken));
+            providerRewards
+                .reserveAmount
+                .mul(rewardPerToken(program, rewardsData).sub(providerRewards.rewardPerToken))
+                .div(REWARD_RATE_FACTOR);
 
         uint256 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
         return providerRewards.pendingBaseRewards.add(baseReward.mul(multiplier).div(PPM_RESOLUTION));

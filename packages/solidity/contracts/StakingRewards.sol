@@ -233,7 +233,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             );
 
             if (claim) {
-                _store.updateProviderEffectiveStakingTime(provider, poolToken, reserveToken, time(), 0);
+                _store.updateProviderRewardData(
+                    provider,
+                    poolToken,
+                    reserveToken,
+                    providerRewards.rewardPerToken,
+                    0,
+                    time()
+                );
             }
         }
 
@@ -331,15 +338,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         Rewards memory rewardsData = rewards(poolToken, reserveToken);
 
         uint256 newRewardPerToken = rewardPerToken(reserveToken, rewardsData, program);
-        _store.updateRewardPerToken(poolToken, reserveToken, newRewardPerToken, Math.min(time(), program.endTime));
+        _store.updateRewardData(poolToken, reserveToken, newRewardPerToken, Math.min(time(), program.endTime));
 
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
-        _store.updateProviderRewardPerToken(
+        _store.updateProviderRewardData(
             provider,
             poolToken,
             reserveToken,
             newRewardPerToken,
-            baseRewards(reserveToken, rewardsData, providerRewards, program)
+            baseRewards(reserveToken, rewardsData, providerRewards, program),
+            providerRewards.effectiveStakingTime
         );
     }
 
@@ -383,7 +391,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
     function poolProgram(IERC20 poolToken) internal view returns (PoolProgram memory) {
         PoolProgram memory program;
-        (program.reserveTokens, program.startTime, program.endTime, program.rewardRate) = _store.poolProgram(poolToken);
+        (program.startTime, program.endTime, program.rewardRate, program.reserveTokens) = _store.poolProgram(poolToken);
 
         return program;
     }

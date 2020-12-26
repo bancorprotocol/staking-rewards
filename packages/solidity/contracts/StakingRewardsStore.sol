@@ -128,6 +128,22 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(isPoolParticipating(poolToken), "ERR_POOL_NOT_PARTICIPATING");
     }
 
+    modifier onlyParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) {
+        _onlyParticipatingReserve(poolToken, reserveToken);
+        _;
+    }
+
+    function _onlyParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) internal view {
+        _onlyParticipating(poolToken);
+
+        PoolProgram memory program = _programs[poolToken];
+
+        require(
+            program.reserveTokens[0] == reserveToken || program.reserveTokens[1] == reserveToken,
+            "ERR_RESERVE_NOT_PARTICIPATING"
+        );
+    }
+
     /**
      * @dev returns whether the specified pool participates in the LM program
      *
@@ -208,16 +224,16 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         override
         onlyParticipating(poolToken)
         returns (
-            IERC20[2] memory,
             uint256,
             uint256,
-            uint256
+            uint256,
+            IERC20[2] memory
         )
     {
         PoolProgram memory program = _programs[poolToken];
         require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
 
-        return (program.reserveTokens, program.startTime, program.endTime, program.rewardRate);
+        return (program.startTime, program.endTime, program.rewardRate, program.reserveTokens);
     }
 
     /**
@@ -233,7 +249,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 reserveAmount
-    ) external override onlyOwner onlyParticipating(poolToken) {
+    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
         // update pool's total reserve amount
         Rewards storage rewardsData = _rewards[poolToken][reserveToken];
         rewardsData.totalReserveAmount = rewardsData.totalReserveAmount.add(reserveAmount);
@@ -269,14 +285,24 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 removedReserveAmount
-    ) external override onlyOwner onlyParticipating(poolToken) {
-        // update pool's total reserve amount
+    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
+        // update pool's total reserve amount.
         Rewards storage rewardsData = _rewards[poolToken][reserveToken];
         rewardsData.totalReserveAmount = rewardsData.totalReserveAmount.sub(removedReserveAmount);
 
-        // update provider's reserve amount
+        // update provider's reserve amount.
         ProviderRewards storage providerRewards = _providerRewards[provider][poolToken][reserveToken];
         providerRewards.reserveAmount = providerRewards.reserveAmount.sub(removedReserveAmount);
+
+        // if the provider doesn't provide any more liqudiity - remove the pools from its list.
+        if (providerRewards.reserveAmount == 0) {
+            PoolProgram memory program = _programs[poolToken];
+            IERC20 reserveToken2 =
+                program.reserveTokens[0] == reserveToken ? program.reserveTokens[1] : program.reserveTokens[0];
+            if (_providerRewards[provider][poolToken][reserveToken2].reserveAmount == 0) {
+                _poolsByProvider[provider].remove(address(poolToken));
+            }
+        }
 
         emit ProviderLiquidityRemoved(provider, poolToken, reserveToken, removedReserveAmount);
     }
@@ -324,19 +350,19 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev updates the reward rate per-token of a specific reserve in a specific pool
+     * @dev updates the reward data of a specific reserve in a specific pool
      *
      * @param poolToken the pool token representing the LM pool
      * @param reserveToken the reserve token in the LM pool
      * @param rewardPerToken the new reward rate per-token
      * @param lastUpdateTime the last upate time
      */
-    function updateRewardPerToken(
+    function updateRewardData(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 rewardPerToken,
         uint256 lastUpdateTime
-    ) external override onlyOwner onlyParticipating(poolToken) {
+    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
         Rewards storage data = _rewards[poolToken][reserveToken];
         data.rewardPerToken = rewardPerToken;
         data.lastUpdateTime = lastUpdateTime;
@@ -372,47 +398,28 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev updates specific provider's reward rate per-token
+     * @dev updates specific provider's reward data
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the LM pool
      * @param reserveToken the reserve token in the LM pool
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
+     * @param effectiveStakingTime the new effective staking time
      */
-    function updateProviderRewardPerToken(
+    function updateProviderRewardData(
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 rewardPerToken,
-        uint256 pendingBaseRewards
-    ) external override onlyOwner onlyParticipating(poolToken) {
+        uint256 pendingBaseRewards,
+        uint256 effectiveStakingTime
+    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
         ProviderRewards storage data = _providerRewards[provider][poolToken][reserveToken];
 
         data.rewardPerToken = rewardPerToken;
         data.pendingBaseRewards = pendingBaseRewards;
-    }
-
-    /**
-     * @dev updates specific provider's effective staking time
-     *
-     * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token in the LM pool
-     * @param effectiveStakingTime the new effective staking time
-     * @param pendingBaseRewards the updated pending base rewards
-     */
-    function updateProviderEffectiveStakingTime(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 effectiveStakingTime,
-        uint256 pendingBaseRewards
-    ) external override onlyOwner onlyParticipating(poolToken) {
-        ProviderRewards storage data = _providerRewards[provider][poolToken][reserveToken];
-
         data.effectiveStakingTime = effectiveStakingTime;
-        data.pendingBaseRewards = pendingBaseRewards;
     }
 
     /**

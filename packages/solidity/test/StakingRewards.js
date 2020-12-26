@@ -91,6 +91,16 @@ describe('StakingRewards', () => {
         }
     };
 
+    const getPoolRewards = async (poolToken, reserveToken) => {
+        const data = await store.rewards.call(poolToken.address, reserveToken.address);
+
+        return {
+            lastUpdateTime: data[0],
+            rewardPerToken: data[1],
+            totalReserveAmount: data[2]
+        };
+    };
+
     const getProviderRewards = async (provider, poolToken, reserveToken) => {
         const data = await store.providerRewards.call(provider, poolToken.address, reserveToken.address);
 
@@ -99,16 +109,6 @@ describe('StakingRewards', () => {
             pendingBaseRewards: data[1],
             reserveAmount: data[2],
             effectiveStakingTime: data[3]
-        };
-    };
-
-    const getPoolRewards = async (poolToken, reserveToken) => {
-        const data = await store.rewards.call(poolToken.address, reserveToken.address);
-
-        return {
-            lastUpdateTime: data[0],
-            rewardPerToken: data[1],
-            totalReserveAmount: data[2]
         };
     };
 

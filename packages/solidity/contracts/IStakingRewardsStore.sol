@@ -39,10 +39,10 @@ interface IStakingRewardsStore {
         external
         view
         returns (
-            IERC20[2] memory,
             uint256,
             uint256,
-            uint256
+            uint256,
+            IERC20[2] memory
         );
 
     function addProviderLiquidity(
@@ -70,7 +70,7 @@ interface IStakingRewardsStore {
             uint256
         );
 
-    function updateRewardPerToken(
+    function updateRewardData(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 rewardPerToken,
@@ -91,20 +91,13 @@ interface IStakingRewardsStore {
             uint256
         );
 
-    function updateProviderRewardPerToken(
+    function updateProviderRewardData(
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 rewardPerToken,
-        uint256 pendingBaseRewards
-    ) external;
-
-    function updateProviderEffectiveStakingTime(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 effectiveStakingTime,
-        uint256 pendingBaseRewards
+        uint256 pendingBaseRewards,
+        uint256 effectiveStakingTime
     ) external;
 
     function updateProviderLastClaimTime(address provider) external;

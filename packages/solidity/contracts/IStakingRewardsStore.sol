@@ -10,10 +10,17 @@ struct PoolProgram {
     IERC20[2] reserveTokens;
 }
 
-struct Position {
-    address provider;
-    IERC20 poolToken;
-    uint256 startTime;
+struct Rewards {
+    uint256 lastUpdateTime;
+    uint256 rewardPerToken;
+    uint256 totalReserveAmount;
+}
+
+struct ProviderRewards {
+    uint256 rewardPerToken;
+    uint256 pendingBaseRewards;
+    uint256 reserveAmount;
+    uint256 effectiveStakingTime;
 }
 
 interface IStakingRewardsStore {
@@ -38,7 +45,69 @@ interface IStakingRewardsStore {
             uint256
         );
 
-    function updateLastClaimTime(address provider) external;
+    function addProviderLiquidity(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        uint256 reserveAmount
+    ) external;
 
-    function lastClaimTime(address provider) external view returns (uint256);
+    function removeProviderLiquidity(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        uint256 removedReserveAmount
+    ) external;
+
+    function poolsByProvider(address provider) external view returns (IERC20[] memory);
+
+    function rewards(IERC20 poolToken, IERC20 reserveToken)
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
+
+    function updateReward(
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        uint256 rewardPerToken,
+        uint256 lastUpdateTime
+    ) external;
+
+    function providerRewards(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken
+    )
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        );
+
+    function updateProviderRewardPerToken(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        uint256 rewardPerToken,
+        uint256 pendingBaseRewards
+    ) external;
+
+    function updateProviderEffectiveStakingTime(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        uint256 effectiveStakingTime,
+        uint256 pendingBaseRewards
+    ) external;
+
+    function updateProviderLastClaimTime(address provider) external;
+
+    function lastProviderClaimTime(address provider) external view returns (uint256);
 }

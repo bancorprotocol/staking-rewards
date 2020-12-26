@@ -70,7 +70,7 @@ interface IStakingRewardsStore {
             uint256
         );
 
-    function updateReward(
+    function updateRewardPerToken(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 rewardPerToken,

@@ -319,7 +319,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         Rewards memory rewardsData = rewards(poolToken, reserveToken);
 
         uint256 newRewardPerToken = rewardPerToken(reserveToken, rewardsData, program);
-        _store.updateReward(poolToken, reserveToken, newRewardPerToken, Math.min(time(), program.endTime));
+        _store.updateRewardPerToken(poolToken, reserveToken, newRewardPerToken, Math.min(time(), program.endTime));
 
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
         _store.updateProviderRewardPerToken(

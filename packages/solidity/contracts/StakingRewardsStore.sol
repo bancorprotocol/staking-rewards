@@ -277,6 +277,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         // update provider's reserve amount
         ProviderRewards storage providerRewards = _providerRewards[provider][poolToken][reserveToken];
         providerRewards.reserveAmount = providerRewards.reserveAmount.sub(removedReserveAmount);
+
+        emit ProviderLiquidityRemoved(provider, poolToken, reserveToken, removedReserveAmount);
     }
 
     /**
@@ -322,14 +324,14 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev updates the rewards data of a specific reserve in a specific pool
+     * @dev updates the reward rate per-token of a specific reserve in a specific pool
      *
      * @param poolToken the pool token representing the LM pool
      * @param reserveToken the reserve token in the LM pool
      * @param rewardPerToken the new reward rate per-token
      * @param lastUpdateTime the last upate time
      */
-    function updateReward(
+    function updateRewardPerToken(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 rewardPerToken,

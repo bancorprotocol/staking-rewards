@@ -15,7 +15,7 @@
                 "poolToken": "0x6b181C478b315bE3f9E99c57CE926436c32e17a7",
                 "startTime": 1607018040,
                 "endTime": 1614275640,
-                "weeklyRewards": "20000000000000000000000"
+                "rewardRate": "20000000000000000000000"
             }
         ]
     },

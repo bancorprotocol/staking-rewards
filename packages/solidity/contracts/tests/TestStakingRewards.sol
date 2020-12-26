@@ -54,7 +54,7 @@ contract TestStakingRewards is StakingRewards, TestTime {
         Rewards memory rewardsData = _rewards[poolToken][reserveToken];
         PoolProgram memory program = poolProgram(poolToken);
 
-        return rewardPerToken(program, rewardsData);
+        return rewardPerToken(program, reserveToken, rewardsData);
     }
 
     function providerPools(address provider) external view returns (IERC20[] memory) {

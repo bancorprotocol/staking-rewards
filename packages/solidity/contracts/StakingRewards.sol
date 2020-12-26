@@ -50,6 +50,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the weekly 25% increase of the rewards multiplier (in units of PPM)
     uint32 private constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4;
 
+    // the share of the total rewards for staking the network token
+    uint32 public constant NETWORK_TOKEN_REWARDS_SHARE = 700000; // 70%
+
+    // the share of the total rewards for staking the base token
+    uint32 public constant BASE_TOKEN_REWARDS_SHARE = 300000; // 30%
+
     // since we will be dividing by the total amount of protected tokens in units of wei, we can encounter cases
     // where the total amount in the denominator is higher than the product of the rewards rate and staking duration. In
     // order to avoid this imprecision, we will amplify the reward rate by the units amount.
@@ -60,6 +66,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
     // the permissioned wrapper around the network token which should allow this contract to mint staking rewards
     ITokenGovernance private immutable _networkTokenGovernance;
+
+    // the address of the network token
+    IERC20 private immutable _networkToken;
 
     // the checkpoint store recording last protected position removal times
     ICheckpointStore private immutable _lastRemoveTimes;
@@ -113,6 +122,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     {
         _store = store;
         _networkTokenGovernance = networkTokenGovernance;
+        _networkToken = networkTokenGovernance.token();
         _lastRemoveTimes = lastRemoveTimes;
 
         // Set up administrative roles.
@@ -312,7 +322,11 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     //     return stakeRewards(msg.sender, poolTokens);
     // }
 
-    function rewardPerToken(PoolProgram memory program, Rewards memory rewardsData) internal view returns (uint256) {
+    function rewardPerToken(
+        PoolProgram memory program,
+        IERC20 reserveToken,
+        Rewards memory rewardsData
+    ) internal view returns (uint256) {
         if (rewardsData.totalReserveAmount == 0) {
             return rewardsData.rewardPerToken;
         }
@@ -327,9 +341,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         return
             rewardsData.rewardPerToken.add(
-                stakingEndTime.sub(stakingStartTime).mul(program.rewardRate).mul(REWARD_RATE_FACTOR).div(
-                    rewardsData.totalReserveAmount
-                )
+                stakingEndTime
+                    .sub(stakingStartTime)
+                    .mul(program.rewardRate)
+                    .mul(REWARD_RATE_FACTOR)
+                    .mul(rewardShare(reserveToken))
+                    .div(rewardsData.totalReserveAmount.mul(PPM_RESOLUTION))
             );
     }
 
@@ -345,11 +362,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 baseReward =
             providerRewards
                 .reserveAmount
-                .mul(rewardPerToken(program, rewardsData).sub(providerRewards.rewardPerToken))
+                .mul(rewardPerToken(program, reserveToken, rewardsData).sub(providerRewards.rewardPerToken))
                 .div(REWARD_RATE_FACTOR);
 
-        uint256 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
-        return providerRewards.pendingBaseRewards.add(baseReward.mul(multiplier).div(PPM_RESOLUTION));
+        // apply the the rewards multipler and return the total pending rewards
+        return
+            providerRewards.pendingBaseRewards.add(
+                baseReward.mul(rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program)).div(
+                    PPM_RESOLUTION
+                )
+            );
     }
 
     function updateRewards(
@@ -360,13 +382,21 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         PoolProgram memory program = poolProgram(poolToken);
         Rewards storage rewardsData = _rewards[poolToken][reserveToken];
 
-        uint256 newRewardPerToken = rewardPerToken(program, rewardsData);
+        uint256 newRewardPerToken = rewardPerToken(program, reserveToken, rewardsData);
         rewardsData.rewardPerToken = newRewardPerToken;
         rewardsData.lastUpdateTime = Math.min(time(), program.endTime);
 
         ProviderRewards storage providerRewards = _providerRewards[provider][poolToken][reserveToken];
         providerRewards.pendingBaseRewards = fullRewards(provider, poolToken, reserveToken, program);
         providerRewards.rewardPerToken = newRewardPerToken;
+    }
+
+    function rewardShare(IERC20 reserveToken) private view returns (uint32) {
+        if (reserveToken == _networkToken) {
+            return NETWORK_TOKEN_REWARDS_SHARE;
+        }
+
+        return BASE_TOKEN_REWARDS_SHARE;
     }
 
     function rewardsMultiplier(

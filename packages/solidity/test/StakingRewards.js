@@ -26,6 +26,9 @@ const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
 
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
+const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
+const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
+
 const REWARD_RATE_FACTOR = new BN(10).pow(new BN(18));
 const REWARDS_DURATION = duration.weeks(12);
 const BIG_POOL_REWARD_RATE = new BN(200000)
@@ -445,12 +448,17 @@ describe('StakingRewards', () => {
             const { poolTokens, reserveTokens } = providerPools[provider];
             for (const poolToken of poolTokens) {
                 for (const reserveToken of reserveTokens) {
+                    const rewardShare =
+                        reserveToken === networkToken.address ? NETWORK_TOKEN_REWARDS_SHARE : BASE_TOKEN_REWARDS_SHARE;
+
                     reward = reward.add(
                         reserveAmounts[poolToken][reserveToken][provider]
                             .mul(
                                 duration
                                     .mul(programs[poolToken].rewardRate)
                                     .mul(REWARD_RATE_FACTOR)
+                                    .mul(rewardShare)
+                                    .div(PPM_RESOLUTION)
                                     .div(totalReserveAmounts[poolToken][reserveToken])
                             )
                             .div(REWARD_RATE_FACTOR)

@@ -249,11 +249,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         for (uint256 i = 0; i < length; ++i) {
             IERC20 reserveToken = program.reserveTokens[i];
 
-            // update all provider's pending rewards, in order to take apply retroactive reward multipliers.
-            if (claim) {
-                updateRewards(provider, poolToken, reserveToken);
-            }
-
             // calculate the claimable base rewards (since the last claim).
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
             uint256 baseRewards = baseRewards(rewards(poolToken, reserveToken), reserveToken, providerRewards, program);

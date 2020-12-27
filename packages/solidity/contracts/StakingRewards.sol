@@ -158,7 +158,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 removedReserveAmount,
         uint256 /* id */
     ) external override only(LIQUIDITY_PROTECTION) validExternalAddress(provider) {
-        // claim all pending rewards before handling the removal of the liquidity
+        // claim all pending rewards before handling the removal of the liquidity.
         claimRewards(provider);
 
         _store.removeProviderLiquidity(provider, poolToken, reserveToken, removedReserveAmount);
@@ -196,10 +196,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      */
     function rewards(address provider, bool claim) private returns (uint256) {
         // while querying rewards is allowed for every address, claiming rewards is allowed only by the actual
-        // msg.sender
-        if (claim) {
-            require(provider == msg.sender, "ERR_ACCESS_DENIED");
-        }
+        // msg.sender.
+        require(!claim || provider == msg.sender, "ERR_ACCESS_DENIED");
 
         return rewards(provider, _store.poolsByProvider(provider), claim);
     }

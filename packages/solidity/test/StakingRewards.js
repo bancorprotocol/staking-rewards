@@ -251,35 +251,37 @@ describe('StakingRewards', () => {
             );
         });
 
-        it('should revert when notifying for a non-whitelisted pool token', async () => {
+        it('should revert when notifying for a non-participating pool token', async () => {
             await expectRevert(
                 staking.addLiquidity(provider, poolToken2.address, reserveToken.address, 0, 0, id, {
                     from: liquidityProtectionProxy
                 }),
-                'ERR_POOL_NOT_WHITELISTED'
+                'ERR_POOL_NOT_PARTICIPATING.'
             );
 
             await expectRevert(
                 staking.removeLiquidity(provider, poolToken2.address, reserveToken.address, 0, 0, id, {
                     from: liquidityProtectionProxy
                 }),
-                'ERR_POOL_NOT_WHITELISTED'
+                'ERR_POOL_NOT_PARTICIPATING.'
             );
         });
 
-        it('should revert when notifying for a zero reserve token ', async () => {
+        it('should revert when notifying for a non-participating reserve token', async () => {
+            const reserveToken2 = accounts[3];
+
             await expectRevert(
-                staking.addLiquidity(provider, poolToken.address, ZERO_ADDRESS, 0, 0, id, {
+                staking.addLiquidity(provider, poolToken.address, reserveToken2, 0, 0, id, {
                     from: liquidityProtectionProxy
                 }),
-                'ERR_INVALID_EXTERNAL_ADDRESS'
+                'ERR_RESERVE_NOT_PARTICIPATING'
             );
 
             await expectRevert(
-                staking.removeLiquidity(provider, poolToken.address, ZERO_ADDRESS, 0, 0, id, {
+                staking.removeLiquidity(provider, poolToken.address, reserveToken2, 0, 0, id, {
                     from: liquidityProtectionProxy
                 }),
-                'ERR_INVALID_EXTERNAL_ADDRESS'
+                'ERR_RESERVE_NOT_PARTICIPATING'
             );
         });
 

@@ -49,8 +49,7 @@ describe('StakingRewardsStore', () => {
 
         return {
             lastUpdateTime: data[0],
-            rewardPerToken: data[1],
-            totalReserveAmount: data[2]
+            rewardPerToken: data[1]
         };
     };
 
@@ -62,8 +61,7 @@ describe('StakingRewardsStore', () => {
             pendingBaseRewards: data[1],
             effectiveStakingTime: data[2],
             baseRewardsDebt: data[3],
-            baseRewardsDebtMultiplier: data[4],
-            reserveAmount: data[5]
+            baseRewardsDebtMultiplier: data[4]
         };
     };
 
@@ -360,151 +358,9 @@ describe('StakingRewardsStore', () => {
                 { from: owner }
             );
         });
-
-        it('should revert when a non-owner attempts to add provider liquidity', async () => {
-            await expectRevert(
-                store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, new BN(1000), {
-                    from: nonOwner
-                }),
-                'ERR_ACCESS_DENIED'
-            );
-        });
-
-        it('should add provider liquidity', async () => {
-            const reserveAmount = new BN(1000);
-            await store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
-                from: owner
-            });
-
-            let poolData = await getPoolRewards(poolToken, reserveToken);
-            expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-            expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
-            expect(poolData.totalReserveAmount).to.be.bignumber.equal(reserveAmount);
-
-            let providerData = await getProviderRewards(provider, poolToken, reserveToken);
-            expect(providerData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-            expect(providerData.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
-            expect(providerData.effectiveStakingTime).to.be.bignumber.equal(now);
-            expect(providerData.baseRewardsDebt).to.be.bignumber.equal(new BN(0));
-            expect(providerData.baseRewardsDebtMultiplier).to.be.bignumber.equal(new BN(0));
-            expect(providerData.reserveAmount).to.be.bignumber.equal(reserveAmount);
-
-            let providerPools = await store.poolsByProvider.call(provider);
-            expect(providerPools).to.be.equalTo([poolToken.address]);
-
-            await store.addProviderLiquidity(provider, poolToken2.address, reserveToken.address, reserveAmount, {
-                from: owner
-            });
-
-            poolData = await getPoolRewards(poolToken2, reserveToken);
-            expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-            expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
-            expect(poolData.totalReserveAmount).to.be.bignumber.equal(reserveAmount);
-
-            const reserveAmount2 = new BN(9999);
-            await store.addProviderLiquidity(provider2, poolToken.address, reserveToken.address, reserveAmount2, {
-                from: owner
-            });
-
-            providerPools = await store.poolsByProvider.call(provider);
-            expect(providerPools).to.be.equalTo([poolToken.address, poolToken2.address]);
-
-            poolData = await getPoolRewards(poolToken, reserveToken);
-            expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-            expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
-            expect(poolData.totalReserveAmount).to.be.bignumber.equal(reserveAmount.add(reserveAmount2));
-
-            providerData = await getProviderRewards(provider2, poolToken, reserveToken);
-            expect(providerData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-            expect(providerData.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
-            expect(providerData.effectiveStakingTime).to.be.bignumber.equal(now);
-            expect(providerData.baseRewardsDebt).to.be.bignumber.equal(new BN(0));
-            expect(providerData.baseRewardsDebtMultiplier).to.be.bignumber.equal(new BN(0));
-            expect(providerData.reserveAmount).to.be.bignumber.equal(reserveAmount2);
-
-            providerPools = await store.poolsByProvider.call(provider2);
-            expect(providerPools).to.be.equalTo([poolToken.address]);
-        });
-
-        context('with provider liquidity', async () => {
-            const reserveAmount = new BN(1000);
-
-            beforeEach(async () => {
-                await store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
-                    from: owner
-                });
-            });
-
-            it('should revert when a non-owner attempts to remove provider liquidity', async () => {
-                await expectRevert(
-                    store.removeProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
-                        from: nonOwner
-                    }),
-                    'ERR_ACCESS_DENIED'
-                );
-            });
-
-            it('should remove provider liquidity', async () => {
-                const removedReserveAmount = new BN(100);
-                await store.removeProviderLiquidity(
-                    provider,
-                    poolToken.address,
-                    reserveToken.address,
-                    removedReserveAmount,
-                    {
-                        from: owner
-                    }
-                );
-
-                let poolData = await getPoolRewards(poolToken, reserveToken);
-                expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-                expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
-                expect(poolData.totalReserveAmount).to.be.bignumber.equal(reserveAmount.sub(removedReserveAmount));
-
-                let providerData = await getProviderRewards(provider, poolToken, reserveToken);
-                expect(providerData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-                expect(providerData.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
-                expect(providerData.effectiveStakingTime).to.be.bignumber.equal(now);
-                expect(providerData.baseRewardsDebt).to.be.bignumber.equal(new BN(0));
-                expect(providerData.baseRewardsDebtMultiplier).to.be.bignumber.equal(new BN(0));
-                expect(providerData.reserveAmount).to.be.bignumber.equal(reserveAmount.sub(removedReserveAmount));
-
-                let providerPools = await store.poolsByProvider.call(provider);
-                expect(providerPools).to.be.equalTo([poolToken.address]);
-
-                await store.removeProviderLiquidity(
-                    provider,
-                    poolToken.address,
-                    reserveToken.address,
-                    reserveAmount.sub(removedReserveAmount),
-                    {
-                        from: owner
-                    }
-                );
-
-                poolData = await getPoolRewards(poolToken, reserveToken);
-                expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-                expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
-                expect(poolData.totalReserveAmount).to.be.bignumber.equal(new BN(0));
-
-                providerData = await getProviderRewards(provider, poolToken, reserveToken);
-                expect(providerData.rewardPerToken).to.be.bignumber.equal(new BN(0));
-                expect(providerData.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
-                expect(providerData.effectiveStakingTime).to.be.bignumber.equal(now);
-                expect(providerData.baseRewardsDebt).to.be.bignumber.equal(new BN(0));
-                expect(providerData.baseRewardsDebtMultiplier).to.be.bignumber.equal(new BN(0));
-                expect(providerData.reserveAmount).to.be.bignumber.equal(new BN(0));
-
-                providerPools = await store.poolsByProvider.call(provider);
-                expect(providerPools).to.be.equalTo([]);
-            });
-        });
     });
 
     describe('pool rewards data', () => {
-        const provider = accounts[5];
-        const reserveAmount = new BN(1000);
-
         beforeEach(async () => {
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
@@ -517,10 +373,6 @@ describe('StakingRewardsStore', () => {
                 rewardRate,
                 { from: owner }
             );
-
-            await store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
-                from: owner
-            });
         });
 
         it('should revert when a non-owner attempts to update pool rewards', async () => {
@@ -536,7 +388,6 @@ describe('StakingRewardsStore', () => {
             let poolData = await getPoolRewards(poolToken, reserveToken);
             expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
             expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
-            expect(poolData.totalReserveAmount).to.be.bignumber.equal(reserveAmount);
 
             const rewardPerToken = new BN(10000);
             const lastUpdateTime = new BN(123);
@@ -547,7 +398,6 @@ describe('StakingRewardsStore', () => {
             poolData = await getPoolRewards(poolToken, reserveToken);
             expect(poolData.rewardPerToken).to.be.bignumber.equal(rewardPerToken);
             expect(poolData.lastUpdateTime).to.be.bignumber.equal(lastUpdateTime);
-            expect(poolData.totalReserveAmount).to.be.bignumber.equal(reserveAmount);
         });
     });
 
@@ -567,10 +417,6 @@ describe('StakingRewardsStore', () => {
                 rewardRate,
                 { from: owner }
             );
-
-            await store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
-                from: owner
-            });
         });
 
         it('should revert when a non-owner attempts to update provider rewards data', async () => {
@@ -596,7 +442,7 @@ describe('StakingRewardsStore', () => {
             let providerData = await getProviderRewards(provider, poolToken, reserveToken);
             expect(providerData.rewardPerToken).to.be.bignumber.equal(new BN(0));
             expect(providerData.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
-            expect(providerData.effectiveStakingTime).to.be.bignumber.equal(now);
+            expect(providerData.effectiveStakingTime).to.be.bignumber.equal(new BN(0));
 
             const rewardPerToken = new BN(10000);
             const pendingBaseRewards = new BN(123);

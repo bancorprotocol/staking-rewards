@@ -167,15 +167,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns pending rewards for all participating pools.
-     *
-     * @return all pending rewards
-     */
-    function rewards() external returns (uint256) {
-        return rewards(msg.sender, false, MAX_UINT256, liquidityProtectionStore());
-    }
-
-    /**
      * @dev returns specific provider's pending rewards for all participating pools.
      *
      * @param provider the owner of the liquidity

@@ -24,6 +24,7 @@ const ROLE_REWARDS_DISTRIBUTOR = web3.utils.keccak256('ROLE_REWARDS_DISTRIBUTOR'
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
+const ROLE_PUBLISHER = web3.utils.keccak256('ROLE_PUBLISHER');
 
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
@@ -155,22 +156,33 @@ describe('StakingRewards', () => {
         liquidityProtection = await LiquidityProtection.new(liquidityProtectionStore.address, staking.address);
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
 
-        await networkTokenGovernance.grantRole(ROLE_MINTER, staking.address);
         await store.grantRole(ROLE_OWNER, staking.address);
+        await staking.grantRole(ROLE_PUBLISHER, liquidityProtection.address);
+        await networkTokenGovernance.grantRole(ROLE_MINTER, staking.address);
 
         await setTime(new BN(100000000));
     });
 
     describe('construction', async () => {
         it('should properly initialize roles', async () => {
-            expect(await staking.getRoleMemberCount.call(ROLE_SUPERVISOR)).to.be.bignumber.equal(new BN(1));
-            expect(await staking.getRoleMemberCount.call(ROLE_REWARDS_DISTRIBUTOR)).to.be.bignumber.equal(new BN(0));
+            const newStaking = await StakingRewards.new(
+                store.address,
+                networkTokenGovernance.address,
+                checkpointStore.address,
+                contractRegistry.address
+            );
 
-            expect(await staking.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
-            expect(await staking.getRoleAdmin.call(ROLE_REWARDS_DISTRIBUTOR)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStaking.getRoleMemberCount.call(ROLE_SUPERVISOR)).to.be.bignumber.equal(new BN(1));
+            expect(await newStaking.getRoleMemberCount.call(ROLE_PUBLISHER)).to.be.bignumber.equal(new BN(0));
+            expect(await newStaking.getRoleMemberCount.call(ROLE_REWARDS_DISTRIBUTOR)).to.be.bignumber.equal(new BN(0));
 
-            expect(await staking.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
-            expect(await staking.hasRole.call(ROLE_REWARDS_DISTRIBUTOR, supervisor)).to.be.false();
+            expect(await newStaking.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStaking.getRoleAdmin.call(ROLE_PUBLISHER)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStaking.getRoleAdmin.call(ROLE_REWARDS_DISTRIBUTOR)).to.eql(ROLE_SUPERVISOR);
+
+            expect(await newStaking.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
+            expect(await newStaking.hasRole.call(ROLE_PUBLISHER, supervisor)).to.be.false();
+            expect(await newStaking.hasRole.call(ROLE_REWARDS_DISTRIBUTOR, supervisor)).to.be.false();
         });
 
         it('should revert if initialized with a zero address store', async () => {
@@ -227,7 +239,7 @@ describe('StakingRewards', () => {
         beforeEach(async () => {
             await setTime(now.add(duration.weeks(1)));
 
-            await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtectionProxy);
+            await staking.grantRole(ROLE_PUBLISHER, liquidityProtectionProxy);
 
             await store.addPoolProgram(
                 poolToken.address,

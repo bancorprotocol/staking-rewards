@@ -28,6 +28,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the role is used to globally govern the contract and its governing roles.
     bytes32 public constant ROLE_SUPERVISOR = keccak256("ROLE_SUPERVISOR");
 
+    // the roles is used to restrict who is allowed to publish liquidity protection events.
+    bytes32 public constant ROLE_PUBLISHER = keccak256("ROLE_PUBLISHER");
+
     // the role is used to govern retroactive rewards distribution.
     bytes32 public constant ROLE_REWARDS_DISTRIBUTOR = keccak256("ROLE_REWARDS_DISTRIBUTOR");
 
@@ -100,10 +103,20 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         // Set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
+        _setRoleAdmin(ROLE_PUBLISHER, ROLE_SUPERVISOR);
         _setRoleAdmin(ROLE_REWARDS_DISTRIBUTOR, ROLE_SUPERVISOR);
 
         // Allow the deployer to initially govern the contract.
         _setupRole(ROLE_SUPERVISOR, _msgSender());
+    }
+
+    modifier onlyPublisher() {
+        _onlyPublisher();
+        _;
+    }
+
+    function _onlyPublisher() internal view {
+        require(hasRole(ROLE_PUBLISHER, msg.sender), "ERR_ACCESS_DENIED");
     }
 
     modifier onlyRewardsDistributor() {
@@ -130,7 +143,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256, /* poolAmount */
         uint256, /* reserveAmount */
         uint256 /* id */
-    ) external override only(LIQUIDITY_PROTECTION) validExternalAddress(provider) {
+    ) external override onlyPublisher validExternalAddress(provider) {
         if (!_store.isParticipatingReserve(poolToken, reserveToken)) {
             return;
         }
@@ -153,7 +166,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256, /* removedPoolAmount */
         uint256, /* removedReserveAmount */
         uint256 /* id */
-    ) external override only(LIQUIDITY_PROTECTION) validExternalAddress(provider) {
+    ) external override onlyPublisher validExternalAddress(provider) {
         if (!_store.isParticipatingReserve(poolToken, reserveToken)) {
             return;
         }

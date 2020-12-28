@@ -45,16 +45,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     event PoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
     /**
-     * @dev triggered when a pool program is being updated
-     *
-     * @param poolToken the pool token representing the LM pool
-     * @param startTime the starting time of the program
-     * @param endTime the ending time of the program
-     * @param rewardRate the program's weekly rewards
-     */
-    event PoolProgramUpdated(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
-
-    /**
      * @dev triggered when a pool program is being removed
      *
      * @param poolToken the pool token representing the LM pool
@@ -164,7 +154,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(rewardRate > 0, "ERR_ZERO_VALUE");
 
         PoolProgram storage program = _programs[poolToken];
-        bool newProgram = !isPoolParticipating(program);
+        require(!isPoolParticipating(program), "ERR_ALREADY_SUPPORTED");
 
         program.startTime = startTime;
         program.endTime = endTime;
@@ -177,11 +167,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.reserveTokens[0] = converter.connectorTokens(0);
         program.reserveTokens[1] = converter.connectorTokens(1);
 
-        if (newProgram) {
-            emit PoolProgramAdded(poolToken, startTime, endTime, rewardRate);
-        } else {
-            emit PoolProgramUpdated(poolToken, startTime, endTime, rewardRate);
-        }
+        emit PoolProgramAdded(poolToken, startTime, endTime, rewardRate);
     }
 
     /**
@@ -190,6 +176,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the LM pool
      */
     function removePoolProgram(IERC20 poolToken) external override onlyOwner {
+        require(isPoolParticipating(_programs[poolToken]), "ERR_POOL_NOT_PARTICIPATING");
+
         delete _programs[poolToken];
 
         emit PoolProgramRemoved(poolToken);

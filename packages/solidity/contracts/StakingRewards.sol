@@ -36,12 +36,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the weekly 25% increase of the rewards multiplier (in units of PPM)
     uint32 private constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4;
 
-    // the share of the total rewards for staking the network token
-    uint32 public constant NETWORK_TOKEN_REWARDS_SHARE = 700000; // 70%
-
-    // the share of the total rewards for staking the base token
-    uint32 public constant BASE_TOKEN_REWARDS_SHARE = 300000; // 30%
-
     // since we will be dividing by the total amount of protected tokens in units of wei, we can encounter cases
     // where the total amount in the denominator is higher than the product of the rewards rate and staking duration. In
     // order to avoid this imprecision, we will amplify the reward rate by the units amount.
@@ -506,7 +500,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                     .sub(stakingStartTime) // the duration of the staking
                     .mul(program.rewardRate) // multiplied by the rate
                     .mul(REWARD_RATE_FACTOR) // and factored to increase precision
-                    .mul(rewardShare(reserveToken)) // and applied the specific token share of the whole reward
+                    .mul(rewardShare(reserveToken, program)) // and applied the specific token share of the whole reward
                     .div(rewardsData.totalReserveAmount.mul(PPM_RESOLUTION)) // and divided by the total protected tokens amount in the pool
             );
     }
@@ -571,13 +565,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev returns the specific reserve token's share of all rewards
      *
      * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param program the pool program info
      */
-    function rewardShare(IERC20 reserveToken) private view returns (uint32) {
-        if (reserveToken == _networkToken) {
-            return NETWORK_TOKEN_REWARDS_SHARE;
+    function rewardShare(IERC20 reserveToken, PoolProgram memory program) private pure returns (uint32) {
+        if (reserveToken == program.reserveTokens[0]) {
+            return program.rewardShares[0];
         }
 
-        return BASE_TOKEN_REWARDS_SHARE;
+        return program.rewardShares[1];
     }
 
     /**
@@ -628,7 +623,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      */
     function poolProgram(IERC20 poolToken) internal view returns (PoolProgram memory) {
         PoolProgram memory program;
-        (program.startTime, program.endTime, program.rewardRate, program.reserveTokens) = _store.poolProgram(poolToken);
+        (program.startTime, program.endTime, program.rewardRate, program.reserveTokens, program.rewardShares) = _store
+            .poolProgram(poolToken);
 
         return program;
     }

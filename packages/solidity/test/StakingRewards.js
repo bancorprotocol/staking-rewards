@@ -225,7 +225,13 @@ describe('StakingRewards', () => {
 
             await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtectionProxy);
 
-            await store.addPoolProgram(poolToken.address, now.add(REWARDS_DURATION), BIG_POOL_BASE_REWARD_RATE);
+            await store.addPoolProgram(
+                poolToken.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                now.add(REWARDS_DURATION),
+                BIG_POOL_BASE_REWARD_RATE
+            );
         });
 
         it('should revert when a non-LP contract attempts to notify', async () => {
@@ -472,7 +478,13 @@ describe('StakingRewards', () => {
                 rewardRate
             };
 
-            await store.addPoolProgram(poolToken.address, programEndTime, rewardRate);
+            await store.addPoolProgram(
+                poolToken.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                programEndTime,
+                rewardRate
+            );
         };
 
         const getExpectedRewards = (provider, duration, multiplierDuration = undefined) => {

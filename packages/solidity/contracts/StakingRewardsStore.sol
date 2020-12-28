@@ -14,10 +14,13 @@ import "./Time.sol";
  * @dev This contract stores staking rewards liquidity and pool specific data.
  */
 contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time {
+    using SafeMath for uint32;
     using SafeMath for uint256;
 
     // the owner role is used to set the values in the store
     bytes32 public constant ROLE_OWNER = keccak256("ROLE_OWNER");
+
+    uint32 private constant PPM_RESOLUTION = 1000000;
 
     // the mapping between pool tokens and their respective LM program information
     mapping(IERC20 => PoolProgram) private _programs;
@@ -140,17 +143,22 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds or updates a pool program
      *
      * @param poolToken the pool token representing the LM pool
+     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
      * @param rewardRate the program's weekly rewards
      */
     function addPoolProgram(
         IERC20 poolToken,
+        IERC20[2] calldata reserveTokens,
+        uint32[2] calldata rewardShares,
         uint256 endTime,
         uint256 rewardRate
     ) external override onlyOwner validAddress(address(poolToken)) {
         uint256 currentTime = time();
         require(endTime > currentTime, "ERR_INVALID_DURATION");
         require(rewardRate > 0, "ERR_ZERO_VALUE");
+        require(rewardShares[0].add(rewardShares[1]) == PPM_RESOLUTION, "ERR_INVALID_REWARD_SHARES");
 
         PoolProgram storage program = _programs[poolToken];
         require(!isPoolParticipating(program), "ERR_ALREADY_SUPPORTED");
@@ -158,13 +166,19 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.startTime = currentTime;
         program.endTime = endTime;
         program.rewardRate = rewardRate;
+        program.rewardShares = rewardShares;
 
+        // verify that reserve tokens correspond to the pool
         IConverter converter = IConverter(IOwned(address(poolToken)).owner());
         uint256 length = converter.connectorTokenCount();
         require(length == 2, "ERR_POOL_NOT_SUPPORTED");
 
-        program.reserveTokens[0] = converter.connectorTokens(0);
-        program.reserveTokens[1] = converter.connectorTokens(1);
+        require(
+            (converter.connectorTokens(0) == reserveTokens[0] && converter.connectorTokens(1) == reserveTokens[1]) ||
+                (converter.connectorTokens(0) == reserveTokens[1] && converter.connectorTokens(1) == reserveTokens[0]),
+            "ERR_INVALID_RESERVE_TOKENS"
+        );
+        program.reserveTokens = reserveTokens;
 
         emit PoolProgramAdded(poolToken, currentTime, endTime, rewardRate);
     }
@@ -195,13 +209,14 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256,
             uint256,
             uint256,
-            IERC20[2] memory
+            IERC20[2] memory,
+            uint32[2] memory
         )
     {
         PoolProgram memory program = _programs[poolToken];
         require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
 
-        return (program.startTime, program.endTime, program.rewardRate, program.reserveTokens);
+        return (program.startTime, program.endTime, program.rewardRate, program.reserveTokens, program.rewardShares);
     }
 
     /**

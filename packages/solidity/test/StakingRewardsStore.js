@@ -10,6 +10,8 @@ const TestPoolToken = contract.fromArtifact('TestPoolToken');
 const StakingRewardsStore = contract.fromArtifact('TestStakingRewardsStore');
 
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
+const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
+const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
 
 describe('StakingRewardsStore', () => {
     let store;
@@ -37,7 +39,8 @@ describe('StakingRewardsStore', () => {
             startTime: data[0],
             endTime: data[1],
             rewardRate: data[2],
-            reserveTokens: data[3]
+            reserveTokens: data[3],
+            rewardShares: data[4]
         };
     };
 
@@ -94,30 +97,108 @@ describe('StakingRewardsStore', () => {
     describe('pool programs', () => {
         it('should revert when a non-owner attempts to add a pool', async () => {
             await expectRevert(
-                store.addPoolProgram(poolToken.address, now.add(new BN(2000)), new BN(1000), { from: nonOwner }),
+                store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(2000)),
+                    new BN(1000),
+                    { from: nonOwner }
+                ),
                 'ERR_ACCESS_DENIED'
             );
         });
 
         it('should revert when adding a zero address pool', async () => {
             await expectRevert(
-                store.addPoolProgram(ZERO_ADDRESS, now.add(new BN(2000)), new BN(1000), { from: owner }),
+                store.addPoolProgram(
+                    ZERO_ADDRESS,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(2000)),
+                    new BN(1000),
+                    { from: owner }
+                ),
                 'ERR_INVALID_ADDRESS'
             );
         });
 
         it('should revert when adding a pool with invalid ending time', async () => {
             await expectRevert(
-                store.addPoolProgram(poolToken.address, now.sub(new BN(1)), new BN(1000), {
-                    from: owner
-                }),
+                store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.sub(new BN(1)),
+                    new BN(1000),
+                    {
+                        from: owner
+                    }
+                ),
                 'ERR_INVALID_DURATION'
+            );
+        });
+
+        it('should revert when adding a pool with reward shares', async () => {
+            const invalidToken = accounts[5];
+
+            await expectRevert(
+                store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE.sub(new BN(1)), BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(2000)),
+                    new BN(1000),
+                    {
+                        from: owner
+                    }
+                ),
+                'ERR_INVALID_REWARD_SHARES'
+            );
+        });
+
+        it('should revert when adding a pool with invalid reserve tokens', async () => {
+            const invalidToken = accounts[5];
+
+            await expectRevert(
+                store.addPoolProgram(
+                    poolToken.address,
+                    [invalidToken, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(2000)),
+                    new BN(1000),
+                    {
+                        from: owner
+                    }
+                ),
+                'ERR_INVALID_RESERVE_TOKENS'
+            );
+
+            await expectRevert(
+                store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, invalidToken],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(2000)),
+                    new BN(1000),
+                    {
+                        from: owner
+                    }
+                ),
+                'ERR_INVALID_RESERVE_TOKENS'
             );
         });
 
         it('should revert when adding without any weekly rewards', async () => {
             await expectRevert(
-                store.addPoolProgram(poolToken.address, now.add(new BN(2000)), new BN(0), { from: owner }),
+                store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(2000)),
+                    new BN(0),
+                    { from: owner }
+                ),
                 'ERR_ZERO_VALUE'
             );
         });
@@ -129,7 +210,14 @@ describe('StakingRewardsStore', () => {
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
             const rewardRate = new BN(1000);
-            const res = await store.addPoolProgram(poolToken.address, endTime, rewardRate, { from: owner });
+            const res = await store.addPoolProgram(
+                poolToken.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                endTime,
+                rewardRate,
+                { from: owner }
+            );
             expectEvent(res, 'PoolProgramAdded', {
                 poolToken: poolToken.address,
                 startTime,
@@ -146,9 +234,18 @@ describe('StakingRewardsStore', () => {
             expect(pool.rewardRate).to.be.bignumber.equal(rewardRate);
             expect(pool.reserveTokens[0]).to.eql(networkToken.address);
             expect(pool.reserveTokens[1]).to.eql(reserveToken.address);
+            expect(pool.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+            expect(pool.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
 
             await expectRevert(
-                store.addPoolProgram(poolToken.address, now.add(new BN(1)), rewardRate, { from: owner }),
+                store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(1)),
+                    rewardRate,
+                    { from: owner }
+                ),
                 'ERR_ALREADY_SUPPORTED'
             );
 
@@ -160,9 +257,16 @@ describe('StakingRewardsStore', () => {
             const startTime2 = now;
             const endTime2 = startTime2.add(new BN(6000));
             const rewardRate2 = startTime2.add(new BN(9999));
-            const res2 = await store.addPoolProgram(poolToken2.address, endTime2, rewardRate2, {
-                from: owner
-            });
+            const res2 = await store.addPoolProgram(
+                poolToken2.address,
+                [reserveToken.address, networkToken.address],
+                [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
+                endTime2,
+                rewardRate2,
+                {
+                    from: owner
+                }
+            );
             expectEvent(res2, 'PoolProgramAdded', {
                 poolToken: poolToken2.address,
                 startTime: startTime2,
@@ -179,9 +283,18 @@ describe('StakingRewardsStore', () => {
             expect(pool2.rewardRate).to.be.bignumber.equal(rewardRate2);
             expect(pool2.reserveTokens[0]).to.eql(reserveToken.address);
             expect(pool2.reserveTokens[1]).to.eql(networkToken.address);
+            expect(pool2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+            expect(pool2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
 
             await expectRevert(
-                store.addPoolProgram(poolToken2.address, now.add(new BN(1)), rewardRate, { from: owner }),
+                store.addPoolProgram(
+                    poolToken2.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    now.add(new BN(1)),
+                    rewardRate,
+                    { from: owner }
+                ),
                 'ERR_ALREADY_SUPPORTED'
             );
         });
@@ -191,7 +304,14 @@ describe('StakingRewardsStore', () => {
                 const startTime = now;
                 const endTime = startTime.add(new BN(2000));
                 const rewardRate = new BN(1000);
-                await store.addPoolProgram(poolToken.address, endTime, rewardRate, { from: owner });
+                await store.addPoolProgram(
+                    poolToken.address,
+                    [networkToken.address, reserveToken.address],
+                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                    endTime,
+                    rewardRate,
+                    { from: owner }
+                );
             });
 
             it('should revert when a non-owner attempts to remove a pool', async () => {
@@ -223,8 +343,22 @@ describe('StakingRewardsStore', () => {
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
             const rewardRate = new BN(1000);
-            await store.addPoolProgram(poolToken.address, endTime, rewardRate, { from: owner });
-            await store.addPoolProgram(poolToken2.address, endTime, rewardRate, { from: owner });
+            await store.addPoolProgram(
+                poolToken.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                endTime,
+                rewardRate,
+                { from: owner }
+            );
+            await store.addPoolProgram(
+                poolToken2.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                endTime,
+                rewardRate,
+                { from: owner }
+            );
         });
 
         it('should revert when a non-owner attempts to add provider liquidity', async () => {
@@ -375,7 +509,14 @@ describe('StakingRewardsStore', () => {
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
             const rewardRate = new BN(1000);
-            await store.addPoolProgram(poolToken.address, endTime, rewardRate, { from: owner });
+            await store.addPoolProgram(
+                poolToken.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                endTime,
+                rewardRate,
+                { from: owner }
+            );
 
             await store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
                 from: owner
@@ -418,7 +559,14 @@ describe('StakingRewardsStore', () => {
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
             const rewardRate = new BN(1000);
-            await store.addPoolProgram(poolToken.address, endTime, rewardRate, { from: owner });
+            await store.addPoolProgram(
+                poolToken.address,
+                [networkToken.address, reserveToken.address],
+                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                endTime,
+                rewardRate,
+                { from: owner }
+            );
 
             await store.addProviderLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
                 from: owner

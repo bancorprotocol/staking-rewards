@@ -8,6 +8,7 @@ struct PoolProgram {
     uint256 endTime;
     uint256 rewardRate;
     IERC20[2] reserveTokens;
+    uint32[2] rewardShares;
 }
 
 struct Rewards {
@@ -30,6 +31,8 @@ interface IStakingRewardsStore {
 
     function addPoolProgram(
         IERC20 poolToken,
+        IERC20[2] calldata reserveTokens,
+        uint32[2] calldata rewardShares,
         uint256 endTime,
         uint256 rewardRate
     ) external;
@@ -43,7 +46,8 @@ interface IStakingRewardsStore {
             uint256,
             uint256,
             uint256,
-            IERC20[2] memory
+            IERC20[2] memory,
+            uint32[2] memory
         );
 
     function addProviderLiquidity(

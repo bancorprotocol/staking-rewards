@@ -47,6 +47,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // order to avoid this imprecision, we will amplify the reward rate by the units amount.
     uint256 private constant REWARD_RATE_FACTOR = 1e18;
 
+    uint256 private constant MAX_UINT256 = uint256(-1);
+
     // the staking rewards settings
     IStakingRewardsStore private immutable _store;
 
@@ -136,6 +138,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 reserveAmount,
         uint256 /* id */
     ) external override only(LIQUIDITY_PROTECTION) validExternalAddress(provider) {
+        if (!_store.isParticipatingReserve(poolToken, reserveToken)) {
+            return;
+        }
+
         _store.addProviderLiquidity(provider, poolToken, reserveToken, reserveAmount);
 
         updateRewards(provider, poolToken, reserveToken);
@@ -158,6 +164,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 removedReserveAmount,
         uint256 /* id */
     ) external override only(LIQUIDITY_PROTECTION) validExternalAddress(provider) {
+        if (!_store.isParticipatingReserve(poolToken, reserveToken)) {
+            return;
+        }
+
         // claim all pending rewards before handling the removal of the liquidity.
         claimRewards(provider);
 
@@ -167,12 +177,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns msg.sender's pending rewards for all participating pools.
+     * @dev returns pending rewards for all participating pools.
      *
      * @return all pending rewards
      */
     function rewards() external returns (uint256) {
-        return rewards(msg.sender, false);
+        return rewards(msg.sender, false, MAX_UINT256);
     }
 
     /**
@@ -183,7 +193,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @return all pending rewards
      */
     function rewardsOf(address provider) external returns (uint256) {
-        return rewards(provider, false);
+        return rewards(provider, false, MAX_UINT256);
     }
 
     /**
@@ -191,15 +201,20 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param claim whether to actually claim the rewards
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      *
      * @return all pending rewards
      */
-    function rewards(address provider, bool claim) private returns (uint256) {
+    function rewards(
+        address provider,
+        bool claim,
+        uint256 maxAmount
+    ) private returns (uint256) {
         // while querying rewards is allowed for every address, claiming rewards is allowed only by the actual
         // msg.sender.
         require(!claim || provider == msg.sender, "ERR_ACCESS_DENIED");
 
-        return rewards(provider, _store.poolsByProvider(provider), claim);
+        return rewards(provider, _store.poolsByProvider(provider), claim, maxAmount);
     }
 
     /**
@@ -209,19 +224,26 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
      * @param claim whether to actually claim the rewards
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      *
      * @return all pending rewards
      */
     function rewards(
         address provider,
         IERC20[] memory poolTokens,
-        bool claim
+        bool claim,
+        uint256 maxAmount
     ) private returns (uint256) {
         uint256 reward = 0;
 
         uint256 length = poolTokens.length;
-        for (uint256 i = 0; i < length; ++i) {
-            reward = reward.add(rewards(provider, poolTokens[i], claim));
+        for (uint256 i = 0; i < length && maxAmount > 0; ++i) {
+            uint256 poolReward = rewards(provider, poolTokens[i], claim, maxAmount);
+            reward = reward.add(poolReward);
+
+            if (claim && maxAmount != MAX_UINT256) {
+                maxAmount = maxAmount.sub(poolReward);
+            }
         }
 
         return reward;
@@ -233,37 +255,82 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param poolToken the pool to query
      * @param claim whether to actually claim the rewards
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      *
-     * @return all pending rewards
+     * @return reward all pending rewards
      */
     function rewards(
         address provider,
         IERC20 poolToken,
-        bool claim
-    ) private returns (uint256) {
-        uint256 reward = 0;
-
+        bool claim,
+        uint256 maxAmount
+    ) private returns (uint256 reward) {
         PoolProgram memory program = poolProgram(poolToken);
 
         uint256 length = program.reserveTokens.length;
-        for (uint256 i = 0; i < length; ++i) {
+        for (uint256 i = 0; i < length && maxAmount > 0; ++i) {
             IERC20 reserveToken = program.reserveTokens[i];
+
+            // update all provider's pending rewards, in order to apply retroactive reward multipliers.
+            if (claim) {
+                updateRewards(provider, poolToken, reserveToken);
+            }
 
             // calculate the claimable base rewards (since the last claim).
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
-            uint256 baseRewards = baseRewards(rewards(poolToken, reserveToken), reserveToken, providerRewards, program);
+            uint256 newBaseRewards =
+                baseRewards(rewards(poolToken, reserveToken), reserveToken, providerRewards, program);
 
             // make sure that we aren't exceeding the reward rate for any reason.
-            verifyBaseReward(baseRewards, providerRewards, program);
+            verifyBaseReward(newBaseRewards, providerRewards, program);
 
-            // apply the rewards multiplier on all rewards.
-            reward = reward.add(
-                providerRewards
-                    .pendingBaseRewards
-                    .add(baseRewards)
-                    .mul(rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program))
-                    .div(PPM_RESOLUTION)
-            );
+            // calculate pending rewards and apply the rewards multiplier.
+            uint32 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
+            uint256 fullReward =
+                providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
+
+            // add any pending rewards, while applying the best retractive multiplier.
+            uint256 bestMultiplier = Math.max(multiplier, providerRewards.baseRewardsDebtMultiplier);
+            if (bestMultiplier == PPM_RESOLUTION) {
+                fullReward = fullReward.add(providerRewards.baseRewardsDebt);
+            } else {
+                fullReward = fullReward.add(providerRewards.baseRewardsDebt.mul(bestMultiplier).div(PPM_RESOLUTION));
+            }
+
+            if (claim) {
+                if (maxAmount != MAX_UINT256) {
+                    if (fullReward > maxAmount) {
+                        // get the amount of the actual base rewards that were claimed
+                        if (multiplier == PPM_RESOLUTION) {
+                            providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
+                        } else {
+                            providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(
+                                multiplier
+                            );
+                        }
+
+                        // store the current multiplier for future retroactive rewards correction
+                        providerRewards.baseRewardsDebtMultiplier = multiplier;
+
+                        // grant only maxAmount rewards
+                        fullReward = maxAmount;
+
+                        maxAmount = 0;
+                    } else {
+                        // grant any pending rewards
+                        providerRewards.baseRewardsDebt = 0;
+                        providerRewards.baseRewardsDebtMultiplier = 0;
+
+                        maxAmount = maxAmount.sub(fullReward);
+                    }
+                } else {
+                    // grant any pending rewards
+                    providerRewards.baseRewardsDebt = 0;
+                    providerRewards.baseRewardsDebtMultiplier = 0;
+                }
+            }
+
+            reward = reward.add(fullReward);
 
             // update store data with the remaining pending rewards and set the last update time to the timestamp of the
             // current block.
@@ -274,7 +341,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                     reserveToken,
                     providerRewards.rewardPerToken,
                     0,
-                    time()
+                    time(),
+                    providerRewards.baseRewardsDebt,
+                    providerRewards.baseRewardsDebtMultiplier
                 );
             }
         }
@@ -283,7 +352,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims msg.sender's pending rewards from all participating pools.
+     * @dev claims pending rewards from all participating pools.
      *
      * @return all claimed rewards
      */
@@ -292,14 +361,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewards from all participating pools.
+     * @dev claims specific provider's pending rewarss from all participating pools.
      *
      * @param provider the owner of the liquidity
      *
      * @return all claimed rewards
      */
     function claimRewards(address provider) private returns (uint256) {
-        return claimRewards(provider, _store.poolsByProvider(provider));
+        return claimRewards(provider, _store.poolsByProvider(provider), MAX_UINT256);
     }
 
     /**
@@ -307,11 +376,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
+     * @param maxAmount an optional cap on the rewards to claim
      *
      * @return all pending rewards
      */
-    function claimRewards(address provider, IERC20[] memory poolTokens) private returns (uint256) {
-        uint256 amount = rewards(provider, poolTokens, true);
+    function claimRewards(
+        address provider,
+        IERC20[] memory poolTokens,
+        uint256 maxAmount
+    ) private returns (uint256) {
+        uint256 amount = rewards(provider, poolTokens, true, maxAmount);
         if (amount == 0) {
             return amount;
         }
@@ -326,6 +400,73 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         emit RewardsClaimed(provider, amount);
 
         return amount;
+    }
+
+    /**
+     * @dev restakes specific pending rewards from all participating pools.
+     *
+     * @param maxAmount an optional cap on the rewards to stake
+     * @param poolToken the pool token representing the new LM pool
+
+     * @return all staked rewards and the ID of the new position
+     */
+    function stakeRewards(uint256 maxAmount, IERC20 poolToken) external returns (uint256, uint256) {
+        return stakeRewards(msg.sender, maxAmount, poolToken);
+    }
+
+    /**
+     * @dev restakes specific provider's pending rewarss from all participating pools.
+     *
+     * @param provider the owner of the liquidity
+     * @param maxAmount an optional cap on the rewards to stake
+     * @param poolToken the pool token representing the new LM pool
+     *
+     * @return all staked rewards and the ID of the new position
+     */
+    function stakeRewards(
+        address provider,
+        uint256 maxAmount,
+        IERC20 poolToken
+    ) private returns (uint256, uint256) {
+        return stakeRewards(provider, _store.poolsByProvider(provider), maxAmount, poolToken);
+    }
+
+    /**
+     * @dev claims specific provider's pending rewards for a specifc list of participating pools.
+     *
+     * @param provider the owner of the liquidity
+     * @param poolTokens the list of participating pools to query
+     * @param newPoolToken the pool token representing the new LM pool
+     * @param maxAmount an optional cap on the rewards to stake
+     *
+     * @return all staked rewards and the ID of the new position
+     */
+    function stakeRewards(
+        address provider,
+        IERC20[] memory poolTokens,
+        uint256 maxAmount,
+        IERC20 newPoolToken
+    ) private returns (uint256, uint256) {
+        uint256 amount = rewards(provider, poolTokens, true, maxAmount);
+        if (amount == 0) {
+            return (amount, 0);
+        }
+
+        // approve the LiquidityProtection contract to pull the rewards.
+        ILiquidityProtection liquidityProtection = ILiquidityProtection(addressOf(LIQUIDITY_PROTECTION));
+        _networkToken.safeApprove(address(liquidityProtection), amount);
+
+        // mint the reward tokens directly to the provider.
+        _networkTokenGovernance.mint(address(this), amount);
+
+        uint256 newId = liquidityProtection.addLiquidityFor(msg.sender, newPoolToken, _networkToken, amount);
+
+        // please note, that in order to incentivize restaking, we won't be updating the time of the last claim, thus
+        // preserving the rewards bonus multiplier.
+
+        emit RewardsStaked(msg.sender, newPoolToken, amount, newId);
+
+        return (amount, newId);
     }
 
     /**
@@ -385,7 +526,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IERC20 reserveToken,
         ProviderRewards memory providerRewards,
         PoolProgram memory program
-    ) private view returns (uint256) {
+    ) internal view returns (uint256) {
         return
             providerRewards
                 .reserveAmount // the protected tokens amount held by the provider
@@ -420,7 +561,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             reserveToken,
             newRewardPerToken,
             baseRewards(rewardsData, reserveToken, providerRewards, program),
-            providerRewards.effectiveStakingTime
+            providerRewards.effectiveStakingTime,
+            providerRewards.baseRewardsDebt,
+            providerRewards.baseRewardsDebtMultiplier
         );
     }
 
@@ -498,7 +641,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return pool rewards for a specific pool and reserve
      */
-    function rewards(IERC20 poolToken, IERC20 reserveToken) private view returns (Rewards memory) {
+    function rewards(IERC20 poolToken, IERC20 reserveToken) internal view returns (Rewards memory) {
         Rewards memory data;
         (data.lastUpdateTime, data.rewardPerToken, data.totalReserveAmount) = _store.rewards(poolToken, reserveToken);
 
@@ -518,10 +661,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken
-    ) private view returns (ProviderRewards memory) {
+    ) internal view returns (ProviderRewards memory) {
         ProviderRewards memory data;
-        (data.rewardPerToken, data.pendingBaseRewards, data.reserveAmount, data.effectiveStakingTime) = _store
-            .providerRewards(provider, poolToken, reserveToken);
+        (
+            data.rewardPerToken,
+            data.pendingBaseRewards,
+            data.effectiveStakingTime,
+            data.baseRewardsDebt,
+            data.baseRewardsDebtMultiplier,
+            data.reserveAmount
+        ) = _store.providerRewards(provider, poolToken, reserveToken);
 
         return data;
     }

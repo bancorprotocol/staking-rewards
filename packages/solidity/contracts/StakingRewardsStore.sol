@@ -119,39 +119,21 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(hasRole(ROLE_OWNER, msg.sender), "ERR_ACCESS_DENIED");
     }
 
-    modifier onlyParticipating(IERC20 poolToken) {
-        _onlyParticipating(poolToken);
-        _;
-    }
-
-    function _onlyParticipating(IERC20 poolToken) internal view {
-        require(isPoolParticipating(poolToken), "ERR_POOL_NOT_PARTICIPATING");
-    }
-
-    modifier onlyParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) {
-        _onlyParticipatingReserve(poolToken, reserveToken);
-        _;
-    }
-
-    function _onlyParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) internal view {
-        _onlyParticipating(poolToken);
-
-        PoolProgram memory program = _programs[poolToken];
-
-        require(
-            program.reserveTokens[0] == reserveToken || program.reserveTokens[1] == reserveToken,
-            "ERR_RESERVE_NOT_PARTICIPATING"
-        );
-    }
-
     /**
      * @dev returns whether the specified pool participates in the LM program
      *
      * @param poolToken the pool token representing the LM pool
+     * @param reserveToken the reserve token of the added liquidity
+     *
      * @return whether the specified pool participates in the LM program
      */
-    function isPoolParticipating(IERC20 poolToken) public view override returns (bool) {
-        return isPoolParticipating(_programs[poolToken]);
+    function isParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) public view override returns (bool) {
+        PoolProgram memory program = _programs[poolToken];
+        if (!isPoolParticipating(program)) {
+            return false;
+        }
+
+        return program.reserveTokens[0] == reserveToken || program.reserveTokens[1] == reserveToken;
     }
 
     /**
@@ -207,7 +189,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @param poolToken the pool token representing the LM pool
      */
-    function removePoolProgram(IERC20 poolToken) external override onlyOwner onlyParticipating(poolToken) {
+    function removePoolProgram(IERC20 poolToken) external override onlyOwner {
         delete _programs[poolToken];
 
         emit PoolProgramRemoved(poolToken);
@@ -222,7 +204,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         external
         view
         override
-        onlyParticipating(poolToken)
         returns (
             uint256,
             uint256,
@@ -249,7 +230,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 reserveAmount
-    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
+    ) external override onlyOwner {
         // update pool's total reserve amount
         Rewards storage rewardsData = _rewards[poolToken][reserveToken];
         rewardsData.totalReserveAmount = rewardsData.totalReserveAmount.add(reserveAmount);
@@ -285,7 +266,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 removedReserveAmount
-    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
+    ) external override onlyOwner {
         // update pool's total reserve amount.
         Rewards storage rewardsData = _rewards[poolToken][reserveToken];
         rewardsData.totalReserveAmount = rewardsData.totalReserveAmount.sub(removedReserveAmount);
@@ -362,7 +343,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 reserveToken,
         uint256 rewardPerToken,
         uint256 lastUpdateTime
-    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
+    ) external override onlyOwner {
         Rewards storage data = _rewards[poolToken][reserveToken];
         data.rewardPerToken = rewardPerToken;
         data.lastUpdateTime = lastUpdateTime;
@@ -389,12 +370,21 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256,
             uint256,
             uint256,
+            uint256,
+            uint32,
             uint256
         )
     {
         ProviderRewards memory data = _providerRewards[provider][poolToken][reserveToken];
 
-        return (data.rewardPerToken, data.pendingBaseRewards, data.reserveAmount, data.effectiveStakingTime);
+        return (
+            data.rewardPerToken,
+            data.pendingBaseRewards,
+            data.effectiveStakingTime,
+            data.baseRewardsDebt,
+            data.baseRewardsDebtMultiplier,
+            data.reserveAmount
+        );
     }
 
     /**
@@ -406,6 +396,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
      * @param effectiveStakingTime the new effective staking time
+     * @param baseRewardsDebt the updated base rewards debt
+     * @param baseRewardsDebtMultiplier the updated base rewards debt multiplier
      */
     function updateProviderRewardData(
         address provider,
@@ -413,13 +405,17 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 reserveToken,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
-        uint256 effectiveStakingTime
-    ) external override onlyOwner onlyParticipatingReserve(poolToken, reserveToken) {
+        uint256 effectiveStakingTime,
+        uint256 baseRewardsDebt,
+        uint32 baseRewardsDebtMultiplier
+    ) external override onlyOwner {
         ProviderRewards storage data = _providerRewards[provider][poolToken][reserveToken];
 
         data.rewardPerToken = rewardPerToken;
         data.pendingBaseRewards = pendingBaseRewards;
         data.effectiveStakingTime = effectiveStakingTime;
+        data.baseRewardsDebt = baseRewardsDebt;
+        data.baseRewardsDebtMultiplier = baseRewardsDebtMultiplier;
     }
 
     /**

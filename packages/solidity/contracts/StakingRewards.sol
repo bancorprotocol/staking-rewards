@@ -719,9 +719,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ProviderRewards memory providerRewardsData,
         PoolProgram memory program
     ) private view {
-        // don't grant any rewards before the starting time of the program
+        // don't grant any rewards before the starting time of the program or for stakes after the end of the program
         uint256 currentTime = time();
-        if (currentTime < program.startTime) {
+        if (currentTime < program.startTime || providerRewardsData.effectiveStakingTime >= program.endTime) {
             require(baseReward == 0, "ERR_REWARD_TOO_HIGH");
 
             return;

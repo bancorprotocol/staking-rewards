@@ -14,7 +14,6 @@ struct PoolProgram {
 struct Rewards {
     uint256 lastUpdateTime;
     uint256 rewardPerToken;
-    uint256 totalReserveAmount;
 }
 
 struct ProviderRewards {
@@ -23,7 +22,6 @@ struct ProviderRewards {
     uint256 effectiveStakingTime;
     uint256 baseRewardsDebt;
     uint32 baseRewardsDebtMultiplier;
-    uint256 reserveAmount;
 }
 
 interface IStakingRewardsStore {
@@ -50,30 +48,7 @@ interface IStakingRewardsStore {
             uint32[2] memory
         );
 
-    function addProviderLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 reserveAmount
-    ) external;
-
-    function removeProviderLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 removedReserveAmount
-    ) external;
-
-    function poolsByProvider(address provider) external view returns (IERC20[] memory);
-
-    function rewards(IERC20 poolToken, IERC20 reserveToken)
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256
-        );
+    function rewards(IERC20 poolToken, IERC20 reserveToken) external view returns (uint256, uint256);
 
     function updateRewardData(
         IERC20 poolToken,
@@ -94,8 +69,7 @@ interface IStakingRewardsStore {
             uint256,
             uint256,
             uint256,
-            uint32,
-            uint256
+            uint32
         );
 
     function updateProviderRewardData(

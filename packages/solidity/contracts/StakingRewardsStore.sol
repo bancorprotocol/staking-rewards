@@ -31,9 +31,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     // the mapping between pools, reserve tokens, and provider specific rewards
     mapping(address => mapping(IERC20 => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
 
-    // the mapping between providers and the pools they are participating in
-    mapping(address => EnumerableSet.AddressSet) internal _poolsByProvider;
-
     // the mapping between providers and their respective last claim times
     mapping(address => uint256) private _lastProviderClaimTimes;
 
@@ -53,36 +50,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the LM pool
      */
     event PoolProgramRemoved(IERC20 indexed poolToken);
-
-    /**
-     * @dev triggered when a provider provisions liquidity
-     *
-     * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token of the added liquidity
-     * @param reserveAmount the added reserve amount
-     */
-    event ProviderLiquidityAdded(
-        address indexed provider,
-        IERC20 indexed poolToken,
-        IERC20 indexed reserveToken,
-        uint256 reserveAmount
-    );
-
-    /**
-     * @dev triggered when a provider removes liquidity
-     *
-     * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token of the removed liquidity
-     * @param removedReserveAmount the removed reserve amount
-     */
-    event ProviderLiquidityRemoved(
-        address indexed provider,
-        IERC20 indexed poolToken,
-        IERC20 indexed reserveToken,
-        uint256 removedReserveAmount
-    );
 
     /**
      * @dev triggered when provider's last claim time is being updated
@@ -220,96 +187,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev adds provider's liquidity
-     *
-     * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token of the added liquidity
-     * @param reserveAmount the added reserve amount
-     */
-    function addProviderLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 reserveAmount
-    ) external override onlyOwner {
-        // update pool's total reserve amount
-        Rewards storage rewardsData = _rewards[poolToken][reserveToken];
-        rewardsData.totalReserveAmount = rewardsData.totalReserveAmount.add(reserveAmount);
-
-        // if this is the first liquidity provision, record its time as the effective staking time for future reward
-        // multiplier calculations.
-        ProviderRewards storage providerRewards = _providerRewards[provider][poolToken][reserveToken];
-        uint256 prevProviderAmount = providerRewards.reserveAmount;
-        if (prevProviderAmount == 0) {
-            // please note, that EnumerableSet.AddressSet won't add the pool token more than once (for example, in
-            // the case when a provider has removed and add liquidity again).
-            _poolsByProvider[provider].add(address(poolToken));
-
-            providerRewards.effectiveStakingTime = time();
-        }
-
-        // update provider's reserve amount
-        providerRewards.reserveAmount = prevProviderAmount.add(reserveAmount);
-
-        emit ProviderLiquidityAdded(provider, poolToken, reserveToken, reserveAmount);
-    }
-
-    /**
-     * @dev removes provider's liquidity
-     *
-     * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token of the removed liquidity
-     * @param removedReserveAmount the removed reserve amount
-     */
-    function removeProviderLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 removedReserveAmount
-    ) external override onlyOwner {
-        // update pool's total reserve amount.
-        Rewards storage rewardsData = _rewards[poolToken][reserveToken];
-        rewardsData.totalReserveAmount = rewardsData.totalReserveAmount.sub(removedReserveAmount);
-
-        // update provider's reserve amount.
-        ProviderRewards storage providerRewards = _providerRewards[provider][poolToken][reserveToken];
-        providerRewards.reserveAmount = providerRewards.reserveAmount.sub(removedReserveAmount);
-
-        // if the provider doesn't provide any more liqudiity - remove the pools from its list.
-        if (providerRewards.reserveAmount == 0) {
-            PoolProgram memory program = _programs[poolToken];
-            IERC20 reserveToken2 =
-                program.reserveTokens[0] == reserveToken ? program.reserveTokens[1] : program.reserveTokens[0];
-            if (_providerRewards[provider][poolToken][reserveToken2].reserveAmount == 0) {
-                _poolsByProvider[provider].remove(address(poolToken));
-            }
-        }
-
-        emit ProviderLiquidityRemoved(provider, poolToken, reserveToken, removedReserveAmount);
-    }
-
-    /**
-     * @dev returns all the LM pools that the provider participates in
-     *
-     * @param provider the owner of the liquidity
-     *
-     * @return an array of pools tokens
-     */
-    function poolsByProvider(address provider) external view override returns (IERC20[] memory) {
-        EnumerableSet.AddressSet storage providerPools = _poolsByProvider[provider];
-
-        uint256 length = providerPools.length();
-        IERC20[] memory poolTokens = new IERC20[](length);
-        for (uint256 i = 0; i < length; ++i) {
-            poolTokens[i] = IERC20(providerPools.at(i));
-        }
-
-        return poolTokens;
-    }
-
-    /**
      * @dev returns the rewards data of a specific reserve in a specific pool
      *
      * @param poolToken the pool token representing the LM pool
@@ -317,19 +194,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return rewards data
      */
-    function rewards(IERC20 poolToken, IERC20 reserveToken)
-        external
-        view
-        override
-        returns (
-            uint256,
-            uint256,
-            uint256
-        )
-    {
+    function rewards(IERC20 poolToken, IERC20 reserveToken) external view override returns (uint256, uint256) {
         Rewards memory data = _rewards[poolToken][reserveToken];
 
-        return (data.lastUpdateTime, data.rewardPerToken, data.totalReserveAmount);
+        return (data.lastUpdateTime, data.rewardPerToken);
     }
 
     /**
@@ -373,8 +241,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256,
             uint256,
             uint256,
-            uint32,
-            uint256
+            uint32
         )
     {
         ProviderRewards memory data = _providerRewards[provider][poolToken][reserveToken];
@@ -384,8 +251,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             data.pendingBaseRewards,
             data.effectiveStakingTime,
             data.baseRewardsDebt,
-            data.baseRewardsDebtMultiplier,
-            data.reserveAmount
+            data.baseRewardsDebtMultiplier
         );
     }
 

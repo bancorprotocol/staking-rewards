@@ -30,7 +30,6 @@ interface IStakingRewardsStore {
 
     function addPoolProgram(
         IERC20 poolToken,
-        uint256 startTime,
         uint256 endTime,
         uint256 rewardRate
     ) external;

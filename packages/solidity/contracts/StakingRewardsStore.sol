@@ -140,23 +140,22 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds or updates a pool program
      *
      * @param poolToken the pool token representing the LM pool
-     * @param startTime the starting time of the program
      * @param endTime the ending time of the program
      * @param rewardRate the program's weekly rewards
      */
     function addPoolProgram(
         IERC20 poolToken,
-        uint256 startTime,
         uint256 endTime,
         uint256 rewardRate
     ) external override onlyOwner validAddress(address(poolToken)) {
-        require(startTime > 0 && startTime < endTime && endTime > time(), "ERR_INVALID_DURATION");
+        uint256 currentTime = time();
+        require(endTime > currentTime, "ERR_INVALID_DURATION");
         require(rewardRate > 0, "ERR_ZERO_VALUE");
 
         PoolProgram storage program = _programs[poolToken];
         require(!isPoolParticipating(program), "ERR_ALREADY_SUPPORTED");
 
-        program.startTime = startTime;
+        program.startTime = currentTime;
         program.endTime = endTime;
         program.rewardRate = rewardRate;
 
@@ -167,7 +166,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.reserveTokens[0] = converter.connectorTokens(0);
         program.reserveTokens[1] = converter.connectorTokens(1);
 
-        emit PoolProgramAdded(poolToken, startTime, endTime, rewardRate);
+        emit PoolProgramAdded(poolToken, currentTime, endTime, rewardRate);
     }
 
     /**

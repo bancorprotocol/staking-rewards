@@ -221,9 +221,11 @@ describe('StakingRewards', () => {
         const nonLiquidityProtection = accounts[9];
 
         beforeEach(async () => {
+            await setTime(now.add(duration.weeks(1)));
+
             await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtectionProxy);
 
-            await store.addPoolProgram(poolToken.address, now, now.add(REWARDS_DURATION), BIG_POOL_BASE_REWARD_RATE);
+            await store.addPoolProgram(poolToken.address, now.add(REWARDS_DURATION), BIG_POOL_BASE_REWARD_RATE);
         });
 
         it('should revert when a non-LP contract attempts to notify', async () => {
@@ -463,14 +465,14 @@ describe('StakingRewards', () => {
             }
         };
 
-        const addPoolProgram = async (poolToken, programStartTime, programEndTime, rewardRate) => {
+        const addPoolProgram = async (poolToken, programEndTime, rewardRate) => {
             programs[poolToken.address] = {
-                programStartTime,
+                now,
                 programEndTime,
                 rewardRate
             };
 
-            await store.addPoolProgram(poolToken.address, programStartTime, programEndTime, rewardRate);
+            await store.addPoolProgram(poolToken.address, programEndTime, rewardRate);
         };
 
         const getExpectedRewards = (provider, duration, multiplierDuration = undefined) => {
@@ -857,36 +859,39 @@ describe('StakingRewards', () => {
 
         context('single pool', async () => {
             beforeEach(async () => {
-                await setTime(now);
-
                 programStartTime = now.add(duration.weeks(1));
                 programEndTime = programStartTime.add(REWARDS_DURATION);
 
-                await addPoolProgram(poolToken, programStartTime, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                const currentTime = now;
+                await setTime(programStartTime);
+
+                await addPoolProgram(poolToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+
+                await setTime(currentTime);
 
                 await addLiquidity(providers[0], poolToken, reserveToken, new BN(1000).mul(new BN(10).pow(new BN(18))));
             });
 
-            // context('single sided staking', async () => {
-            //     context('single provider', async () => {
-            //         testStatic([providers[0]]);
-            //         testDynamic([providers[0]]);
-            //     });
+            context('single sided staking', async () => {
+                context('single provider', async () => {
+                    testStatic([providers[0]]);
+                    testDynamic([providers[0]]);
+                });
 
-            //     context('multiple providers', async () => {
-            //         beforeEach(async () => {
-            //             await addLiquidity(
-            //                 providers[1],
-            //                 poolToken,
-            //                 reserveToken,
-            //                 new BN(222222).mul(new BN(10).pow(new BN(18)))
-            //             );
-            //         });
+                context('multiple providers', async () => {
+                    beforeEach(async () => {
+                        await addLiquidity(
+                            providers[1],
+                            poolToken,
+                            reserveToken,
+                            new BN(222222).mul(new BN(10).pow(new BN(18)))
+                        );
+                    });
 
-            //         testStatic(providers);
-            //         testDynamic(providers);
-            //     });
-            // });
+                    testStatic(providers);
+                    testDynamic(providers);
+                });
+            });
 
             context('double sided staking', async () => {
                 beforeEach(async () => {
@@ -932,9 +937,14 @@ describe('StakingRewards', () => {
                 programStartTime = now.add(duration.weeks(1));
                 programEndTime = programStartTime.add(REWARDS_DURATION);
 
-                await addPoolProgram(poolToken, programStartTime, programEndTime, BIG_POOL_BASE_REWARD_RATE);
-                await addPoolProgram(poolToken2, programStartTime, programEndTime, SMALL_POOL_BASE_REWARD_RATE);
-                await addPoolProgram(poolToken3, programStartTime, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                const currentTime = now;
+                await setTime(programStartTime);
+
+                await addPoolProgram(poolToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                await addPoolProgram(poolToken2, programEndTime, SMALL_POOL_BASE_REWARD_RATE);
+                await addPoolProgram(poolToken3, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+
+                await setTime(currentTime);
 
                 await addLiquidity(
                     providers[0],

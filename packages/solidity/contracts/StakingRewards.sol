@@ -700,7 +700,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param baseReward the base rewards to checl
      * @param providerRewardsData the rewards data of the provider
      * @param program the pool program info
-     *
      */
     function verifyBaseReward(
         uint256 baseReward,
@@ -722,10 +721,20 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         require(baseReward <= program.rewardRate.mul(stakingEndTime.sub(stakingStartTime)), "ERR_REWARD_RATE_TOO_HIGH");
     }
 
+    /**
+     * @dev returns the liquidity protection store data contract
+     *
+     * @return the liquidity protection store data contract
+     */
     function liquidityProtectionStore() private view returns (ILiquidityProtectionDataStore) {
         return liquidityProtection().store();
     }
 
+    /**
+     * @dev returns the liquidity protection contract
+     *
+     * @return the liquidity protection store data contract
+     */
     function liquidityProtection() private view returns (ILiquidityProtection) {
         return ILiquidityProtection(addressOf(LIQUIDITY_PROTECTION));
     }

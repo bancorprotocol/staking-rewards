@@ -788,8 +788,6 @@ describe('StakingRewards', () => {
                             // Should retroactively apply the three weeks multiplier on the unclaimed rewards.
                             await setTime(now.add(duration.weeks(2)));
 
-                            const pRewardsReserveToken2 = await getProviderRewards(provider, poolToken, reserveToken);
-
                             const multiplier3 = getRewardsMultiplier(duration.weeks(3));
                             bestMultiplier = BN.max(multiplier2, multiplier3);
                             reward = await staking.rewardsOf.call(provider);
@@ -803,36 +801,144 @@ describe('StakingRewards', () => {
                             expect(reward).to.be.bignumber.closeTo(expectedRewards, MAX_REWARDS_ERROR);
                         });
 
-                        it.skip('should keep all rewards when partially removing liquidity', async () => {
-                            // Should return all rewards for three weeks, with the three weeks multiplier bonus
-                            await setTime(programStartTime.add(duration.weeks(3)));
+                        it('should keep all rewards when partially removing liquidity', async () => {
+                            // Should return all rewards for four weeks, with the four weeks multiplier bonus
+                            await setTime(programStartTime.add(duration.weeks(1)));
 
-                            reward = await staking.rewardsOf.call(provider);
-                            expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, duration.weeks(3)));
+                            const unclaimed = await staking.rewardsOf.call(provider);
+                            expect(unclaimed).to.be.bignumber.equal(getExpectedRewards(provider, duration.weeks(1)));
+                            const debMultiplier = getRewardsMultiplier(duration.weeks(1));
+                            const debt = unclaimed.mul(PPM_RESOLUTION).div(debMultiplier);
 
-                            const removedAmount = new BN(100);
-                            prevBalance = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, reserveToken, removedAmount);
-                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(
-                                prevBalance.add(reward)
+                            // Remove all the liquidity.
+                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
+                            const partialAmount = fullAmount.div(new BN(2));
+                            const prevBalance = await networkToken.balanceOf.call(provider);
+                            await removeLiquidity(provider, poolToken, reserveToken, partialAmount);
+                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
+
+                            // Should not affect the claimable amount.
+                            let reward = await staking.rewardsOf.call(provider);
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(
+                                debt.mul(debMultiplier).div(PPM_RESOLUTION),
+                                MAX_REWARDS_ERROR
                             );
-                            expect(await staking.rewardsOf.call(provider)).to.be.bignumber.equal(new BN(0));
 
-                            // Re-add the removed liquidity.
-                            await addLiquidity(provider, poolToken, reserveToken, removedAmount);
-
-                            // Should return all rewards for two weeks + second week's retroactive multiplier.
                             await setTime(now.add(duration.weeks(2)));
 
+                            // Should retroactively apply the two weeks multiplier on the debt rewards.
+                            const multiplier2 = getRewardsMultiplier(duration.weeks(2));
+                            let bestMultiplier = BN.max(debMultiplier, multiplier2);
                             reward = await staking.rewardsOf.call(provider);
-                            expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, duration.weeks(2)));
 
-                            const removedAllAmount = reserveAmounts[poolToken.address][networkToken.address][provider];
-                            prevBalance = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, networkToken, removedAllAmount);
-                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(
-                                prevBalance.add(reward)
+                            let expectedRewards = getExpectedRewards(provider, duration.weeks(2)).add(
+                                debt.mul(bestMultiplier).div(PPM_RESOLUTION)
                             );
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(expectedRewards, MAX_REWARDS_ERROR);
+
+                            // Should retroactively apply the four weeks multiplier on the unclaimed rewards.
+                            await setTime(now.add(duration.weeks(2)));
+
+                            const multiplier3 = getRewardsMultiplier(duration.weeks(4));
+                            bestMultiplier = BN.max(multiplier2, multiplier3);
+                            reward = await staking.rewardsOf.call(provider);
+
+                            expectedRewards = getExpectedRewards(provider, duration.weeks(4)).add(
+                                debt.mul(bestMultiplier).div(PPM_RESOLUTION)
+                            );
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(expectedRewards, MAX_REWARDS_ERROR);
+
+                            // Remove all the remaining liquidity after two weeks.
+                            await setTime(now.add(duration.weeks(2)));
+
+                            const unclaimed2 = await staking.rewardsOf.call(provider);
+                            expect(unclaimed2).to.be.bignumber.closeTo(
+                                getExpectedRewards(provider, duration.weeks(6)).add(
+                                    debt.mul(bestMultiplier).div(PPM_RESOLUTION)
+                                ),
+                                MAX_REWARDS_ERROR
+                            );
+                            const debMultiplier2 = getRewardsMultiplier(duration.weeks(2));
+                            const debt2 = unclaimed2.mul(PPM_RESOLUTION).div(debMultiplier2);
+
+                            const prevBalance2 = await networkToken.balanceOf.call(provider);
+                            await removeLiquidity(provider, poolToken, reserveToken, partialAmount);
+                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance2);
+
+                            // Should not affect the claimable amount.
+                            reward = await staking.rewardsOf.call(provider);
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(
+                                debt2.mul(debMultiplier2).div(PPM_RESOLUTION),
+                                MAX_REWARDS_ERROR
+                            );
+
+                            await setTime(now.add(duration.weeks(1)));
+
+                            // Should retroactively apply the one weeks multiplier on the debt rewards.
+                            const multiplier4 = getRewardsMultiplier(duration.weeks(1));
+                            bestMultiplier = BN.max(debMultiplier2, multiplier4);
+                            reward = await staking.rewardsOf.call(provider);
+
+                            expectedRewards = getExpectedRewards(provider, duration.weeks(1)).add(
+                                debt2.mul(bestMultiplier).div(PPM_RESOLUTION)
+                            );
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(expectedRewards, MAX_REWARDS_ERROR);
+                        });
+
+                        it('should allow claiming rewards after removing liquidity', async () => {
+                            // Should return all rewards for four weeks, with the four weeks multiplier bonus
+                            await setTime(programStartTime.add(duration.weeks(1)));
+
+                            const unclaimed = await staking.rewardsOf.call(provider);
+                            expect(unclaimed).to.be.bignumber.equal(getExpectedRewards(provider, duration.weeks(1)));
+                            const debMultiplier = getRewardsMultiplier(duration.weeks(1));
+                            const debt = unclaimed.mul(PPM_RESOLUTION).div(debMultiplier);
+
+                            // Remove all the liquidity.
+                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
+                            const prevBalance = await networkToken.balanceOf.call(provider);
+                            await removeLiquidity(provider, poolToken, reserveToken, fullAmount);
+                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
+
+                            // Should not affect the claimable amount.
+                            let reward = await staking.rewardsOf.call(provider);
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(
+                                debt.mul(debMultiplier).div(PPM_RESOLUTION),
+                                MAX_REWARDS_ERROR
+                            );
+
+                            const claimed = await staking.claimRewards.call({ from: provider });
+                            expect(claimed).to.be.bignumber.equal(reward);
+                            const prevBalance2 = await networkToken.balanceOf.call(provider);
+                            const tx = await staking.claimRewards({ from: provider });
+                            if (claimed.gt(new BN(0))) {
+                                expectEvent(tx, 'RewardsClaimed', {
+                                    provider,
+                                    amount: claimed
+                                });
+                            }
+                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(
+                                prevBalance2.add(reward)
+                            );
+
                             expect(await staking.rewardsOf.call(provider)).to.be.bignumber.equal(new BN(0));
                         });
                     });

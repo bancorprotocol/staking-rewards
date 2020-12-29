@@ -49,7 +49,8 @@ describe('StakingRewardsStore', () => {
 
         return {
             lastUpdateTime: data[0],
-            rewardPerToken: data[1]
+            rewardPerToken: data[1],
+            totalClaimedRewards: data[2]
         };
     };
 
@@ -377,7 +378,7 @@ describe('StakingRewardsStore', () => {
 
         it('should revert when a non-owner attempts to update pool rewards', async () => {
             await expectRevert(
-                store.updateRewardData(poolToken.address, reserveToken.address, new BN(1000), new BN(0), {
+                store.updateRewardData(poolToken.address, reserveToken.address, new BN(0), new BN(1000), new BN(1000), {
                     from: nonOwner
                 }),
                 'ERR_ACCESS_DENIED'
@@ -386,18 +387,29 @@ describe('StakingRewardsStore', () => {
 
         it('should update pool rewards data', async () => {
             let poolData = await getPoolRewards(poolToken, reserveToken);
-            expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
             expect(poolData.lastUpdateTime).to.be.bignumber.equal(new BN(0));
+            expect(poolData.rewardPerToken).to.be.bignumber.equal(new BN(0));
+            expect(poolData.totalClaimedRewards).to.be.bignumber.equal(new BN(0));
 
-            const rewardPerToken = new BN(10000);
             const lastUpdateTime = new BN(123);
-            await store.updateRewardData(poolToken.address, reserveToken.address, rewardPerToken, lastUpdateTime, {
-                from: owner
-            });
+            const rewardPerToken = new BN(10000);
+            const totalClaimedRewards = new BN(5555555);
+
+            await store.updateRewardData(
+                poolToken.address,
+                reserveToken.address,
+                lastUpdateTime,
+                rewardPerToken,
+                totalClaimedRewards,
+                {
+                    from: owner
+                }
+            );
 
             poolData = await getPoolRewards(poolToken, reserveToken);
-            expect(poolData.rewardPerToken).to.be.bignumber.equal(rewardPerToken);
             expect(poolData.lastUpdateTime).to.be.bignumber.equal(lastUpdateTime);
+            expect(poolData.rewardPerToken).to.be.bignumber.equal(rewardPerToken);
+            expect(poolData.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewards);
         });
     });
 

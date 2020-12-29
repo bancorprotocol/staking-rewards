@@ -99,11 +99,12 @@ describe('StakingRewards', () => {
     };
 
     const getPoolRewards = async (poolToken, reserveToken) => {
-        const data = await store.rewards.call(poolToken.address, reserveToken.address);
+        const data = await store.rewards.call(poolToken.address || poolToken, reserveToken.address || reserveToken);
 
         return {
             lastUpdateTime: data[0],
-            rewardPerToken: data[1]
+            rewardPerToken: data[1],
+            totalClaimedRewards: data[2]
         };
     };
 
@@ -464,6 +465,19 @@ describe('StakingRewards', () => {
             return reward;
         };
 
+        const getTotalClaimed = async (provider) => {
+            let totalClaimedRewards = new BN(0);
+
+            for (const [poolToken, reserveTokens] of Object.entries(providerPools[provider])) {
+                for (const reserveToken of reserveTokens) {
+                    const poolRewards = await getPoolRewards(poolToken, reserveToken);
+                    totalClaimedRewards = totalClaimedRewards.add(poolRewards.totalClaimedRewards);
+                }
+            }
+
+            return totalClaimedRewards;
+        };
+
         let programStartTime;
         let programEndTime;
 
@@ -490,7 +504,10 @@ describe('StakingRewards', () => {
 
             const claimed = await staking.claimRewards.call({ from: provider });
             expect(claimed).to.be.bignumber.equal(reward);
+
             const prevBalance = await networkToken.balanceOf.call(provider);
+            const prevTotalClaimed = await getTotalClaimed(provider);
+
             const tx = await staking.claimRewards({ from: provider });
             if (claimed.gt(new BN(0))) {
                 expectEvent(tx, 'RewardsClaimed', {
@@ -498,7 +515,9 @@ describe('StakingRewards', () => {
                     amount: claimed
                 });
             }
+
             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance.add(reward));
+            expect(await getTotalClaimed(provider)).to.be.bignumber.equal(prevTotalClaimed.add(reward));
 
             expect(await staking.rewardsOf.call(provider)).to.be.bignumber.equal(new BN(0));
         };
@@ -510,6 +529,7 @@ describe('StakingRewards', () => {
             expect(data[0]).to.be.bignumber.equal(amount);
 
             const prevProviderBalance = await networkToken.balanceOf.call(provider);
+            const prevTotalClaimed = await getTotalClaimed(provider);
             const pervLiquidityProtectionBalance = await networkToken.balanceOf.call(liquidityProtection.address);
 
             const tx = await staking.stakeRewards(amount, newPoolToken.address, { from: provider });
@@ -526,6 +546,7 @@ describe('StakingRewards', () => {
             }
 
             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevProviderBalance);
+            expect(await getTotalClaimed(provider)).to.be.bignumber.equal(prevTotalClaimed.add(data[0]));
             expect(await networkToken.balanceOf.call(liquidityProtection.address)).to.be.bignumber.equal(
                 pervLiquidityProtectionBalance.add(amount)
             );

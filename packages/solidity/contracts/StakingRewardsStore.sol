@@ -194,10 +194,19 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return rewards data
      */
-    function rewards(IERC20 poolToken, IERC20 reserveToken) external view override returns (uint256, uint256) {
+    function rewards(IERC20 poolToken, IERC20 reserveToken)
+        external
+        view
+        override
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         Rewards memory data = _rewards[poolToken][reserveToken];
 
-        return (data.lastUpdateTime, data.rewardPerToken);
+        return (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards);
     }
 
     /**
@@ -205,18 +214,22 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @param poolToken the pool token representing the LM pool
      * @param reserveToken the reserve token in the LM pool
-     * @param rewardPerToken the new reward rate per-token
      * @param lastUpdateTime the last upate time
+     * @param rewardPerToken the new reward rate per-token
+
+     * @param totalClaimedRewards the total claimed rewards up until now
      */
     function updateRewardData(
         IERC20 poolToken,
         IERC20 reserveToken,
+        uint256 lastUpdateTime,
         uint256 rewardPerToken,
-        uint256 lastUpdateTime
+        uint256 totalClaimedRewards
     ) external override onlyOwner {
         Rewards storage data = _rewards[poolToken][reserveToken];
-        data.rewardPerToken = rewardPerToken;
         data.lastUpdateTime = lastUpdateTime;
+        data.rewardPerToken = rewardPerToken;
+        data.totalClaimedRewards = totalClaimedRewards;
     }
 
     /**

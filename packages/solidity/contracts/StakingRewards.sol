@@ -39,6 +39,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the weekly 25% increase of the rewards multiplier (in units of PPM)
     uint32 private constant MULTIPLIER_INCREMENT = PPM_RESOLUTION / 4;
 
+    // the maximum weekly 200% rewards multiplier (in units of PPM)
+    uint32 private constant MAX_MULTIPLIER = PPM_RESOLUTION + MULTIPLIER_INCREMENT * 4;
+
     // since we will be dividing by the total amount of protected tokens in units of wei, we can encounter cases
     // where the total amount in the denominator is higher than the product of the rewards rate and staking duration. In
     // order to avoid this imprecision, we will amplify the reward rate by the units amount.
@@ -275,20 +278,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             }
 
             // calculate the claimable base rewards (since the last claim).
+            Rewards memory rewardsData = rewards(poolToken, reserveToken);
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
             uint256 newBaseRewards =
-                baseRewards(
-                    provider,
-                    poolToken,
-                    reserveToken,
-                    rewards(poolToken, reserveToken),
-                    providerRewards,
-                    program,
-                    lpStore
-                );
+                baseRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
 
-            // make sure that we aren't exceeding the reward rate for any reason.
-            verifyBaseReward(newBaseRewards, providerRewards, program);
+            // make sure that we aren't exceeding the base reward rate for any reason.
+            verifyBaseReward(newBaseRewards, providerRewards.effectiveStakingTime, reserveToken, program);
 
             // calculate pending rewards and apply the rewards multiplier.
             uint32 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
@@ -296,12 +292,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
 
             // add any pending rewards, while applying the best retractive multiplier.
-            uint256 bestMultiplier = Math.max(multiplier, providerRewards.baseRewardsDebtMultiplier);
-            if (bestMultiplier == PPM_RESOLUTION) {
-                fullReward = fullReward.add(providerRewards.baseRewardsDebt);
-            } else {
-                fullReward = fullReward.add(providerRewards.baseRewardsDebt.mul(bestMultiplier).div(PPM_RESOLUTION));
-            }
+            fullReward = fullReward.add(
+                applyBestMultiplier(
+                    providerRewards.baseRewardsDebt,
+                    multiplier,
+                    providerRewards.baseRewardsDebtMultiplier
+                )
+            );
+
+            // make sure that we aren't exceeding the full reward rate for any reason.
+            verifyFullReward(fullReward, reserveToken, rewardsData, program);
 
             if (claim) {
                 if (maxAmount != MAX_UINT256) {
@@ -338,9 +338,18 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
             reward = reward.add(fullReward);
 
-            // update store data with the remaining pending rewards and set the last update time to the timestamp of the
-            // current block.
             if (claim) {
+                // update pool rewards data total claimed rewards.
+                _store.updateRewardData(
+                    poolToken,
+                    reserveToken,
+                    rewardsData.lastUpdateTime,
+                    rewardsData.rewardPerToken,
+                    rewardsData.totalClaimedRewards.add(fullReward)
+                );
+
+                // update provider rewards data with the remaining pending rewards and set the last update time to the
+                // timestamp of the current block.
                 _store.updateProviderRewardData(
                     provider,
                     poolToken,
@@ -523,20 +532,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             updateRewards(provider, poolToken, reserveToken, lpStore);
 
             // calculate the claimable base rewards (since the last claim).
+            Rewards memory rewardsData = rewards(poolToken, reserveToken);
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
             uint256 newBaseRewards =
-                baseRewards(
-                    provider,
-                    poolToken,
-                    reserveToken,
-                    rewards(poolToken, reserveToken),
-                    providerRewards,
-                    program,
-                    lpStore
-                );
+                baseRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
 
             // make sure that we aren't exceeding the reward rate for any reason.
-            verifyBaseReward(newBaseRewards, providerRewards, program);
+            verifyBaseReward(newBaseRewards, providerRewards.effectiveStakingTime, reserveToken, program);
 
             // calculate pending rewards and apply the rewards multiplier.
             uint32 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
@@ -544,12 +546,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
 
             // add any pending rewards, while applying the best retractive multiplier.
-            uint256 bestMultiplier = Math.max(multiplier, providerRewards.baseRewardsDebtMultiplier);
-            if (bestMultiplier == PPM_RESOLUTION) {
-                fullReward = fullReward.add(providerRewards.baseRewardsDebt);
-            } else {
-                fullReward = fullReward.add(providerRewards.baseRewardsDebt.mul(bestMultiplier).div(PPM_RESOLUTION));
-            }
+            fullReward = fullReward.add(
+                applyBestMultiplier(
+                    providerRewards.baseRewardsDebt,
+                    multiplier,
+                    providerRewards.baseRewardsDebtMultiplier
+                )
+            );
+
+            // make sure that we aren't exceeding the full reward rate for any reason.
+            verifyFullReward(fullReward, reserveToken, rewardsData, program);
 
             // get the amount of the actual base rewards that were claimed
             if (multiplier == PPM_RESOLUTION) {
@@ -576,8 +582,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     /**
      * @dev returns the aggregated reward rate per-token
      *
-     * @param rewardsData the rewards data of the pool
+     * @param poolToken the list of participating pools to query
      * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param rewardsData the rewards data of the pool
      * @param program the pool program info
      * @param lpStore liquidity protection data store
      *
@@ -670,7 +677,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         // calculate the new reward rate per-token and update it in the store
         uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore);
-        _store.updateRewardData(poolToken, reserveToken, newRewardPerToken, Math.min(time(), program.endTime));
+        _store.updateRewardData(
+            poolToken,
+            reserveToken,
+            Math.min(time(), program.endTime),
+            newRewardPerToken,
+            rewardsData.totalClaimedRewards
+        );
 
         // update provider's rewards with the newly claimable base rewards and the new rewared rate per-token
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
@@ -766,7 +779,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      */
     function rewards(IERC20 poolToken, IERC20 reserveToken) internal view returns (Rewards memory) {
         Rewards memory data;
-        (data.lastUpdateTime, data.rewardPerToken) = _store.rewards(poolToken, reserveToken);
+        (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards) = _store.rewards(poolToken, reserveToken);
 
         return data;
     }
@@ -798,30 +811,92 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev applies the best of two rewards multipliers on the provided amount
+     *
+     * @param amount the amount of the reward
+     * @param multiplier1 the first multiplier
+     * @param multiplier2 the second multipliero
+     *
+     * @return new reward amount
+     */
+    function applyBestMultiplier(
+        uint256 amount,
+        uint32 multiplier1,
+        uint32 multiplier2
+    ) private pure returns (uint256) {
+        uint256 bestMultiplier = Math.max(multiplier1, multiplier2);
+        if (bestMultiplier == PPM_RESOLUTION) {
+            return amount;
+        }
+
+        return amount.mul(bestMultiplier).div(PPM_RESOLUTION);
+    }
+
+    /**
      * @dev performs a sanity check on the newly claimable base rewards
      *
-     * @param baseReward the base rewards to checl
-     * @param providerRewardsData the rewards data of the provider
+     * @param baseReward the base reward to check
+     * @param stakingStartTime the staking time in the pool
+     * @param reserveToken the reserve token representing the liquidity in the pool
      * @param program the pool program info
      */
     function verifyBaseReward(
         uint256 baseReward,
-        ProviderRewards memory providerRewardsData,
+        uint256 stakingStartTime,
+        IERC20 reserveToken,
         PoolProgram memory program
     ) private view {
         // don't grant any rewards before the starting time of the program or for stakes after the end of the program
         uint256 currentTime = time();
-        if (currentTime < program.startTime || providerRewardsData.effectiveStakingTime >= program.endTime) {
-            require(baseReward == 0, "ERR_REWARD_TOO_HIGH");
+        if (currentTime < program.startTime || stakingStartTime >= program.endTime) {
+            require(baseReward == 0, "ERR_BASE_REWARD_TOO_HIGH");
 
             return;
         }
 
-        uint256 stakingStartTime = Math.max(providerRewardsData.effectiveStakingTime, program.startTime);
-        uint256 stakingEndTime = Math.min(currentTime, program.endTime);
+        uint256 effectiveStakingStartTime = Math.max(stakingStartTime, program.startTime);
+        uint256 effectiveStakingEndTime = Math.min(currentTime, program.endTime);
 
-        // make sure that we aren't exceeding the reward rate for any reason
-        require(baseReward <= program.rewardRate.mul(stakingEndTime.sub(stakingStartTime)), "ERR_REWARD_RATE_TOO_HIGH");
+        // make sure that we aren't exceeding the base reward rate for any reason
+        require(
+            baseReward <=
+                program
+                    .rewardRate
+                    .mul(effectiveStakingEndTime.sub(effectiveStakingStartTime))
+                    .mul(rewardShare(reserveToken, program))
+                    .div(PPM_RESOLUTION),
+            "ERR_BASE_REWARD_RATE_TOO_HIGH"
+        );
+    }
+
+    /**
+     * @dev performs a sanity check on the newly claimable full rewards
+     *
+     * @param fullReward the full reward to check
+     * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param rewardsData the rewards data of the pool
+     * @param program the pool program info
+     */
+    function verifyFullReward(
+        uint256 fullReward,
+        IERC20 reserveToken,
+        Rewards memory rewardsData,
+        PoolProgram memory program
+    ) private pure {
+        uint256 maxClaimableReward =
+            (
+                program
+                    .rewardRate
+                    .mul(program.endTime.sub(program.startTime))
+                    .mul(rewardShare(reserveToken, program))
+                    .mul(MAX_MULTIPLIER)
+                    .div(PPM_RESOLUTION)
+                    .div(PPM_RESOLUTION)
+            )
+                .sub(rewardsData.totalClaimedRewards);
+
+        // make sure that we aren't exceeding the full reward rate for any reason
+        require(fullReward <= maxClaimableReward, "ERR_REWARD_RATE_TOO_HIGH");
     }
 
     /**

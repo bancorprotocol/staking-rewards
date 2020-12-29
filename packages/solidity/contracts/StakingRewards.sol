@@ -129,8 +129,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev liquidity provision notification callback. can be only called by the current LiquidityProtection contract and
-     * for participating pool and reserve tokens (the check is performed by the store).
+     * @dev liquidity provision notification callback. The callback should be called *after* the liquidity is added in
+     * the LP contract.
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the LM pool
@@ -152,8 +152,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev liquidity removal callback. can be only called by the current LiquidityProtection contract and
-     * for participating pool and reserve tokens (the check is performed by the store).
+     * @dev liquidity removal callback. The callback must be called *before* the liquidity is removed in the LP
+     * contract.
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the LM pool
@@ -173,10 +173,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         ILiquidityProtectionDataStore lpStore = liquidityProtectionStore();
 
-        // claim all pending rewards before handling the removal of the liquidity.
-        claimRewards(provider, lpStore);
-
-        updateRewards(provider, poolToken, reserveToken, lpStore);
+        // make sure that all pending rewards are properly stored for future claims, with retroactive rewards
+        // multipliers.
+        storeRewards(provider, lpStore.providerPools(provider), lpStore);
     }
 
     /**
@@ -481,6 +480,97 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         emit RewardsStaked(msg.sender, newPoolToken, amount, newId);
 
         return (amount, newId);
+    }
+
+    /**
+     * @dev store specific provider's pending rewards for future claims.
+     *
+     * @param provider the owner of the liquidity
+     * @param poolTokens the list of participating pools to query
+     * @param lpStore liquidity protection data store
+     *
+     */
+    function storeRewards(
+        address provider,
+        IERC20[] memory poolTokens,
+        ILiquidityProtectionDataStore lpStore
+    ) private {
+        uint256 length = poolTokens.length;
+        for (uint256 i = 0; i < length; ++i) {
+            storeRewards(provider, poolTokens[i], lpStore);
+        }
+    }
+
+    /**
+     * @dev store specific provider's pending rewards for future claims.
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the list of participating pools to query
+     * @param lpStore liquidity protection data store
+     *
+     */
+    function storeRewards(
+        address provider,
+        IERC20 poolToken,
+        ILiquidityProtectionDataStore lpStore
+    ) private {
+        PoolProgram memory program = poolProgram(poolToken);
+
+        for (uint256 i = 0; i < program.reserveTokens.length; ++i) {
+            IERC20 reserveToken = program.reserveTokens[i];
+
+            // update all provider's pending rewards, in order to apply retroactive reward multipliers.
+            updateRewards(provider, poolToken, reserveToken, lpStore);
+
+            // calculate the claimable base rewards (since the last claim).
+            ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+            uint256 newBaseRewards =
+                baseRewards(
+                    provider,
+                    poolToken,
+                    reserveToken,
+                    rewards(poolToken, reserveToken),
+                    providerRewards,
+                    program,
+                    lpStore
+                );
+
+            // make sure that we aren't exceeding the reward rate for any reason.
+            verifyBaseReward(newBaseRewards, providerRewards, program);
+
+            // calculate pending rewards and apply the rewards multiplier.
+            uint32 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
+            uint256 fullReward =
+                providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
+
+            // add any pending rewards, while applying the best retractive multiplier.
+            uint256 bestMultiplier = Math.max(multiplier, providerRewards.baseRewardsDebtMultiplier);
+            if (bestMultiplier == PPM_RESOLUTION) {
+                fullReward = fullReward.add(providerRewards.baseRewardsDebt);
+            } else {
+                fullReward = fullReward.add(providerRewards.baseRewardsDebt.mul(bestMultiplier).div(PPM_RESOLUTION));
+            }
+
+            // get the amount of the actual base rewards that were claimed
+            if (multiplier == PPM_RESOLUTION) {
+                providerRewards.baseRewardsDebt = fullReward;
+            } else {
+                providerRewards.baseRewardsDebt = fullReward.mul(PPM_RESOLUTION).div(multiplier);
+            }
+
+            // update store data with the store pending rewards and set the last update time to the timestamp of the
+            // current block.
+            _store.updateProviderRewardData(
+                provider,
+                poolToken,
+                reserveToken,
+                providerRewards.rewardPerToken,
+                0,
+                time(),
+                providerRewards.baseRewardsDebt,
+                multiplier
+            );
+        }
     }
 
     /**

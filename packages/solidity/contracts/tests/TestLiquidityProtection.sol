@@ -27,6 +27,24 @@ contract TestLiquidityProtection is ILiquidityProtection {
         return _store;
     }
 
+    function addLiquidityFor(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        uint256 reserveAmount
+    ) external payable override returns (uint256) {
+        _provider = provider;
+        _poolToken = poolToken;
+        _reserveToken = reserveToken;
+        _reserveAmount = reserveAmount;
+
+        reserveToken.safeTransferFrom(msg.sender, address(this), reserveAmount);
+
+        _stakingRewards.addLiquidity(provider, poolToken, reserveToken, 0, reserveAmount, 0);
+
+        return 0;
+    }
+
     function addLiquidity(
         address provider,
         IERC20 poolToken,
@@ -46,27 +64,9 @@ contract TestLiquidityProtection is ILiquidityProtection {
         IERC20 reserveToken,
         uint256 removedReserveAmount
     ) external payable returns (uint256) {
-        _store.removeLiquidity(provider, poolToken, reserveToken, removedReserveAmount);
-
         _stakingRewards.removeLiquidity(provider, poolToken, reserveToken, 0, removedReserveAmount, 0);
 
-        return 0;
-    }
-
-    function addLiquidityFor(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 reserveAmount
-    ) external payable override returns (uint256) {
-        _provider = provider;
-        _poolToken = poolToken;
-        _reserveToken = reserveToken;
-        _reserveAmount = reserveAmount;
-
-        reserveToken.safeTransferFrom(msg.sender, address(this), reserveAmount);
-
-        _stakingRewards.addLiquidity(provider, poolToken, reserveToken, 0, reserveAmount, 0);
+        _store.removeLiquidity(provider, poolToken, reserveToken, removedReserveAmount, false);
 
         return 0;
     }

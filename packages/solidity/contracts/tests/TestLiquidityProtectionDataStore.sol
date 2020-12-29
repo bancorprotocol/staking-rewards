@@ -72,7 +72,8 @@ contract TestLiquidityProtectionDataStore is ILiquidityProtectionDataStore {
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
-        uint256 removedReserveAmount
+        uint256 removedReserveAmount,
+        bool removePool
     ) external {
         _totalAmounrs[poolToken][reserveToken] = _totalAmounrs[poolToken][reserveToken].sub(removedReserveAmount);
 
@@ -81,7 +82,7 @@ contract TestLiquidityProtectionDataStore is ILiquidityProtectionDataStore {
         );
 
         // if the provider doesn't provide any more liqudiity - remove the pools from its list.
-        if (_providerAmounts[provider][poolToken][reserveToken] == 0) {
+        if (removePool && _providerAmounts[provider][poolToken][reserveToken] == 0) {
             PoolProgram memory program = poolProgram(poolToken);
             IERC20 reserveToken2 =
                 program.reserveTokens[0] == reserveToken ? program.reserveTokens[1] : program.reserveTokens[0];

@@ -42,6 +42,8 @@ const SMALL_POOL_BASE_REWARD_RATE = new BN(10000)
     .mul(new BN(10).pow(new BN(18)))
     .div(duration.weeks(1));
 
+const MAX_REWARDS_ERROR = new BN(10);
+
 const getRewardsMultiplier = (stakingDuration) => {
     // For 0 <= x <= 1 weeks: 100% PPM
     if (stakingDuration.gte(duration.weeks(0)) && stakingDuration.lt(duration.weeks(1))) {
@@ -101,8 +103,7 @@ describe('StakingRewards', () => {
 
         return {
             lastUpdateTime: data[0],
-            rewardPerToken: data[1],
-            totalReserveAmount: data[2]
+            rewardPerToken: data[1]
         };
     };
 
@@ -114,8 +115,7 @@ describe('StakingRewards', () => {
             pendingBaseRewards: data[1],
             effectiveStakingTime: data[2],
             baseRewardsDebt: data[3],
-            baseRewardsDebtMultiplier: data[4],
-            reserveAmount: data[5]
+            baseRewardsDebtMultiplier: data[4]
         };
     };
 
@@ -328,10 +328,7 @@ describe('StakingRewards', () => {
             };
 
             for (const provider of providers) {
-                providerPools[provider] = {
-                    poolTokens: [],
-                    reserveTokens: []
-                };
+                providerPools[provider] = {};
 
                 reserveAmounts[poolToken.address][reserveToken.address][provider] = new BN(0);
                 reserveAmounts[poolToken.address][networkToken.address][provider] = new BN(0);
@@ -343,12 +340,13 @@ describe('StakingRewards', () => {
         });
 
         const addTestLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
-            if (!providerPools[provider].poolTokens.includes(poolToken.address)) {
-                providerPools[provider].poolTokens.push(poolToken.address);
+            if (!providerPools[provider][poolToken.address]) {
+                providerPools[provider][poolToken.address] = [];
             }
 
-            if (!providerPools[provider].reserveTokens.includes(reserveToken.address)) {
-                providerPools[provider].reserveTokens.push(reserveToken.address);
+            const reserveTokens = providerPools[provider][poolToken.address];
+            if (!reserveTokens.includes(reserveToken.address)) {
+                reserveTokens.push(reserveToken.address);
             }
 
             reserveAmounts[poolToken.address][reserveToken.address][provider] = reserveAmounts[poolToken.address][
@@ -386,16 +384,21 @@ describe('StakingRewards', () => {
             ].sub(removedReserveAmount);
 
             if (reserveAmounts[poolToken.address][reserveToken.address][provider].eq(new BN(0))) {
-                providerPools[provider].reserveTokens.splice(
-                    providerPools[provider].reserveTokens.indexOf(reserveToken.address),
+                providerPools[provider][poolToken.address].splice(
+                    providerPools[provider][poolToken.address].indexOf(reserveToken.address),
                     1
                 );
 
-                if (providerPools[provider].reserveTokens.length === 0) {
-                    providerPools[provider].poolTokens.splice(
-                        providerPools[provider].poolTokens.indexOf(poolToken.address),
-                        1
-                    );
+                let reserveToken2;
+                if (providerPools[provider][poolToken.address].length > 0) {
+                    reserveToken2 = providerPools[provider][poolToken.address][0];
+                }
+
+                if (
+                    !reserveToken2 ||
+                    reserveAmounts[poolToken.address][reserveToken2.address][provider].eq(new BN(0))
+                ) {
+                    providerPools[provider].poolTokens = [];
                 }
             }
         };
@@ -436,26 +439,25 @@ describe('StakingRewards', () => {
                 return reward;
             }
 
-            const { poolTokens, reserveTokens } = providerPools[provider];
-            for (const poolToken of poolTokens) {
+            for (const [poolToken, reserveTokens] of Object.entries(providerPools[provider])) {
                 for (const reserveToken of reserveTokens) {
                     const rewardShare =
                         reserveToken === networkToken.address ? NETWORK_TOKEN_REWARDS_SHARE : BASE_TOKEN_REWARDS_SHARE;
 
-                    reward = reward.add(
-                        reserveAmounts[poolToken][reserveToken][provider]
-                            .mul(
-                                duration
-                                    .mul(programs[poolToken].rewardRate)
-                                    .mul(REWARD_RATE_FACTOR)
-                                    .mul(rewardShare)
-                                    .div(PPM_RESOLUTION)
-                                    .div(totalReserveAmounts[poolToken][reserveToken])
-                            )
-                            .div(REWARD_RATE_FACTOR)
-                            .mul(getRewardsMultiplier(multiplierDuration || duration))
-                            .div(PPM_RESOLUTION)
-                    );
+                    const currentReward = reserveAmounts[poolToken][reserveToken][provider]
+                        .mul(
+                            duration
+                                .mul(programs[poolToken].rewardRate)
+                                .mul(REWARD_RATE_FACTOR)
+                                .mul(rewardShare)
+                                .div(PPM_RESOLUTION)
+                                .div(totalReserveAmounts[poolToken][reserveToken])
+                        )
+                        .div(REWARD_RATE_FACTOR)
+                        .mul(getRewardsMultiplier(multiplierDuration || duration))
+                        .div(PPM_RESOLUTION);
+
+                    reward = reward.add(currentReward);
                 }
             }
 
@@ -537,7 +539,7 @@ describe('StakingRewards', () => {
 
             // take into account that there there might be very small imprecisions when dealing with
             // multipliers
-            expect(newReward).to.be.bignumber.closeTo(reward.sub(amount), new BN(1));
+            expect(newReward).to.be.bignumber.closeTo(reward.sub(amount), MAX_REWARDS_ERROR);
 
             return newReward;
         };
@@ -547,7 +549,7 @@ describe('StakingRewards', () => {
                 context(`provider #${i + 1}`, async () => {
                     const provider = providers[i];
 
-                    describe('rewards', async () => {
+                    describe('querying', async () => {
                         it('should properly calculate all rewards', async () => {
                             // Should return no rewards before the program has started.
                             await testRewards(provider, new BN(0));
@@ -616,7 +618,7 @@ describe('StakingRewards', () => {
                         });
                     });
 
-                    describe('staking rewards', async () => {
+                    describe('staking', async () => {
                         beforeEach(async () => {
                             await setTime(programStartTime);
                         });
@@ -742,8 +744,66 @@ describe('StakingRewards', () => {
                         });
                     });
 
-                    describe('removal', async () => {
-                        it.skip('should claim all rewards when removing liquidity', async () => {
+                    describe('removing', async () => {
+                        it('should keep all rewards when removing liquidity', async () => {
+                            // Should return all rewards for four weeks, with the four weeks multiplier bonus
+                            await setTime(programStartTime.add(duration.weeks(1)));
+
+                            const unclaimed = await staking.rewardsOf.call(provider);
+                            expect(unclaimed).to.be.bignumber.equal(getExpectedRewards(provider, duration.weeks(1)));
+                            const debMultiplier = getRewardsMultiplier(duration.weeks(1));
+                            const debt = unclaimed.mul(PPM_RESOLUTION).div(debMultiplier);
+
+                            // Remove all the liquidity.
+                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
+                            const prevBalance = await networkToken.balanceOf.call(provider);
+                            await removeLiquidity(provider, poolToken, reserveToken, fullAmount);
+                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
+
+                            // Should not affect the claimable amount.
+                            let reward = await staking.rewardsOf.call(provider);
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(
+                                debt.mul(debMultiplier).div(PPM_RESOLUTION),
+                                MAX_REWARDS_ERROR
+                            );
+
+                            await setTime(now.add(duration.weeks(1)));
+
+                            // Should retroactively apply the two weeks multiplier on the debt rewards.
+                            const multiplier2 = getRewardsMultiplier(duration.weeks(1));
+                            let bestMultiplier = BN.max(debMultiplier, multiplier2);
+                            reward = await staking.rewardsOf.call(provider);
+
+                            let expectedRewards = getExpectedRewards(provider, duration.weeks(1)).add(
+                                debt.mul(bestMultiplier).div(PPM_RESOLUTION)
+                            );
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(expectedRewards, MAX_REWARDS_ERROR);
+
+                            // Should retroactively apply the three weeks multiplier on the unclaimed rewards.
+                            await setTime(now.add(duration.weeks(2)));
+
+                            const pRewardsReserveToken2 = await getProviderRewards(provider, poolToken, reserveToken);
+
+                            const multiplier3 = getRewardsMultiplier(duration.weeks(3));
+                            bestMultiplier = BN.max(multiplier2, multiplier3);
+                            reward = await staking.rewardsOf.call(provider);
+
+                            expectedRewards = getExpectedRewards(provider, duration.weeks(3)).add(
+                                debt.mul(bestMultiplier).div(PPM_RESOLUTION)
+                            );
+
+                            // take into account that there there might be very small imprecisions when dealing with
+                            // multipliers.
+                            expect(reward).to.be.bignumber.closeTo(expectedRewards, MAX_REWARDS_ERROR);
+                        });
+
+                        it.skip('should keep all rewards when partially removing liquidity', async () => {
                             // Should return all rewards for three weeks, with the three weeks multiplier bonus
                             await setTime(programStartTime.add(duration.weeks(3)));
 

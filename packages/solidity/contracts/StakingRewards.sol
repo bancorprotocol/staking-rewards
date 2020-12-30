@@ -293,7 +293,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
             // add any pending rewards, while applying the best retractive multiplier.
             fullReward = fullReward.add(
-                applyBestMultiplier(
+                applyHigherMultiplier(
                     providerRewards.baseRewardsDebt,
                     multiplier,
                     providerRewards.baseRewardsDebtMultiplier
@@ -547,7 +547,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
             // add any pending rewards, while applying the best retractive multiplier.
             fullReward = fullReward.add(
-                applyBestMultiplier(
+                applyHigherMultiplier(
                     providerRewards.baseRewardsDebt,
                     multiplier,
                     providerRewards.baseRewardsDebtMultiplier
@@ -819,7 +819,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return new reward amount
      */
-    function applyBestMultiplier(
+    function applyHigherMultiplier(
         uint256 amount,
         uint32 multiplier1,
         uint32 multiplier2

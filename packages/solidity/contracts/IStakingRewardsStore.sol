@@ -26,7 +26,7 @@ struct ProviderRewards {
 }
 
 interface IStakingRewardsStore {
-    function isParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) external view returns (bool);
+    function isReserveParticipating(IERC20 poolToken, IERC20 reserveToken) external view returns (bool);
 
     function addPoolProgram(
         IERC20 poolToken,

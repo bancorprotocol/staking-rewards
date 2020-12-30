@@ -87,7 +87,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return whether the specified pool participates in the LM program
      */
-    function isParticipatingReserve(IERC20 poolToken, IERC20 reserveToken) public view override returns (bool) {
+    function isReserveParticipating(IERC20 poolToken, IERC20 reserveToken) public view override returns (bool) {
         PoolProgram memory program = _programs[poolToken];
         if (!isPoolParticipating(program)) {
             return false;

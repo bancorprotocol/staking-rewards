@@ -147,7 +147,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256, /* poolAmount */
         uint256 /* reserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
-        if (!_store.isParticipatingReserve(poolToken, reserveToken)) {
+        if (!_store.isReserveParticipating(poolToken, reserveToken)) {
             return;
         }
 
@@ -170,7 +170,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256, /* removedPoolAmount */
         uint256 /* removedReserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
-        if (!_store.isParticipatingReserve(poolToken, reserveToken)) {
+        if (!_store.isReserveParticipating(poolToken, reserveToken)) {
             return;
         }
 

@@ -203,8 +203,8 @@ describe('StakingRewardsStore', () => {
         });
 
         it('should allow managing pools', async () => {
-            expect(await store.isParticipatingReserve.call(poolToken.address, networkToken.address)).to.be.false();
-            expect(await store.isParticipatingReserve.call(poolToken.address, reserveToken.address)).to.be.false();
+            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
+            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
 
             const startTime = now;
             const endTime = startTime.add(new BN(2000));
@@ -224,8 +224,8 @@ describe('StakingRewardsStore', () => {
                 rewardRate
             });
 
-            expect(await store.isParticipatingReserve.call(poolToken.address, networkToken.address)).to.be.true();
-            expect(await store.isParticipatingReserve.call(poolToken.address, reserveToken.address)).to.be.true();
+            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
+            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
 
             const pool = await getPoolProgram(poolToken);
             expect(pool.startTime).to.be.bignumber.equal(startTime);
@@ -248,8 +248,8 @@ describe('StakingRewardsStore', () => {
                 'ERR_ALREADY_SUPPORTED'
             );
 
-            expect(await store.isParticipatingReserve.call(poolToken2.address, networkToken.address)).to.be.false();
-            expect(await store.isParticipatingReserve.call(poolToken2.address, reserveToken.address)).to.be.false();
+            expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
+            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken.address)).to.be.false();
 
             await setTime(now.add(new BN(100000)));
 
@@ -273,8 +273,8 @@ describe('StakingRewardsStore', () => {
                 rewardRate: rewardRate2
             });
 
-            expect(await store.isParticipatingReserve.call(poolToken2.address, networkToken.address)).to.be.true();
-            expect(await store.isParticipatingReserve.call(poolToken2.address, reserveToken.address)).to.be.true();
+            expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.true();
+            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken.address)).to.be.true();
 
             const pool2 = await getPoolProgram(poolToken2);
             expect(pool2.startTime).to.be.bignumber.equal(startTime2);
@@ -328,8 +328,8 @@ describe('StakingRewardsStore', () => {
                 const res = await store.removePoolProgram(poolToken.address, { from: owner });
                 expectEvent(res, 'PoolProgramRemoved', { poolToken: poolToken.address });
 
-                expect(await store.isParticipatingReserve.call(poolToken.address, networkToken.address)).to.be.false();
-                expect(await store.isParticipatingReserve.call(poolToken.address, reserveToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
             });
         });
     });

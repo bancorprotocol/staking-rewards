@@ -193,7 +193,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns specific provider's pending rewards for all  participating pools and optionally claims them.
+     * @dev returns specific provider's pending rewards for all participating pools and optionally claims them.
      *
      * @param provider the owner of the liquidity
      * @param claim whether to actually claim the rewards

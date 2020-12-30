@@ -608,14 +608,11 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ILiquidityProtectionDataStore lpStore
     ) internal view returns (uint256) {
         uint256 providerReserveAmount = lpStore.providerReserveAmount(provider, poolToken, reserveToken);
+        uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore);
 
         return
             providerReserveAmount // the protected tokens amount held by the provider
-                .mul(
-                rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore).sub(
-                    providerRewards.rewardPerToken
-                )
-            ) // multiplied by the difference between the previous and the current rate
+                .mul(newRewardPerToken.sub(providerRewards.rewardPerToken)) // multiplied by the difference between the previous and the current rate
                 .div(REWARD_RATE_FACTOR); // and factored back
     }
 
@@ -650,7 +647,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         // calculate pending rewards and apply the rewards multiplier.
         uint32 multiplier = rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
-        uint256 fullReward = providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
+        uint256 fullReward = providerRewards.pendingBaseRewards.add(newBaseRewards);
+        if (multiplier != PPM_RESOLUTION) {
+            fullReward = fullReward.mul(multiplier).div(PPM_RESOLUTION);
+        }
 
         // add any debt, while applying the best retractive multiplier.
         fullReward = fullReward.add(

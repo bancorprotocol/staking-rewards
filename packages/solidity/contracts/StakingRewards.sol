@@ -303,64 +303,64 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             // make sure that we aren't exceeding the full reward rate for any reason.
             verifyFullReward(fullReward, reserveToken, rewardsData, program);
 
-            if (claim) {
-                if (maxAmount != MAX_UINT256) {
-                    if (fullReward > maxAmount) {
-                        // get the amount of the actual base rewards that were claimed
-                        if (multiplier == PPM_RESOLUTION) {
-                            providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
-                        } else {
-                            providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(
-                                multiplier
-                            );
-                        }
+            if (!claim) {
+                reward = reward.add(fullReward);
 
-                        // store the current multiplier for future retroactive rewards correction
-                        providerRewards.baseRewardsDebtMultiplier = multiplier;
+                continue;
+            }
 
-                        // grant only maxAmount rewards
-                        fullReward = maxAmount;
-
-                        maxAmount = 0;
+            if (maxAmount != MAX_UINT256) {
+                if (fullReward > maxAmount) {
+                    // get the amount of the actual base rewards that were claimed
+                    if (multiplier == PPM_RESOLUTION) {
+                        providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
                     } else {
-                        // grant any pending rewards
-                        providerRewards.baseRewardsDebt = 0;
-                        providerRewards.baseRewardsDebtMultiplier = 0;
-
-                        maxAmount = maxAmount.sub(fullReward);
+                        providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
                     }
+
+                    // store the current multiplier for future retroactive rewards correction
+                    providerRewards.baseRewardsDebtMultiplier = multiplier;
+
+                    // grant only maxAmount rewards
+                    fullReward = maxAmount;
+
+                    maxAmount = 0;
                 } else {
                     // grant any pending rewards
                     providerRewards.baseRewardsDebt = 0;
                     providerRewards.baseRewardsDebtMultiplier = 0;
+
+                    maxAmount = maxAmount.sub(fullReward);
                 }
+            } else {
+                // grant any pending rewards
+                providerRewards.baseRewardsDebt = 0;
+                providerRewards.baseRewardsDebtMultiplier = 0;
             }
 
             reward = reward.add(fullReward);
 
-            if (claim) {
-                // update pool rewards data total claimed rewards.
-                _store.updateRewardsData(
-                    poolToken,
-                    reserveToken,
-                    rewardsData.lastUpdateTime,
-                    rewardsData.rewardPerToken,
-                    rewardsData.totalClaimedRewards.add(fullReward)
-                );
+            // update pool rewards data total claimed rewards.
+            _store.updateRewardsData(
+                poolToken,
+                reserveToken,
+                rewardsData.lastUpdateTime,
+                rewardsData.rewardPerToken,
+                rewardsData.totalClaimedRewards.add(fullReward)
+            );
 
-                // update provider rewards data with the remaining pending rewards and set the last update time to the
-                // timestamp of the current block.
-                _store.updateProviderRewardsData(
-                    provider,
-                    poolToken,
-                    reserveToken,
-                    providerRewards.rewardPerToken,
-                    0,
-                    time(),
-                    providerRewards.baseRewardsDebt,
-                    providerRewards.baseRewardsDebtMultiplier
-                );
-            }
+            // update provider rewards data with the remaining pending rewards and set the last update time to the
+            // timestamp of the current block.
+            _store.updateProviderRewardsData(
+                provider,
+                poolToken,
+                reserveToken,
+                providerRewards.rewardPerToken,
+                0,
+                time(),
+                providerRewards.baseRewardsDebt,
+                providerRewards.baseRewardsDebtMultiplier
+            );
         }
 
         return reward;

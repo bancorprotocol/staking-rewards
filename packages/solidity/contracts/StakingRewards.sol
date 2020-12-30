@@ -73,7 +73,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev triggered when pending rewards are being added or updated
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param amount the reward amount
      * @param newId the ID of the new position
      */
@@ -136,7 +136,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * the LP contract.
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token of the added liquidity
      */
     function onLiquidityAdded(
@@ -159,7 +159,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * contract.
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token of the removed liquidity
      */
     function onLiquidityRemoved(
@@ -424,7 +424,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev restakes specific pending rewards from all participating pools.
      *
      * @param maxAmount an optional cap on the rewards to stake
-     * @param poolToken the pool token representing the new LM pool
+     * @param poolToken the pool token representing the new rewards pool
 
      * @return all staked rewards and the ID of the new position
      */
@@ -437,7 +437,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param maxAmount an optional cap on the rewards to stake
-     * @param poolToken the pool token representing the new LM pool
+     * @param poolToken the pool token representing the new rewards pool
      * @param lpStore liquidity protection data store
      *
      * @return all staked rewards and the ID of the new position
@@ -456,7 +456,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
-     * @param newPoolToken the pool token representing the new LM pool
+     * @param newPoolToken the pool token representing the new rewards pool
      * @param maxAmount an optional cap on the rewards to stake
      * @param lpStore liquidity protection data store
      *
@@ -662,7 +662,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev updates pool and provider rewards. this function is called during every liquidity changes
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token representing the liquidity in the pool
      * @param lpStore liquidity protection data store
      */
@@ -757,7 +757,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     /**
      * @dev returns the pool program for a specific pool
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      *
      * @return the pool program for a specific pool
      */
@@ -772,7 +772,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     /**
      * @dev returns pool rewards for a specific pool and reserve
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token representing the liquidity in the pool
      *
      * @return pool rewards for a specific pool and reserve
@@ -788,7 +788,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev returns provider rewards for a specific pool and reserve
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token representing the liquidity in the pool
      *
      * @return provider rewards for a specific pool and reserve

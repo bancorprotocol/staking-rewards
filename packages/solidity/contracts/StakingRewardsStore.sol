@@ -37,7 +37,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev triggered when a pool program is being added
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
      * @param rewardRate the program's weekly rewards
@@ -47,7 +47,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev triggered when a pool program is being removed
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      */
     event PoolProgramRemoved(IERC20 indexed poolToken);
 
@@ -82,7 +82,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev returns whether the specified pool participates in the LM program
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token of the added liquidity
      *
      * @return whether the specified pool participates in the LM program
@@ -109,7 +109,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev adds or updates a pool program
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      * @param reserveTokens the reserve tokens representing the liqudiity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
@@ -153,7 +153,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev removes a pool program
      *
-     * @param poolToken the pool token representing the LM pool
+     * @param poolToken the pool token representing the rewards pool
      */
     function removePoolProgram(IERC20 poolToken) external override onlyOwner {
         require(isPoolParticipating(_programs[poolToken]), "ERR_POOL_NOT_PARTICIPATING");
@@ -189,8 +189,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev returns the rewards data of a specific reserve in a specific pool
      *
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token in the LM pool
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token in the rewards pool
      *
      * @return rewards data
      */
@@ -212,8 +212,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev updates the reward data of a specific reserve in a specific pool
      *
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token in the LM pool
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token in the rewards pool
      * @param lastUpdateTime the last upate time
      * @param rewardPerToken the new reward rate per-token
 
@@ -236,8 +236,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev returns rewards data of a specific provider
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token in the LM pool
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token in the rewards pool
      *
      * @return rewards data
      */
@@ -272,8 +272,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev updates specific provider's reward data
      *
      * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the LM pool
-     * @param reserveToken the reserve token in the LM pool
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token in the rewards pool
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
      * @param effectiveStakingTime the new effective staking time

@@ -102,8 +102,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param program the program data
      * @return whether the specified pool participates in the LM program
      */
-    function isPoolParticipating(PoolProgram memory program) private pure returns (bool) {
-        return program.endTime > 0;
+    function isPoolParticipating(PoolProgram memory program) private view returns (bool) {
+        return program.endTime > time();
     }
 
     /**
@@ -181,7 +181,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         )
     {
         PoolProgram memory program = _programs[poolToken];
-        require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
 
         return (program.startTime, program.endTime, program.rewardRate, program.reserveTokens, program.rewardShares);
     }

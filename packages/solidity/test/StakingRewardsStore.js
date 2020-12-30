@@ -299,9 +299,12 @@ describe('StakingRewardsStore', () => {
         });
 
         context('with a registered pool', async () => {
+            let startTime;
+            let endTime;
+
             beforeEach(async () => {
-                const startTime = now;
-                const endTime = startTime.add(new BN(2000));
+                startTime = now;
+                endTime = startTime.add(new BN(2000));
                 const rewardRate = new BN(1000);
                 await store.addPoolProgram(
                     poolToken.address,
@@ -327,6 +330,16 @@ describe('StakingRewardsStore', () => {
             it('should allow removing pools', async () => {
                 const res = await store.removePoolProgram(poolToken.address, { from: owner });
                 expectEvent(res, 'PoolProgramRemoved', { poolToken: poolToken.address });
+
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+            });
+
+            it('should treat as non-participating after the ending time of the program', async () => {
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
+
+                await setTime(endTime);
 
                 expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();

@@ -291,7 +291,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             uint256 fullReward =
                 providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
 
-            // add any pending rewards, while applying the best retractive multiplier.
+            // add any debt, while applying the best retractive multiplier.
             fullReward = fullReward.add(
                 applyHigherMultiplier(
                     providerRewards.baseRewardsDebt,
@@ -545,7 +545,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             uint256 fullReward =
                 providerRewards.pendingBaseRewards.add(newBaseRewards).mul(multiplier).div(PPM_RESOLUTION);
 
-            // add any pending rewards, while applying the best retractive multiplier.
+            // add any debt, while applying the best retractive multiplier.
             fullReward = fullReward.add(
                 applyHigherMultiplier(
                     providerRewards.baseRewardsDebt,

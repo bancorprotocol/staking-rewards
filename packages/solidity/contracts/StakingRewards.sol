@@ -326,14 +326,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
                     maxAmount = 0;
                 } else {
-                    // grant any pending rewards
+                    // grant any debt
                     providerRewards.baseRewardsDebt = 0;
                     providerRewards.baseRewardsDebtMultiplier = 0;
 
                     maxAmount = maxAmount.sub(fullReward);
                 }
             } else {
-                // grant any pending rewards
+                // grant any debt
                 providerRewards.baseRewardsDebt = 0;
                 providerRewards.baseRewardsDebtMultiplier = 0;
             }

@@ -253,14 +253,14 @@ describe('StakingRewards', () => {
 
         it('should revert when a non-LP contract attempts to notify', async () => {
             await expectRevert(
-                staking.addLiquidity(provider, poolToken.address, reserveToken.address, 0, 0, id, {
+                staking.onLiquidityAdded(id, provider, poolToken.address, reserveToken.address, 0, 0, {
                     from: nonLiquidityProtection
                 }),
                 'ERR_ACCESS_DENIED'
             );
 
             await expectRevert(
-                staking.removeLiquidity(provider, poolToken.address, reserveToken.address, 0, 0, id, {
+                staking.onLiquidityRemoved(id, provider, poolToken.address, reserveToken.address, 0, 0, {
                     from: nonLiquidityProtection
                 }),
                 'ERR_ACCESS_DENIED'
@@ -269,14 +269,14 @@ describe('StakingRewards', () => {
 
         it('should revert when notifying for a zero provider ', async () => {
             await expectRevert(
-                staking.addLiquidity(ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, id, {
+                staking.onLiquidityAdded(id, ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, {
                     from: liquidityProtectionProxy
                 }),
                 'ERR_INVALID_EXTERNAL_ADDRESS'
             );
 
             await expectRevert(
-                staking.removeLiquidity(ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, id, {
+                staking.onLiquidityRemoved(id, ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, {
                     from: liquidityProtectionProxy
                 }),
                 'ERR_INVALID_EXTERNAL_ADDRESS'

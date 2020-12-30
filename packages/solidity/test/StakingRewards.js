@@ -540,7 +540,7 @@ describe('StakingRewards', () => {
                 newId: data[1]
             });
 
-            // If we're restaking to a participating pool, don't forget to update the local liquidity state for staking.
+            // If we're staking to a participating pool, don't forget to update the local liquidity state for staking.
             if (participating) {
                 addTestLiquidity(provider, newPoolToken, networkToken, amount);
             }

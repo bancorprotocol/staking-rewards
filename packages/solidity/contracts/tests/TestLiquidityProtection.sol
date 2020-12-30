@@ -40,7 +40,7 @@ contract TestLiquidityProtection is ILiquidityProtection {
 
         reserveToken.safeTransferFrom(msg.sender, address(this), reserveAmount);
 
-        _stakingRewards.addLiquidity(provider, poolToken, reserveToken, 0, reserveAmount, 0);
+        _stakingRewards.onLiquidityAdded(0, provider, poolToken, reserveToken, 0, reserveAmount);
 
         return 0;
     }
@@ -53,7 +53,7 @@ contract TestLiquidityProtection is ILiquidityProtection {
     ) external payable returns (uint256) {
         _store.addLiquidity(provider, poolToken, reserveToken, reserveAmount);
 
-        _stakingRewards.addLiquidity(provider, poolToken, reserveToken, 0, reserveAmount, 0);
+        _stakingRewards.onLiquidityAdded(0, provider, poolToken, reserveToken, 0, reserveAmount);
 
         return 0;
     }
@@ -64,7 +64,7 @@ contract TestLiquidityProtection is ILiquidityProtection {
         IERC20 reserveToken,
         uint256 removedReserveAmount
     ) external payable returns (uint256) {
-        _stakingRewards.removeLiquidity(provider, poolToken, reserveToken, 0, removedReserveAmount, 0);
+        _stakingRewards.onLiquidityRemoved(0, provider, poolToken, reserveToken, 0, removedReserveAmount);
 
         _store.removeLiquidity(provider, poolToken, reserveToken, removedReserveAmount, false);
 

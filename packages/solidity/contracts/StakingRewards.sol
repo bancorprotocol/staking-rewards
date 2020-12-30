@@ -273,13 +273,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             IERC20 reserveToken = program.reserveTokens[i];
 
             // update all provider's pending rewards, in order to apply retroactive reward multipliers.
-            if (claim) {
+            (Rewards memory rewardsData, ProviderRewards memory providerRewards) =
                 updateRewards(provider, poolToken, reserveToken, lpStore);
-            }
-
-            // calculate the claimable base rewards (since the last claim).
-            Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
-            ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
 
             // get full rewards and the respective rewards mutliplier
             (uint256 fullReward, uint32 multiplier) =
@@ -507,10 +502,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             IERC20 reserveToken = program.reserveTokens[i];
 
             // update all provider's pending rewards, in order to apply retroactive reward multipliers.
-            updateRewards(provider, poolToken, reserveToken, lpStore);
-
-            Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
-            ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+            (Rewards memory rewardsData, ProviderRewards memory providerRewards) =
+                updateRewards(provider, poolToken, reserveToken, lpStore);
 
             // get full rewards and the respective rewards mutliplier
             (uint256 fullReward, uint32 multiplier) =
@@ -680,34 +673,45 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IERC20 poolToken,
         IERC20 reserveToken,
         ILiquidityProtectionDataStore lpStore
-    ) private {
+    ) private returns (Rewards memory, ProviderRewards memory) {
         PoolProgram memory program = poolProgram(poolToken);
-        Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
 
         // calculate the new reward rate per-token and update it in the store
-        uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore);
+        Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
+
+        // rewardPerToken must be calculated with the previous value of lastUpdateTime
+        rewardsData.rewardPerToken = rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore);
+        rewardsData.lastUpdateTime = Math.min(time(), program.endTime);
+
         _store.updateRewardsData(
             poolToken,
             reserveToken,
-            Math.min(time(), program.endTime),
-            newRewardPerToken,
+            rewardsData.lastUpdateTime,
+            rewardsData.rewardPerToken,
             rewardsData.totalClaimedRewards
         );
 
         // update provider's rewards with the newly claimable base rewards and the new rewared rate per-token
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
-        uint256 newPendingBaseRewards =
-            baseRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
+
+        // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken
+        providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(
+            baseRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore)
+        );
+        providerRewards.rewardPerToken = rewardsData.rewardPerToken;
+
         _store.updateProviderRewardsData(
             provider,
             poolToken,
             reserveToken,
-            newRewardPerToken,
-            newPendingBaseRewards,
+            providerRewards.rewardPerToken,
+            providerRewards.pendingBaseRewards,
             providerRewards.effectiveStakingTime,
             providerRewards.baseRewardsDebt,
             providerRewards.baseRewardsDebtMultiplier
         );
+
+        return (rewardsData, providerRewards);
     }
 
     /**

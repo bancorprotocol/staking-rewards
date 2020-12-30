@@ -309,6 +309,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 continue;
             }
 
+            // mark any debt as repaid
+            providerRewards.baseRewardsDebt = 0;
+            providerRewards.baseRewardsDebtMultiplier = 0;
+
             if (maxAmount != MAX_UINT256) {
                 if (fullReward > maxAmount) {
                     // get the amount of the actual base rewards that were claimed
@@ -326,16 +330,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
                     maxAmount = 0;
                 } else {
-                    // grant any debt
-                    providerRewards.baseRewardsDebt = 0;
-                    providerRewards.baseRewardsDebtMultiplier = 0;
-
                     maxAmount = maxAmount.sub(fullReward);
                 }
-            } else {
-                // grant any debt
-                providerRewards.baseRewardsDebt = 0;
-                providerRewards.baseRewardsDebtMultiplier = 0;
             }
 
             reward = reward.add(fullReward);

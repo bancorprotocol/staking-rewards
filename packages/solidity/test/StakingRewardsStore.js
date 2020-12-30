@@ -378,9 +378,16 @@ describe('StakingRewardsStore', () => {
 
         it('should revert when a non-owner attempts to update pool rewards', async () => {
             await expectRevert(
-                store.updateRewardData(poolToken.address, reserveToken.address, new BN(0), new BN(1000), new BN(1000), {
-                    from: nonOwner
-                }),
+                store.updateRewardsData(
+                    poolToken.address,
+                    reserveToken.address,
+                    new BN(0),
+                    new BN(1000),
+                    new BN(1000),
+                    {
+                        from: nonOwner
+                    }
+                ),
                 'ERR_ACCESS_DENIED'
             );
         });
@@ -395,7 +402,7 @@ describe('StakingRewardsStore', () => {
             const rewardPerToken = new BN(10000);
             const totalClaimedRewards = new BN(5555555);
 
-            await store.updateRewardData(
+            await store.updateRewardsData(
                 poolToken.address,
                 reserveToken.address,
                 lastUpdateTime,

@@ -280,7 +280,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param baseRewardsDebt the updated base rewards debt
      * @param baseRewardsDebtMultiplier the updated base rewards debt multiplier
      */
-    function updateProviderRewardData(
+    function updateProviderRewardsData(
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,

@@ -350,7 +350,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
                 // update provider rewards data with the remaining pending rewards and set the last update time to the
                 // timestamp of the current block.
-                _store.updateProviderRewardData(
+                _store.updateProviderRewardsData(
                     provider,
                     poolToken,
                     reserveToken,
@@ -566,7 +566,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
             // update store data with the store pending rewards and set the last update time to the timestamp of the
             // current block.
-            _store.updateProviderRewardData(
+            _store.updateProviderRewardsData(
                 provider,
                 poolToken,
                 reserveToken,
@@ -689,7 +689,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
         uint256 newPendingBaseRewards =
             baseRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
-        _store.updateProviderRewardData(
+        _store.updateProviderRewardsData(
             provider,
             poolToken,
             reserveToken,

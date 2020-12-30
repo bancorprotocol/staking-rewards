@@ -440,7 +440,7 @@ describe('StakingRewardsStore', () => {
 
         it('should revert when a non-owner attempts to update provider rewards data', async () => {
             await expectRevert(
-                store.updateProviderRewardData(
+                store.updateProviderRewardsData(
                     provider,
                     poolToken.address,
                     reserveToken.address,
@@ -468,7 +468,7 @@ describe('StakingRewardsStore', () => {
             const effectiveStakingTime = new BN(11111);
             const baseRewardsDebt = new BN(9999999);
             const baseRewardsDebtMultiplier = new BN(100000);
-            await store.updateProviderRewardData(
+            await store.updateProviderRewardsData(
                 provider,
                 poolToken.address,
                 reserveToken.address,

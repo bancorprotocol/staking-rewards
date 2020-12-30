@@ -278,7 +278,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             }
 
             // calculate the claimable base rewards (since the last claim).
-            Rewards memory rewardsData = rewards(poolToken, reserveToken);
+            Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
 
             // get full rewards and the respective rewards mutliplier
@@ -509,7 +509,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             // update all provider's pending rewards, in order to apply retroactive reward multipliers.
             updateRewards(provider, poolToken, reserveToken, lpStore);
 
-            Rewards memory rewardsData = rewards(poolToken, reserveToken);
+            Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
             ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
 
             // get full rewards and the respective rewards mutliplier
@@ -575,7 +575,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // where the total amount in the denominator is higher than the product of the rewards rate and staking duration.
         // in order to avoid this imprecision, we will amplify the reward rate by the units amount.
         return
-            rewardsData.rewardPerToken.add( // the aggregate reward rate
+            rewardsData.rewardPerToken.add( // the aggregated reward rate
                 stakingEndTime
                     .sub(stakingStartTime) // the duration of the staking
                     .mul(program.rewardRate) // multiplied by the rate
@@ -682,7 +682,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ILiquidityProtectionDataStore lpStore
     ) private {
         PoolProgram memory program = poolProgram(poolToken);
-        Rewards memory rewardsData = rewards(poolToken, reserveToken);
+        Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
 
         // calculate the new reward rate per-token and update it in the store
         uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore);
@@ -786,7 +786,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return pool rewards for a specific pool and reserve
      */
-    function rewards(IERC20 poolToken, IERC20 reserveToken) internal view returns (Rewards memory) {
+    function poolRewards(IERC20 poolToken, IERC20 reserveToken) internal view returns (Rewards memory) {
         Rewards memory data;
         (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards) = _store.rewards(poolToken, reserveToken);
 

@@ -60,7 +60,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     event LastProviderClaimTimeUpdated(address indexed provider, uint256 claimTime);
 
     /**
-     * @dev initializes a new StakingRewardsDistributionStore contract
+     * @dev initializes a new StakingRewardsStore contract
      */
     constructor() public {
         // Set up administrative roles.

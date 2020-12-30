@@ -70,7 +70,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     event RewardsClaimed(address indexed provider, uint256 amount);
 
     /**
-     * @dev triggered when pending rewards are being added or updated
+     * @dev triggered when pending rewards are being staked in a pool
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
@@ -80,7 +80,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     event RewardsStaked(address indexed provider, IERC20 indexed poolToken, uint256 amount, uint256 indexed newId);
 
     /**
-     * @dev initializes a new StakingRewardsDistribution contract
+     * @dev initializes a new StakingRewards contract
      *
      * @param store the staking rewards store
      * @param networkTokenGovernance the permissioned wrapper around the network token

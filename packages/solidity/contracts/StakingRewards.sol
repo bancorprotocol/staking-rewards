@@ -376,7 +376,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewarss from all participating pools.
+     * @dev claims specific provider's pending rewards from all participating pools.
      *
      * @param provider the owner of the liquidity
      * @param lpStore liquidity protection data store
@@ -421,7 +421,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev restakes specific pending rewards from all participating pools.
+     * @dev stakes specific pending rewards from all participating pools.
      *
      * @param maxAmount an optional cap on the rewards to stake
      * @param poolToken the pool token representing the new rewards pool
@@ -433,7 +433,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev restakes specific provider's pending rewarss from all participating pools.
+     * @dev stakes specific provider's pending rewards from all participating pools.
      *
      * @param provider the owner of the liquidity
      * @param maxAmount an optional cap on the rewards to stake

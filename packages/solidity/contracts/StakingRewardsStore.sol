@@ -12,31 +12,31 @@ import "./Utils.sol";
 import "./Time.sol";
 
 /**
- * @dev This contract stores staking rewards liquidity and pool specific data.
+ * @dev This contract stores staking rewards liquidity and pool specific data
  */
 contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time {
     using SafeMath for uint32;
     using SafeMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    // the owner role is used to set the values in the store
+    // the owner role is used to set the values in the store.
     bytes32 public constant ROLE_OWNER = keccak256("ROLE_OWNER");
 
     uint32 private constant PPM_RESOLUTION = 1000000;
 
-    // the mapping between pool tokens and their respective rewards program information
+    // the mapping between pool tokens and their respective rewards program information.
     mapping(IERC20 => PoolProgram) private _programs;
 
-    // the set of participating pools
+    // the set of participating pools.
     EnumerableSet.AddressSet private _pools;
 
-    // the mapping between pools, reserve tokens, and their rewards
+    // the mapping between pools, reserve tokens, and their rewards.
     mapping(IERC20 => mapping(IERC20 => Rewards)) internal _rewards;
 
-    // the mapping between pools, reserve tokens, and provider specific rewards
+    // the mapping between pools, reserve tokens, and provider specific rewards.
     mapping(address => mapping(IERC20 => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
 
-    // the mapping between providers and their respective last claim times
+    // the mapping between providers and their respective last claim times.
     mapping(address => uint256) private _providerLastClaimTimes;
 
     /**
@@ -142,7 +142,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.rewardRate = rewardRate;
         program.rewardShares = rewardShares;
 
-        // verify that reserve tokens correspond to the pool
+        // verify that reserve tokens correspond to the pool.
         IConverter converter = IConverter(IOwned(address(poolToken)).owner());
         uint256 length = converter.connectorTokenCount();
         require(length == 2, "ERR_POOL_NOT_SUPPORTED");

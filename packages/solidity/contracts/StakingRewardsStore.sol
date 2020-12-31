@@ -215,7 +215,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param reserveToken the reserve token in the rewards pool
      * @param lastUpdateTime the last upate time
      * @param rewardPerToken the new reward rate per-token
-
      * @param totalClaimedRewards the total claimed rewards up until now
      */
     function updateRewardsData(

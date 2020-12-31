@@ -750,7 +750,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             );
 
         // check that the staking range is valid. for example, it can be invalid when calculating the multiplier when
-        // the staking has started berore the start of the program, in which case the effective staking start time will
+        // the staking has started before the start of the program, in which case the effective staking start time will
         // be in the future, compared to the effective staking end time (which will be the time of the current block).
         if (effectiveStakingStartTime >= effectiveStakingEndTime) {
             return PPM_RESOLUTION;

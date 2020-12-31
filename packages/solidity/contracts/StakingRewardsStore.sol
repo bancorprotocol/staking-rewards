@@ -80,12 +80,12 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev returns whether the specified pool participates in the LM program
+     * @dev returns whether the specified reserve is participating in the rewards program
      *
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token of the added liquidity
      *
-     * @return whether the specified pool participates in the LM program
+     * @return whether the specified reserve is participating in the rewards program
      */
     function isReserveParticipating(IERC20 poolToken, IERC20 reserveToken) public view override returns (bool) {
         PoolProgram memory program = _programs[poolToken];

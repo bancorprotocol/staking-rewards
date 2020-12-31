@@ -3,6 +3,7 @@ pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
 import "./IStakingRewardsStore.sol";
 import "./IOwned.sol";
@@ -16,14 +17,18 @@ import "./Time.sol";
 contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time {
     using SafeMath for uint32;
     using SafeMath for uint256;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // the owner role is used to set the values in the store
     bytes32 public constant ROLE_OWNER = keccak256("ROLE_OWNER");
 
     uint32 private constant PPM_RESOLUTION = 1000000;
 
-    // the mapping between pool tokens and their respective LM program information
+    // the mapping between pool tokens and their respective rewards program information
     mapping(IERC20 => PoolProgram) private _programs;
+
+    // the set of participating pools
+    EnumerableSet.AddressSet private _pools;
 
     // the mapping between pools, reserve tokens, and their rewards
     mapping(IERC20 => mapping(IERC20 => Rewards)) internal _rewards;
@@ -97,10 +102,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev returns whether the specified pool participates in the LM program
+     * @dev returns whether the specified pool participates in the rewards program
      *
      * @param program the program data
-     * @return whether the specified pool participates in the LM program
+     * @return whether the specified pool participates in the rewards program
      */
     function isPoolParticipating(PoolProgram memory program) private view returns (bool) {
         return program.endTime > time();
@@ -127,8 +132,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(rewardRate > 0, "ERR_ZERO_VALUE");
         require(rewardShares[0].add(rewardShares[1]) == PPM_RESOLUTION, "ERR_INVALID_REWARD_SHARES");
 
+        require(_pools.add(address(poolToken)), "ERR_ALREADY_PARTICIPATING");
+
         PoolProgram storage program = _programs[poolToken];
-        require(!isPoolParticipating(program), "ERR_ALREADY_SUPPORTED");
+        require(!isPoolParticipating(program), "ERR_ALREADY_PARTICIPATING");
 
         program.startTime = currentTime;
         program.endTime = endTime;
@@ -160,6 +167,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
 
         delete _programs[poolToken];
 
+        require(_pools.remove(address(poolToken)), "ERR_POOL_NOT_PARTICIPATING");
+
         emit PoolProgramRemoved(poolToken);
     }
 
@@ -183,6 +192,44 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         PoolProgram memory program = _programs[poolToken];
 
         return (program.startTime, program.endTime, program.rewardRate, program.reserveTokens, program.rewardShares);
+    }
+
+    /**
+     * @dev returns all pool programs
+     *
+     * @return all pool programs
+     */
+    function poolPrograms()
+        external
+        view
+        override
+        returns (
+            uint256[] memory,
+            uint256[] memory,
+            uint256[] memory,
+            IERC20[2][] memory,
+            uint32[2][] memory
+        )
+    {
+        uint256 length = _pools.length();
+
+        uint256[] memory startTimes = new uint256[](length);
+        uint256[] memory endTimes = new uint256[](length);
+        uint256[] memory rewardRates = new uint256[](length);
+        IERC20[2][] memory reserveTokens = new IERC20[2][](length);
+        uint32[2][] memory rewardShares = new uint32[2][](length);
+
+        for (uint256 i = 0; i < length; ++i) {
+            PoolProgram memory program = _programs[IERC20(_pools.at(i))];
+
+            startTimes[i] = program.startTime;
+            endTimes[i] = program.endTime;
+            rewardRates[i] = program.rewardRate;
+            reserveTokens[i] = program.reserveTokens;
+            rewardShares[i] = program.rewardShares;
+        }
+
+        return (startTimes, endTimes, rewardRates, reserveTokens, rewardShares);
     }
 
     /**

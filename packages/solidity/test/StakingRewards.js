@@ -323,7 +323,7 @@ describe('StakingRewards', () => {
         });
     });
 
-    describe.only('rewards', async () => {
+    describe('rewards', async () => {
         const providers = [accounts[1], accounts[2]];
 
         let reserveAmounts;
@@ -1197,7 +1197,7 @@ describe('StakingRewards', () => {
                 });
             });
 
-            context.only('double sided staking', async () => {
+            context('double sided staking', async () => {
                 beforeEach(async () => {
                     await addLiquidity(
                         providers[0],

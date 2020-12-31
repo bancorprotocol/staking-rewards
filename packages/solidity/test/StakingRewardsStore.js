@@ -44,6 +44,30 @@ describe('StakingRewardsStore', () => {
         };
     };
 
+    const getPoolPrograms = async () => {
+        const data = await store.poolPrograms.call();
+
+        const startTimes = data[0];
+        const endTimes = data[1];
+        const rewardRates = data[2];
+        const reserveTokens = data[3];
+        const rewardShares = data[4];
+
+        const programs = [];
+
+        for (let i = 0; i < startTimes.length; ++i) {
+            programs.push({
+                startTime: startTimes[i],
+                endTime: endTimes[i],
+                rewardRate: rewardRates[i],
+                reserveTokens: reserveTokens[i],
+                rewardShares: rewardShares[i]
+            });
+        }
+
+        return programs;
+    };
+
     const getPoolRewards = async (poolToken, reserveToken) => {
         const data = await store.rewards.call(poolToken.address, reserveToken.address);
 
@@ -227,14 +251,14 @@ describe('StakingRewardsStore', () => {
             expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
             expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
 
-            const pool = await getPoolProgram(poolToken);
-            expect(pool.startTime).to.be.bignumber.equal(startTime);
-            expect(pool.endTime).to.be.bignumber.equal(endTime);
-            expect(pool.rewardRate).to.be.bignumber.equal(rewardRate);
-            expect(pool.reserveTokens[0]).to.eql(networkToken.address);
-            expect(pool.reserveTokens[1]).to.eql(reserveToken.address);
-            expect(pool.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-            expect(pool.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+            const program = await getPoolProgram(poolToken);
+            expect(program.startTime).to.be.bignumber.equal(startTime);
+            expect(program.endTime).to.be.bignumber.equal(endTime);
+            expect(program.rewardRate).to.be.bignumber.equal(rewardRate);
+            expect(program.reserveTokens[0]).to.eql(networkToken.address);
+            expect(program.reserveTokens[1]).to.eql(reserveToken.address);
+            expect(program.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+            expect(program.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
 
             await expectRevert(
                 store.addPoolProgram(
@@ -245,8 +269,23 @@ describe('StakingRewardsStore', () => {
                     rewardRate,
                     { from: owner }
                 ),
-                'ERR_ALREADY_SUPPORTED'
+                'ERR_ALREADY_PARTICIPATING'
             );
+
+            const programs = await getPoolPrograms();
+            expect(programs.length).to.eql(1);
+
+            const program1 = programs[0];
+
+            console.log('program1.endTime', program1.endTime.toString());
+            expect(program1.startTime).to.be.bignumber.equal(startTime);
+            expect(program1.endTime).to.be.bignumber.equal(endTime);
+
+            expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+            expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+            expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+            expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+            expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
 
             expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
             expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken.address)).to.be.false();
@@ -285,6 +324,18 @@ describe('StakingRewardsStore', () => {
             expect(pool2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
             expect(pool2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
 
+            const programs2 = await getPoolPrograms();
+            expect(programs2.length).to.eql(2);
+
+            const program2 = programs2[1];
+            expect(program2.startTime).to.be.bignumber.equal(startTime2);
+            expect(program2.endTime).to.be.bignumber.equal(endTime2);
+            expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+            expect(program2.reserveTokens[0]).to.eql(reserveToken.address);
+            expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+            expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+            expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+
             await expectRevert(
                 store.addPoolProgram(
                     poolToken2.address,
@@ -294,7 +345,7 @@ describe('StakingRewardsStore', () => {
                     rewardRate,
                     { from: owner }
                 ),
-                'ERR_ALREADY_SUPPORTED'
+                'ERR_ALREADY_PARTICIPATING'
             );
         });
 
@@ -328,8 +379,14 @@ describe('StakingRewardsStore', () => {
             });
 
             it('should allow removing pools', async () => {
+                let programs = await getPoolPrograms();
+                expect(programs.length).to.eql(1);
+
                 const res = await store.removePoolProgram(poolToken.address, { from: owner });
                 expectEvent(res, 'PoolProgramRemoved', { poolToken: poolToken.address });
+
+                programs = await getPoolPrograms();
+                expect(programs.length).to.eql(0);
 
                 expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();

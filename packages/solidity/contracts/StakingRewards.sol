@@ -186,7 +186,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return all pending rewards
      */
-    function rewardsOf(address provider) external returns (uint256) {
+    function rewards(address provider) external returns (uint256) {
         return rewards(provider, false, MAX_UINT256, liquidityProtectionStore());
     }
 

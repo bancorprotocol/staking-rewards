@@ -38,6 +38,8 @@ interface IStakingRewardsStore {
 
     function removePoolProgram(IERC20 poolToken) external;
 
+    function extendPoolProgram(IERC20 poolToken, uint256 newEndTime) external;
+
     function poolProgram(IERC20 poolToken)
         external
         view

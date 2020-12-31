@@ -40,7 +40,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     mapping(address => uint256) private _providerLastClaimTimes;
 
     /**
-     * @dev triggered when a pool program is being added
+     * @dev triggered when a program is being added
      *
      * @param poolToken the pool token representing the rewards pool
      * @param startTime the starting time of the program
@@ -50,7 +50,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     event PoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
     /**
-     * @dev triggered when a pool program is being removed
+     * @dev triggered when a program is being removed
      *
      * @param poolToken the pool token representing the rewards pool
      */
@@ -112,7 +112,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev adds or updates a pool program
+     * @dev adds or updates a program
      *
      * @param poolToken the pool token representing the rewards pool
      * @param reserveTokens the reserve tokens representing the liqudiity in the pool
@@ -158,7 +158,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev removes a pool program
+     * @dev removes a program
      *
      * @param poolToken the pool token representing the rewards pool
      */
@@ -173,9 +173,24 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev returns a pool program
+     * @dev extends the ending time of a program
      *
-     * @return the pool program's starting and ending times
+     * @param poolToken the pool token representing the rewards pool
+     * @param newEndTime the new ending time of the program
+     */
+    function extendPoolProgram(IERC20 poolToken, uint256 newEndTime) external override onlyOwner {
+        PoolProgram storage program = _programs[poolToken];
+
+        require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
+        require(newEndTime > program.endTime, "ERR_INVALID_DURATION");
+
+        program.endTime = newEndTime;
+    }
+
+    /**
+     * @dev returns a program
+     *
+     * @return the program's starting and ending times
      */
     function poolProgram(IERC20 poolToken)
         external
@@ -195,9 +210,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev returns all pool programs
+     * @dev returns all programs
      *
-     * @return all pool programs
+     * @return all programs
      */
     function poolPrograms()
         external

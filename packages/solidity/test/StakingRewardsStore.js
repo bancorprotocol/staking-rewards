@@ -392,7 +392,7 @@ describe('StakingRewardsStore', () => {
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
             });
 
-            it('should treat as non-participating after the ending time of the program', async () => {
+            it('should treat as non-participating pool after the ending time of the program', async () => {
                 expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
 
@@ -400,6 +400,46 @@ describe('StakingRewardsStore', () => {
 
                 expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+            });
+
+            it('should revert when trying to extend a non-existing program', async () => {
+                await expectRevert(
+                    store.extendPoolProgram(poolToken2.address, endTime.add(new BN(1)), { from: owner }),
+                    'ERR_POOL_NOT_PARTICIPATING'
+                );
+            });
+
+            it('should revert when trying to extend an ended program', async () => {
+                const newEndTime = endTime.add(new BN(10000));
+
+                await setTime(endTime);
+
+                await expectRevert(
+                    store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
+                    'ERR_POOL_NOT_PARTICIPATING'
+                );
+
+                await setTime(endTime.add(new BN(1000)));
+
+                await expectRevert(
+                    store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
+                    'ERR_POOL_NOT_PARTICIPATING'
+                );
+            });
+
+            it('should revert when trying to reduce a program', async () => {
+                await expectRevert(
+                    store.extendPoolProgram(poolToken.address, endTime.sub(new BN(1)), { from: owner }),
+                    'ERR_INVALID_DURATION'
+                );
+            });
+
+            it('should allow extending an ongoing program', async () => {
+                const newEndTime = endTime.add(new BN(10000));
+                await store.extendPoolProgram(poolToken.address, newEndTime, { from: owner });
+
+                const program = await getPoolProgram(poolToken);
+                expect(program.endTime).to.be.bignumber.equal(newEndTime);
             });
         });
     });

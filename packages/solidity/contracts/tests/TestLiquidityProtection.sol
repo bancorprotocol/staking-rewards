@@ -51,9 +51,9 @@ contract TestLiquidityProtection is ILiquidityProtection {
         IERC20 reserveToken,
         uint256 reserveAmount
     ) external payable returns (uint256) {
-        _store.addLiquidity(provider, poolToken, reserveToken, reserveAmount);
-
         _stakingRewards.onLiquidityAdded(0, provider, poolToken, reserveToken, 0, reserveAmount);
+
+        _store.addLiquidity(provider, poolToken, reserveToken, reserveAmount);
 
         return 0;
     }

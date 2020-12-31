@@ -84,9 +84,10 @@ describe('StakingRewardsStore', () => {
         return {
             rewardPerToken: data[0],
             pendingBaseRewards: data[1],
-            effectiveStakingTime: data[2],
-            baseRewardsDebt: data[3],
-            baseRewardsDebtMultiplier: data[4]
+            totalClaimedRewards: data[2],
+            effectiveStakingTime: data[3],
+            baseRewardsDebt: data[4],
+            baseRewardsDebtMultiplier: data[5]
         };
     };
 
@@ -277,7 +278,6 @@ describe('StakingRewardsStore', () => {
 
             const program1 = programs[0];
 
-            console.log('program1.endTime', program1.endTime.toString());
             expect(program1.startTime).to.be.bignumber.equal(startTime);
             expect(program1.endTime).to.be.bignumber.equal(endTime);
 
@@ -559,6 +559,7 @@ describe('StakingRewardsStore', () => {
                     new BN(0),
                     new BN(0),
                     new BN(0),
+                    new BN(0),
                     {
                         from: nonOwner
                     }
@@ -571,10 +572,12 @@ describe('StakingRewardsStore', () => {
             let providerData = await getProviderRewards(provider, poolToken, reserveToken);
             expect(providerData.rewardPerToken).to.be.bignumber.equal(new BN(0));
             expect(providerData.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
+            expect(providerData.totalClaimedRewards).to.be.bignumber.equal(new BN(0));
             expect(providerData.effectiveStakingTime).to.be.bignumber.equal(new BN(0));
 
             const rewardPerToken = new BN(10000);
             const pendingBaseRewards = new BN(123);
+            const totalClaimedRewards = new BN(9999);
             const effectiveStakingTime = new BN(11111);
             const baseRewardsDebt = new BN(9999999);
             const baseRewardsDebtMultiplier = new BN(100000);
@@ -584,6 +587,7 @@ describe('StakingRewardsStore', () => {
                 reserveToken.address,
                 rewardPerToken,
                 pendingBaseRewards,
+                totalClaimedRewards,
                 effectiveStakingTime,
                 baseRewardsDebt,
                 baseRewardsDebtMultiplier,
@@ -595,6 +599,7 @@ describe('StakingRewardsStore', () => {
             providerData = await getProviderRewards(provider, poolToken, reserveToken);
             expect(providerData.rewardPerToken).to.be.bignumber.equal(rewardPerToken);
             expect(providerData.pendingBaseRewards).to.be.bignumber.equal(pendingBaseRewards);
+            expect(providerData.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewards);
             expect(providerData.effectiveStakingTime).to.be.bignumber.equal(effectiveStakingTime);
             expect(providerData.baseRewardsDebt).to.be.bignumber.equal(baseRewardsDebt);
             expect(providerData.baseRewardsDebtMultiplier).to.be.bignumber.equal(baseRewardsDebtMultiplier);

@@ -284,23 +284,23 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 continue;
             }
 
-            // mark any debt as repaid
+            // mark any debt as repaid.
             providerRewards.baseRewardsDebt = 0;
             providerRewards.baseRewardsDebtMultiplier = 0;
 
             if (maxAmount != MAX_UINT256) {
                 if (fullReward > maxAmount) {
-                    // get the amount of the actual base rewards that were claimed
+                    // get the amount of the actual base rewards that were claimed.
                     if (multiplier == PPM_RESOLUTION) {
                         providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
                     } else {
                         providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
                     }
 
-                    // store the current multiplier for future retroactive rewards correction
+                    // store the current multiplier for future retroactive rewards correction.
                     providerRewards.baseRewardsDebtMultiplier = multiplier;
 
-                    // grant only maxAmount rewards
+                    // grant only maxAmount rewards.
                     fullReward = maxAmount;
 
                     maxAmount = 0;
@@ -328,6 +328,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 reserveToken,
                 providerRewards.rewardPerToken,
                 0,
+                providerRewards.totalClaimedRewards.add(fullReward),
                 time(),
                 providerRewards.baseRewardsDebt,
                 providerRewards.baseRewardsDebtMultiplier
@@ -335,6 +336,35 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         }
 
         return reward;
+    }
+
+    /**
+     * @dev returns specific provider's total claimed rewards from all participating pools.
+     *
+     * @param provider the owner of the liquidity
+     *
+     * @return total claimed rewards from all participating pools
+     */
+    function totalClaimedRewards(address provider) external view returns (uint256) {
+        uint256 totalRewards = 0;
+
+        ILiquidityProtectionDataStore lpStore = liquidityProtectionStore();
+        IERC20[] memory poolTokens = lpStore.providerPools(provider);
+
+        for (uint256 i = 0; i < poolTokens.length; ++i) {
+            IERC20 poolToken = poolTokens[i];
+            PoolProgram memory program = poolProgram(poolToken);
+
+            for (uint256 j = 0; j < program.reserveTokens.length; ++j) {
+                IERC20 reserveToken = program.reserveTokens[j];
+
+                ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+
+                totalRewards = totalRewards.add(providerRewards.totalClaimedRewards);
+            }
+        }
+
+        return totalRewards;
     }
 
     /**
@@ -522,6 +552,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 reserveToken,
                 providerRewards.rewardPerToken,
                 0,
+                providerRewards.totalClaimedRewards,
                 time(),
                 providerRewards.baseRewardsDebt,
                 multiplier
@@ -704,6 +735,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             reserveToken,
             providerRewards.rewardPerToken,
             providerRewards.pendingBaseRewards,
+            providerRewards.totalClaimedRewards,
             providerRewards.effectiveStakingTime,
             providerRewards.baseRewardsDebt,
             providerRewards.baseRewardsDebtMultiplier
@@ -813,6 +845,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         (
             data.rewardPerToken,
             data.pendingBaseRewards,
+            data.totalClaimedRewards,
             data.effectiveStakingTime,
             data.baseRewardsDebt,
             data.baseRewardsDebtMultiplier

@@ -314,6 +314,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256,
             uint256,
             uint256,
+            uint256,
             uint32
         )
     {
@@ -322,6 +323,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         return (
             data.rewardPerToken,
             data.pendingBaseRewards,
+            data.totalClaimedRewards,
             data.effectiveStakingTime,
             data.baseRewardsDebt,
             data.baseRewardsDebtMultiplier
@@ -336,6 +338,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param reserveToken the reserve token in the rewards pool
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
+     * @param totalClaimedRewards the total claimed rewards up until now
      * @param effectiveStakingTime the new effective staking time
      * @param baseRewardsDebt the updated base rewards debt
      * @param baseRewardsDebtMultiplier the updated base rewards debt multiplier
@@ -346,6 +349,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         IERC20 reserveToken,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
+        uint256 totalClaimedRewards,
         uint256 effectiveStakingTime,
         uint256 baseRewardsDebt,
         uint32 baseRewardsDebtMultiplier
@@ -354,6 +358,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
 
         data.rewardPerToken = rewardPerToken;
         data.pendingBaseRewards = pendingBaseRewards;
+        data.totalClaimedRewards = totalClaimedRewards;
         data.effectiveStakingTime = effectiveStakingTime;
         data.baseRewardsDebt = baseRewardsDebt;
         data.baseRewardsDebtMultiplier = baseRewardsDebtMultiplier;

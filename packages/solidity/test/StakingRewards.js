@@ -1218,6 +1218,7 @@ describe('StakingRewards', () => {
                             reserveToken,
                             new BN(222222).mul(new BN(10).pow(new BN(18)))
                         );
+
                         await addLiquidity(
                             providers[1],
                             poolToken,
@@ -1248,7 +1249,7 @@ describe('StakingRewards', () => {
                     providers[0],
                     poolToken,
                     reserveToken,
-                    new BN(65564).mul(new BN(10).pow(new BN(18)))
+                    new BN(605564).mul(new BN(10).pow(new BN(18)))
                 );
                 await addLiquidity(
                     providers[0],
@@ -1275,7 +1276,7 @@ describe('StakingRewards', () => {
                             providers[1],
                             poolToken,
                             reserveToken,
-                            new BN(66666).mul(new BN(10).pow(new BN(18)))
+                            new BN(666666).mul(new BN(10).pow(new BN(18)))
                         );
                         await addLiquidity(
                             providers[1],

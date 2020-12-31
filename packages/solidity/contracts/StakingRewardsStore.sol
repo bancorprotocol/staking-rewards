@@ -57,7 +57,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param provider the owner of the liquidity
      * @param claimTime the time of the last claim
      */
-    event LastProviderClaimTimeUpdated(address indexed provider, uint256 claimTime);
+    event ProviderLastClaimTimeUpdated(address indexed provider, uint256 claimTime);
 
     /**
      * @dev initializes a new StakingRewardsStore contract
@@ -307,7 +307,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256 time = time();
         _providerLastClaimTimes[provider] = time;
 
-        emit LastProviderClaimTimeUpdated(provider, time);
+        emit ProviderLastClaimTimeUpdated(provider, time);
     }
 
     /**

@@ -32,7 +32,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     mapping(address => mapping(IERC20 => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
 
     // the mapping between providers and their respective last claim times
-    mapping(address => uint256) private _lastProviderClaimTimes;
+    mapping(address => uint256) private _providerLastClaimTimes;
 
     /**
      * @dev triggered when a pool program is being added
@@ -305,7 +305,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function updateProviderLastClaimTime(address provider) external override onlyOwner {
         uint256 time = time();
-        _lastProviderClaimTimes[provider] = time;
+        _providerLastClaimTimes[provider] = time;
 
         emit LastProviderClaimTimeUpdated(provider, time);
     }
@@ -317,7 +317,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return provider's last claim time
      */
-    function lastProviderClaimTime(address provider) external view override returns (uint256) {
-        return _lastProviderClaimTimes[provider];
+    function providerLastClaimTime(address provider) external view override returns (uint256) {
+        return _providerLastClaimTimes[provider];
     }
 }

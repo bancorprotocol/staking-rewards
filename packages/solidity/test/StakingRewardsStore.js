@@ -512,17 +512,17 @@ describe('StakingRewardsStore', () => {
         });
 
         it('should allow to update last claim time', async () => {
-            expect(await store.lastProviderClaimTime.call(provider)).to.be.bignumber.equal(new BN(0));
+            expect(await store.providerLastClaimTime.call(provider)).to.be.bignumber.equal(new BN(0));
 
             await setTime(now.add(new BN(1)));
             const res = await store.updateProviderLastClaimTime(provider, { from: owner });
-            expect(await store.lastProviderClaimTime.call(provider)).to.be.bignumber.equal(now);
+            expect(await store.providerLastClaimTime.call(provider)).to.be.bignumber.equal(now);
             expectEvent(res, 'LastProviderClaimTimeUpdated', { provider, claimTime: now });
 
             await setTime(now.add(new BN(100000)));
             const res2 = await store.updateProviderLastClaimTime(provider, { from: owner });
             expectEvent(res2, 'LastProviderClaimTimeUpdated', { provider, claimTime: now });
-            expect(await store.lastProviderClaimTime.call(provider)).to.be.bignumber.equal(now);
+            expect(await store.providerLastClaimTime.call(provider)).to.be.bignumber.equal(now);
         });
     });
 });

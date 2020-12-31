@@ -94,5 +94,5 @@ interface IStakingRewardsStore {
 
     function updateProviderLastClaimTime(address provider) external;
 
-    function lastProviderClaimTime(address provider) external view returns (uint256);
+    function providerLastClaimTime(address provider) external view returns (uint256);
 }

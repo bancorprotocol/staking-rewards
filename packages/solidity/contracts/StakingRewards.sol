@@ -746,7 +746,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 effectiveStakingStartTime =
             Math.max( // take the latest of actual staking start time and the latest multiplier reset
                 Math.max(stakingStartTime, program.startTime), // don't count staking before the start of the program
-                Math.max(_lastRemoveTimes.checkpoint(provider), _store.lastProviderClaimTime(provider)) // get the latest multiplier reset timestamp
+                Math.max(_lastRemoveTimes.checkpoint(provider), _store.providerLastClaimTime(provider)) // get the latest multiplier reset timestamp
             );
 
         // check that the staking range is valid. for example, it can be invalid when calculating the multiplier when

@@ -273,7 +273,6 @@ describe('StakingRewards', () => {
 
     describe('notifications', async () => {
         const provider = accounts[1];
-        const provider2 = accounts[2];
         const id = new BN(123);
         const liquidityProtectionProxy = accounts[3];
         const nonLiquidityProtection = accounts[9];
@@ -369,7 +368,7 @@ describe('StakingRewards', () => {
             };
             providerPools = {};
 
-            for (const provider of providers) {
+            for (const provider of accounts) {
                 providerPools[provider] = {};
 
                 reserveAmounts[poolToken.address][reserveToken.address][provider] = new BN(0);
@@ -646,6 +645,8 @@ describe('StakingRewards', () => {
                         });
 
                         it('should not affect the rewards, when adding liquidity in the same block', async () => {
+                            const provider3 = accounts[3];
+
                             await setTime(programStartTime.add(duration.weeks(5)));
 
                             const reward = await staking.rewards.call(provider);
@@ -666,6 +667,13 @@ describe('StakingRewards', () => {
                                 new BN(11111).mul(new BN(10).pow(new BN(18)))
                             );
 
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(1000000).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             expectAlmostEqual(await staking.rewards.call(provider), reward);
 
                             await addLiquidity(
@@ -673,6 +681,13 @@ describe('StakingRewards', () => {
                                 poolToken,
                                 reserveToken,
                                 new BN(11111).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(1).mul(new BN(10).pow(new BN(18)))
                             );
 
                             await addLiquidity(
@@ -686,6 +701,15 @@ describe('StakingRewards', () => {
                         });
 
                         it('should not affect the rewards, when removing liquidity in the same block', async () => {
+                            const provider3 = accounts[3];
+
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(1000000).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             await setTime(programStartTime.add(duration.weeks(5)));
 
                             const reward = await staking.rewards.call(provider);
@@ -697,10 +721,24 @@ describe('StakingRewards', () => {
                                 new BN(1).mul(new BN(10).pow(new BN(18)))
                             );
 
+                            await removeLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(1).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             expectAlmostEqual(await staking.rewards.call(provider), reward);
 
                             await removeLiquidity(
                                 provider,
+                                poolToken,
+                                reserveToken,
+                                new BN(11111).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            await removeLiquidity(
+                                provider3,
                                 poolToken,
                                 reserveToken,
                                 new BN(11111).mul(new BN(10).pow(new BN(18)))
@@ -722,10 +760,19 @@ describe('StakingRewards', () => {
                                 new BN(1000).mul(new BN(10).pow(new BN(18)))
                             );
 
+                            await removeLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(50000).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             expectAlmostEqual(await staking.rewards.call(provider), reward);
                         });
 
                         it('should properly calculate all rewards when adding liquidity', async () => {
+                            const provider3 = accounts[3];
+
                             let prevReward = await staking.rewards.call(provider);
 
                             await addLiquidity(
@@ -744,7 +791,14 @@ describe('StakingRewards', () => {
                                 provider,
                                 poolToken,
                                 reserveToken,
-                                new BN(282382389).mul(new BN(10).pow(new BN(18)))
+                                new BN(28238238).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(50000).mul(new BN(10).pow(new BN(18)))
                             );
 
                             await setTime(now.add(duration.days(1)));
@@ -759,15 +813,38 @@ describe('StakingRewards', () => {
                                 new BN(990930923).mul(new BN(10).pow(new BN(18)))
                             );
 
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(2666678).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             await setTime(now.add(duration.weeks(2)));
                             await testPartialRewards(provider, prevReward, duration.weeks(2));
                         });
 
                         it('should properly calculate all rewards when removing liquidity', async () => {
+                            const provider3 = accounts[3];
+
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(1000000).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             let prevReward = await staking.rewards.call(provider);
 
                             await removeLiquidity(
                                 provider,
+                                poolToken,
+                                reserveToken,
+                                new BN(1).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            await removeLiquidity(
+                                provider3,
                                 poolToken,
                                 reserveToken,
                                 new BN(1).mul(new BN(10).pow(new BN(18)))
@@ -781,6 +858,13 @@ describe('StakingRewards', () => {
 
                             await removeLiquidity(
                                 provider,
+                                poolToken,
+                                reserveToken,
+                                new BN(50000).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            await removeLiquidity(
+                                provider3,
                                 poolToken,
                                 reserveToken,
                                 new BN(50000).mul(new BN(10).pow(new BN(18)))
@@ -808,6 +892,13 @@ describe('StakingRewards', () => {
                                 poolToken,
                                 reserveToken,
                                 new BN(30000).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            await removeLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(25000).mul(new BN(10).pow(new BN(18)))
                             );
 
                             await setTime(now.add(duration.weeks(3)));

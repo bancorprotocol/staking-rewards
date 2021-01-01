@@ -333,50 +333,35 @@ describe('StakingRewards', () => {
         let providerPools;
 
         beforeEach(async () => {
-            reserveAmounts = {
-                [poolToken.address]: {
-                    [reserveToken.address]: {},
-                    [networkToken.address]: {}
-                },
-                [poolToken2.address]: {
-                    [reserveToken.address]: {},
-                    [networkToken.address]: {}
-                },
-                [poolToken3.address]: {
-                    [reserveToken.address]: {},
-                    [networkToken.address]: {}
-                }
-            };
-            totalReserveAmounts = {
-                [poolToken.address]: {
-                    [reserveToken.address]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                },
-                [poolToken2.address]: {
-                    [reserveToken.address]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                },
-                [poolToken3.address]: {
-                    [reserveToken.address]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                }
-            };
-            programs = {
-                [poolToken.address]: {},
-                [poolToken2.address]: {},
-                [poolToken3.address]: {}
-            };
+            const poolTokens = [poolToken, poolToken2, poolToken3];
+
+            reserveAmounts = {};
+            totalReserveAmounts = {};
+            programs = {};
             providerPools = {};
 
-            for (const provider of accounts) {
-                providerPools[provider] = {};
+            for (const { address: poolToken } of poolTokens) {
+                reserveAmounts[poolToken] = {
+                    [reserveToken.address]: {},
+                    [networkToken.address]: {}
+                };
 
-                reserveAmounts[poolToken.address][reserveToken.address][provider] = new BN(0);
-                reserveAmounts[poolToken.address][networkToken.address][provider] = new BN(0);
-                reserveAmounts[poolToken2.address][reserveToken.address][provider] = new BN(0);
-                reserveAmounts[poolToken2.address][networkToken.address][provider] = new BN(0);
-                reserveAmounts[poolToken3.address][reserveToken.address][provider] = new BN(0);
-                reserveAmounts[poolToken3.address][networkToken.address][provider] = new BN(0);
+                totalReserveAmounts[poolToken] = {
+                    [reserveToken.address]: new BN(0),
+                    [networkToken.address]: new BN(0)
+                };
+
+                programs[poolToken] = {
+                    [reserveToken.address]: new BN(0),
+                    [networkToken.address]: new BN(0)
+                };
+
+                for (const provider of accounts) {
+                    providerPools[provider] = {};
+
+                    reserveAmounts[poolToken][reserveToken.address][provider] = new BN(0);
+                    reserveAmounts[poolToken][networkToken.address][provider] = new BN(0);
+                }
             }
         });
 
@@ -1325,8 +1310,6 @@ describe('StakingRewards', () => {
 
         context('multiple pools', async () => {
             beforeEach(async () => {
-                await setTime(now);
-
                 programStartTime = now.add(duration.weeks(1));
                 programEndTime = programStartTime.add(REWARDS_DURATION);
 
@@ -1457,6 +1440,48 @@ describe('StakingRewards', () => {
                     tests(providers);
                 });
             });
+        });
+
+        context('pre-existing positions', async () => {
+            const provider = accounts[1];
+
+            beforeEach(async () => {
+                programStartTime = now.add(duration.years(1));
+                programEndTime = programStartTime.add(REWARDS_DURATION);
+
+                expect(await store.isReserveParticipating.call(poolToken3.address, networkToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken3.address, reserveToken.address)).to.be.false();
+            });
+
+            for (const timeDiff of [duration.days(1), duration.weeks(1), duration.days(180)]) {
+                context(`staking ${timeDiff} before the start of the program`, async () => {
+                    it('should only take into account staking duration after the start of the program', async () => {
+                        await setTime(programStartTime.sub(timeDiff));
+
+                        expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
+
+                        await addLiquidity(
+                            provider,
+                            poolToken3,
+                            reserveToken,
+                            new BN(11100008).mul(new BN(10).pow(new BN(18)))
+                        );
+
+                        expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
+
+                        await setTime(programStartTime);
+                        await addPoolProgram(poolToken3, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+
+                        expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
+
+                        await setTime(now.add(duration.days(5)));
+                        await testRewards(provider);
+
+                        await setTime(now.add(duration.weeks(1)));
+                        await testRewards(provider, duration.weeks(1));
+                    });
+                });
+            }
         });
     });
 });

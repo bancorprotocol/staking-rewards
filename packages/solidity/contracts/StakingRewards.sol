@@ -206,10 +206,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 maxAmount,
         ILiquidityProtectionDataStore lpStore
     ) private returns (uint256) {
-        // while querying rewards is allowed for every address, claiming rewards is allowed only by the actual
-        // msg.sender.
-        require(!claim || provider == msg.sender, "ERR_ACCESS_DENIED");
-
         return rewards(provider, lpStore.providerPools(provider), claim, maxAmount, lpStore);
     }
 

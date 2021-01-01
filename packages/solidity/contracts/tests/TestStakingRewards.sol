@@ -16,4 +16,25 @@ contract TestStakingRewards is StakingRewards, TestTime {
     function time() internal view override(Time, TestTime) returns (uint256) {
         return TestTime.time();
     }
+
+    function baseRewards(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken
+    ) external view returns (uint256) {
+        Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
+        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+        PoolProgram memory program = poolProgram(poolToken);
+
+        return
+            baseRewards(
+                provider,
+                poolToken,
+                reserveToken,
+                rewardsData,
+                providerRewards,
+                program,
+                liquidityProtectionStore()
+            );
+    }
 }

@@ -418,24 +418,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims pending rewards for a list of providers
-     *
-     * @param providers owners of the liquidity
-     *
-     * @return all claimed rewards
-     */
-    function claimRewardsFor(address[] calldata providers) external returns (uint256[] memory) {
-        uint256 length = providers.length;
-        uint256[] memory claimed = new uint256[](length);
-
-        for (uint256 i = 0; i < length; ++i) {
-            claimed[i] = claimRewards(providers[i], liquidityProtectionStore());
-        }
-
-        return claimed;
-    }
-
-    /**
      * @dev stakes specific pending rewards from all participating pools
      *
      * @param maxAmount an optional cap on the rewards to stake
@@ -571,6 +553,42 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
                 providerRewards.baseRewardsDebt,
                 multiplier
             );
+        }
+    }
+
+    /**
+     * @dev updates pending rewards for a list of providers
+     *
+     * @param providers owners of the liquidity
+     */
+    function updateRewards(address[] calldata providers) external {
+        ILiquidityProtectionDataStore lpStore = liquidityProtectionStore();
+
+        uint256 length = providers.length;
+        for (uint256 i = 0; i < length; ++i) {
+            updateRewards(providers[i], lpStore);
+        }
+    }
+
+    /**
+     * @dev updates pending rewards for a specific of provider
+     *
+     * @param provider the owner of the liquidity
+     * @param lpStore liquidity protection data store
+     */
+    function updateRewards(address provider, ILiquidityProtectionDataStore lpStore) private {
+        IERC20[] memory poolTokens = lpStore.providerPools(provider);
+
+        for (uint256 i = 0; i < poolTokens.length; ++i) {
+            IERC20 poolToken = poolTokens[i];
+
+            PoolProgram memory program = poolProgram(poolToken);
+
+            for (uint256 j = 0; j < program.reserveTokens.length; ++j) {
+                IERC20 reserveToken = program.reserveTokens[j];
+
+                updateRewards(provider, poolToken, reserveToken, lpStore);
+            }
         }
     }
 
@@ -962,7 +980,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return the liquidity protection store data contract
      */
-    function liquidityProtectionStore() private view returns (ILiquidityProtectionDataStore) {
+    function liquidityProtectionStore() internal view returns (ILiquidityProtectionDataStore) {
         return liquidityProtection().store();
     }
 
@@ -971,7 +989,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return the liquidity protection store data contract
      */
-    function liquidityProtection() private view returns (ILiquidityProtection) {
+    function liquidityProtection() internal view returns (ILiquidityProtection) {
         return ILiquidityProtection(addressOf(LIQUIDITY_PROTECTION));
     }
 }

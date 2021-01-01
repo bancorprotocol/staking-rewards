@@ -744,7 +744,7 @@ describe('StakingRewards', () => {
                                 provider,
                                 poolToken,
                                 reserveToken,
-                                new BN(2342342342341).mul(new BN(10).pow(new BN(18)))
+                                new BN(282382389).mul(new BN(10).pow(new BN(18)))
                             );
 
                             await setTime(now.add(duration.days(1)));
@@ -756,7 +756,7 @@ describe('StakingRewards', () => {
                                 provider,
                                 poolToken,
                                 reserveToken,
-                                new BN(990930943).mul(new BN(10).pow(new BN(18)))
+                                new BN(990930923).mul(new BN(10).pow(new BN(18)))
                             );
 
                             await setTime(now.add(duration.weeks(2)));
@@ -1261,7 +1261,7 @@ describe('StakingRewards', () => {
                     providers[0],
                     poolToken3,
                     reserveToken,
-                    new BN('23484672472347232092099021').mul(new BN(10).pow(new BN(18)))
+                    new BN(33333333333).mul(new BN(10).pow(new BN(18)))
                 );
             });
 
@@ -1308,13 +1308,13 @@ describe('StakingRewards', () => {
                         providers[0],
                         poolToken2,
                         networkToken,
-                        new BN('324832904093249203').mul(new BN(10).pow(new BN(18)))
+                        new BN(888888888).mul(new BN(10).pow(new BN(18)))
                     );
                     await addLiquidity(
                         providers[0],
                         poolToken3,
                         networkToken,
-                        new BN('55555555555555555555').mul(new BN(10).pow(new BN(18)))
+                        new BN(50000).mul(new BN(10).pow(new BN(18)))
                     );
                 });
 
@@ -1353,7 +1353,7 @@ describe('StakingRewards', () => {
                             providers[1],
                             poolToken2,
                             networkToken,
-                            new BN('234324234234234243223999').mul(new BN(10).pow(new BN(18)))
+                            new BN(234324).mul(new BN(10).pow(new BN(18)))
                         );
                         await addLiquidity(
                             providers[1],

@@ -552,6 +552,54 @@ describe('StakingRewards', () => {
             expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
         };
 
+        const testClaimFor = async (providers, multiplierDuration = undefined) => {
+            const effectiveTime = BN.min(now, programEndTime);
+
+            const rewards = [];
+            for (let i = 0; i < providers.length; ++i) {
+                const provider = providers[i];
+
+                rewards[i] = await staking.rewards.call(provider);
+
+                const expectedReward = getExpectedRewards(provider, effectiveTime.sub(prevNow), multiplierDuration);
+                expect(rewards[i]).to.be.bignumber.equal(expectedReward);
+            }
+
+            const prevBalances = [];
+            const prevTotalProviderClaimed = [];
+
+            const claimed = await staking.claimRewardsFor.call(providers);
+            for (let i = 0; i < claimed.length; ++i) {
+                const provider = providers[i];
+
+                expect(claimed[i]).to.be.bignumber.equal(rewards[i]);
+
+                prevBalances[i] = await networkToken.balanceOf.call(provider);
+                prevTotalProviderClaimed[i] = await staking.totalClaimedRewards.call(provider);
+            }
+
+            const tx = await staking.claimRewardsFor(providers);
+
+            for (let i = 0; i < claimed.length; ++i) {
+                const provider = providers[i];
+                const reward = claimed[i];
+
+                if (reward.gt(new BN(0))) {
+                    expectEvent(tx, 'RewardsClaimed', {
+                        provider,
+                        amount: reward
+                    });
+                }
+
+                expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalances[i].add(reward));
+                expect(await staking.totalClaimedRewards.call(provider)).to.be.bignumber.equal(
+                    prevTotalProviderClaimed[i].add(reward)
+                );
+
+                expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
+            }
+        };
+
         const testStaking = async (provider, amount, newPoolToken, participating = false) => {
             const reward = await staking.rewards.call(provider);
 
@@ -1235,6 +1283,56 @@ describe('StakingRewards', () => {
                     });
                 });
             }
+
+            describe('claiming for', async () => {
+                it('should claim all rewards for all providers', async () => {
+                    // Should grant all rewards for the duration of one second.
+                    await setTime(now.add(duration.seconds(1)));
+                    await testClaimFor(providers);
+
+                    // Should return all rewards for a single day, excluding previously granted rewards.
+                    await setTime(programStartTime.add(duration.days(1)));
+                    await testClaimFor(providers);
+
+                    // Should return all weekly rewards, excluding previously granted rewards, but without the
+                    // multiplier bonus.
+                    await setTime(programStartTime.add(duration.weeks(1)));
+                    await testClaimFor(providers);
+
+                    // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
+                    // two weeks rewards multiplier.
+                    await setTime(programStartTime.add(duration.weeks(3)));
+                    await testClaimFor(providers, duration.weeks(2));
+
+                    // Should return all program rewards, excluding previously granted rewards + max retroactive
+                    // multipliers.
+                    await setTime(programEndTime);
+                    await testClaimFor(providers, duration.weeks(4));
+
+                    // Should return no additional rewards after the ending time of the program.
+                    await setTime(programEndTime.add(duration.days(1)));
+                    await testClaimFor(providers);
+                });
+
+                it('should handle claiming for repeated or not participating providers', async () => {
+                    await setTime(now.add(duration.seconds(1)));
+
+                    const reward = await staking.rewards.call(providers[0]);
+                    const claimed = await staking.claimRewardsFor.call([providers[0], providers[0], providers[0]]);
+                    expect(claimed[0]).to.be.bignumber.equal(reward);
+                    expect(claimed[1]).to.be.bignumber.equal(new BN(0));
+                    expect(claimed[2]).to.be.bignumber.equal(new BN(0));
+
+                    await setTime(programStartTime.add(duration.days(5)));
+
+                    const reward2 = await staking.rewards.call(providers[0]);
+                    const provider3 = accounts[3];
+                    const claimed2 = await staking.claimRewardsFor.call([provider3, providers[0], provider3]);
+                    expect(claimed2[0]).to.be.bignumber.equal(new BN(0));
+                    expect(claimed2[1]).to.be.bignumber.equal(reward2);
+                    expect(claimed2[2]).to.be.bignumber.equal(new BN(0));
+                });
+            });
         };
 
         context('single pool', async () => {

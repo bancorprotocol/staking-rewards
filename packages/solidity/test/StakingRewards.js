@@ -397,22 +397,20 @@ describe('StakingRewards', () => {
             });
         };
 
-        const removeTestLiquidity = async (provider, poolToken, reserveToken, removedReserveAmount) => {
+        const removeTestLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
             expect(reserveAmounts[poolToken.address][reserveToken.address][provider]).to.be.bignumber.gte(
-                removedReserveAmount
+                reserveAmount
             );
 
-            expect(totalReserveAmounts[poolToken.address][reserveToken.address]).to.be.bignumber.gte(
-                removedReserveAmount
-            );
+            expect(totalReserveAmounts[poolToken.address][reserveToken.address]).to.be.bignumber.gte(reserveAmount);
 
             reserveAmounts[poolToken.address][reserveToken.address][provider] = reserveAmounts[poolToken.address][
                 reserveToken.address
-            ][provider].sub(removedReserveAmount);
+            ][provider].sub(reserveAmount);
 
             totalReserveAmounts[poolToken.address][reserveToken.address] = totalReserveAmounts[poolToken.address][
                 reserveToken.address
-            ].sub(removedReserveAmount);
+            ].sub(reserveAmount);
 
             if (reserveAmounts[poolToken.address][reserveToken.address][provider].eq(new BN(0))) {
                 providerPools[provider][poolToken.address].splice(
@@ -434,18 +432,18 @@ describe('StakingRewards', () => {
             }
         };
 
-        const removeLiquidity = async (provider, poolToken, reserveToken, removedReserveAmount) => {
+        const removeLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
             await liquidityProtection.removeLiquidity(
                 provider,
                 poolToken.address,
                 reserveToken.address,
-                removedReserveAmount,
+                reserveAmount,
                 {
                     from: provider
                 }
             );
 
-            removeTestLiquidity(provider, poolToken, reserveToken, removedReserveAmount);
+            removeTestLiquidity(provider, poolToken, reserveToken, reserveAmount);
         };
 
         const addPoolProgram = async (poolToken, programEndTime, rewardRate) => {

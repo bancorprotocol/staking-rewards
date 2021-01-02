@@ -21,7 +21,7 @@ interface ILiquidityProtectionEventsSubscriber {
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
-        uint256 removedPoolAmount,
-        uint256 removedReserveAmount
+        uint256 poolAmount,
+        uint256 reserveAmount
     ) external;
 }

@@ -165,8 +165,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
-        uint256, /* removedPoolAmount */
-        uint256 /* removedReserveAmount */
+        uint256, /* poolAmount */
+        uint256 /* reserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
         if (!_store.isReserveParticipating(poolToken, reserveToken)) {
             return;

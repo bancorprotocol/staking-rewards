@@ -62,11 +62,11 @@ contract TestLiquidityProtection is ILiquidityProtection {
         address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
-        uint256 removedReserveAmount
+        uint256 reserveAmount
     ) external payable returns (uint256) {
-        _stakingRewards.onLiquidityRemoved(0, provider, poolToken, reserveToken, 0, removedReserveAmount);
+        _stakingRewards.onLiquidityRemoved(0, provider, poolToken, reserveToken, 0, reserveAmount);
 
-        _store.removeLiquidity(provider, poolToken, reserveToken, removedReserveAmount, false);
+        _store.removeLiquidity(provider, poolToken, reserveToken, reserveAmount, false);
 
         return 0;
     }

@@ -444,33 +444,6 @@ describe('StakingRewardsStore', () => {
         });
     });
 
-    describe('provider liquidity', () => {
-        const provider = accounts[5];
-        const provider2 = accounts[6];
-
-        beforeEach(async () => {
-            const startTime = now;
-            const endTime = startTime.add(new BN(2000));
-            const rewardRate = new BN(1000);
-            await store.addPoolProgram(
-                poolToken.address,
-                [networkToken.address, reserveToken.address],
-                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                endTime,
-                rewardRate,
-                { from: owner }
-            );
-            await store.addPoolProgram(
-                poolToken2.address,
-                [networkToken.address, reserveToken.address],
-                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                endTime,
-                rewardRate,
-                { from: owner }
-            );
-        });
-    });
-
     describe('pool rewards data', () => {
         beforeEach(async () => {
             const startTime = now;

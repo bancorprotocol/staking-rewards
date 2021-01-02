@@ -102,10 +102,11 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev returns whether the specified pool participates in the rewards program
+     * @dev returns whether the specified pool  is participating in the rewards program
      *
      * @param program the program data
-     * @return whether the specified pool participates in the rewards program
+     *
+     * @return whether the specified pool  is participating in the rewards program
      */
     function isPoolParticipating(PoolProgram memory program) private view returns (bool) {
         return program.endTime > time();

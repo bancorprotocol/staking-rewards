@@ -1244,8 +1244,6 @@ describe('StakingRewards', () => {
                         it('should not allow staking more than the claimable rewards', async () => {
                             const newPoolToken = accounts[5];
 
-                            // Should return all weekly rewards, excluding previously granted rewards, with the
-                            // multiplier bonus.
                             await setTime(programStartTime.add(duration.weeks(1)));
 
                             const reward = await staking.rewards.call(provider);

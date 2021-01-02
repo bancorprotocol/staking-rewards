@@ -8,7 +8,7 @@ module.exports = {
             gas: 9500000
         }
     },
-    plugins: ['solidity-coverage'],
+    plugins: ['solidity-coverage', 'truffle-contract-size'],
     compilers: {
         solc: {
             version: '0.6.12',

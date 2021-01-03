@@ -1690,7 +1690,7 @@ describe('StakingRewards', () => {
                             await addLiquidity(
                                 provider,
                                 poolToken3,
-                                reserveToken,
+                                reserveToken3,
                                 new BN(11100008).mul(new BN(10).pow(new BN(18)))
                             );
 

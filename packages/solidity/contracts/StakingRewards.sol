@@ -180,6 +180,33 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev returns the staking rewards store
+     *
+     * @return the staking rewards store
+     */
+    function store() external view returns (IStakingRewardsStore) {
+        return _store;
+    }
+
+    /**
+     * @dev returns the network token governance
+     *
+     * @return the network token governance
+     */
+    function networkTokenGovernance() external view returns (ITokenGovernance) {
+        return _networkTokenGovernance;
+    }
+
+    /**
+     * @dev returns the last remove times
+     *
+     * @return the last remove times
+     */
+    function lastRemoveTimes() external view returns (ICheckpointStore) {
+        return _lastRemoveTimes;
+    }
+
+    /**
      * @dev returns specific provider's pending rewards for all participating pools
      *
      * @param provider the owner of the liquidity

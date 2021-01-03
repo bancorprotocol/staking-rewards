@@ -273,6 +273,12 @@ describe('StakingRewards', () => {
             expect(await newStaking.hasRole.call(ROLE_REWARDS_DISTRIBUTOR, supervisor)).to.be.false();
         });
 
+        it('should initialize the state', async () => {
+            expect(await staking.store.call()).to.eql(store.address);
+            expect(await staking.networkTokenGovernance.call()).to.eql(networkTokenGovernance.address);
+            expect(await staking.lastRemoveTimes.call()).to.eql(checkpointStore.address);
+        });
+
         it('should revert if initialized with a zero address store', async () => {
             await expectRevert(
                 StakingRewards.new(

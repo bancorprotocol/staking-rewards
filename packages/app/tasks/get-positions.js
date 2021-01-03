@@ -25,6 +25,7 @@ const getPositionsTask = async (env) => {
             .call({}, blockNumber);
 
         return {
+            id,
             provider: position[0],
             poolToken: position[1],
             reserveToken: position[2],
@@ -119,8 +120,8 @@ const getPositionsTask = async (env) => {
                             const position = await getPosition(id, blockNumber);
 
                             if (
-                                new BN(position.poolToken).eq(new BN(poolToken)) &&
-                                new BN(position.reserveToken).eq(new BN(reserveToken)) &&
+                                position.poolToken === poolToken &&
+                                position.reserveToken === reserveToken &&
                                 new BN(position.poolAmount).eq(new BN(poolAmount)) &&
                                 new BN(position.reserveAmount).eq(new BN(reserveAmount))
                             ) {
@@ -315,8 +316,8 @@ const getPositionsTask = async (env) => {
 
                             if (
                                 provider === position.provider &&
-                                new BN(position.poolToken).eq(new BN(poolToken)) &&
-                                new BN(position.reserveToken).eq(new BN(reserveToken)) &&
+                                position.poolToken === poolToken &&
+                                position.reserveToken === reserveToken &&
                                 new BN(position.poolAmount).eq(new BN(poolAmount)) &&
                                 new BN(position.reserveAmount).eq(new BN(reserveAmount))
                             ) {
@@ -342,8 +343,8 @@ const getPositionsTask = async (env) => {
 
                             if (
                                 provider === position.provider &&
-                                new BN(position.poolToken).eq(new BN(poolToken)) &&
-                                new BN(position.reserveToken).eq(new BN(reserveToken)) &&
+                                position.poolToken === poolToken &&
+                                position.reserveToken === reserveToken &&
                                 new BN(position.poolAmount).eq(new BN(poolAmount)) &&
                                 new BN(position.reserveAmount).eq(new BN(reserveAmount))
                             ) {

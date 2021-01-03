@@ -223,6 +223,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         view
         override
         returns (
+            IERC20[] memory,
             uint256[] memory,
             uint256[] memory,
             uint256[] memory,
@@ -232,6 +233,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     {
         uint256 length = _pools.length();
 
+        IERC20[] memory poolTokens = new IERC20[](length);
         uint256[] memory startTimes = new uint256[](length);
         uint256[] memory endTimes = new uint256[](length);
         uint256[] memory rewardRates = new uint256[](length);
@@ -239,8 +241,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint32[2][] memory rewardShares = new uint32[2][](length);
 
         for (uint256 i = 0; i < length; ++i) {
-            PoolProgram memory program = _programs[IERC20(_pools.at(i))];
+            IERC20 poolToken = IERC20(_pools.at(i));
+            PoolProgram memory program = _programs[poolToken];
 
+            poolTokens[i] = poolToken;
             startTimes[i] = program.startTime;
             endTimes[i] = program.endTime;
             rewardRates[i] = program.rewardRate;
@@ -248,7 +252,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             rewardShares[i] = program.rewardShares;
         }
 
-        return (startTimes, endTimes, rewardRates, reserveTokens, rewardShares);
+        return (poolTokens, startTimes, endTimes, rewardRates, reserveTokens, rewardShares);
     }
 
     /**

@@ -59,16 +59,18 @@ describe('StakingRewardsStore', () => {
     const getPoolPrograms = async () => {
         const data = await store.poolPrograms.call();
 
-        const startTimes = data[0];
-        const endTimes = data[1];
-        const rewardRates = data[2];
-        const reserveTokens = data[3];
-        const rewardShares = data[4];
+        const poolTokens = data[0];
+        const startTimes = data[1];
+        const endTimes = data[2];
+        const rewardRates = data[3];
+        const reserveTokens = data[4];
+        const rewardShares = data[5];
 
         const programs = [];
 
-        for (let i = 0; i < startTimes.length; ++i) {
+        for (let i = 0; i < poolTokens.length; ++i) {
             programs.push({
+                poolToken: poolTokens[i],
                 startTime: startTimes[i],
                 endTime: endTimes[i],
                 rewardRate: rewardRates[i],
@@ -323,9 +325,9 @@ describe('StakingRewardsStore', () => {
 
             const program1 = programs[0];
 
+            expect(program1.poolToken).to.eql(poolToken.address);
             expect(program1.startTime).to.be.bignumber.equal(startTime);
             expect(program1.endTime).to.be.bignumber.equal(endTime);
-
             expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
             expect(program1.reserveTokens[0]).to.eql(networkToken.address);
             expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
@@ -373,6 +375,7 @@ describe('StakingRewardsStore', () => {
             expect(programs2.length).to.eql(2);
 
             const program2 = programs2[1];
+            expect(program2.poolToken).to.eql(poolToken2.address);
             expect(program2.startTime).to.be.bignumber.equal(startTime2);
             expect(program2.endTime).to.be.bignumber.equal(endTime2);
             expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);

@@ -56,6 +56,7 @@ interface IStakingRewardsStore {
         external
         view
         returns (
+            IERC20[] memory,
             uint256[] memory,
             uint256[] memory,
             uint256[] memory,

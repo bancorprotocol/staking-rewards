@@ -9,6 +9,7 @@ const argv = require('./utils/yargs');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPositionsTask = require('./tasks/get-positions');
+const getLastRemovalTimesTask = require('./tasks/get-last-removal-times');
 
 const setProgramsTask = require('./tasks/set-programs');
 
@@ -29,7 +30,7 @@ const main = async () => {
         const env = await setup();
 
         // Handle all the tasks in the right order.
-        const { getAll, getLiquidity, getPositions, setAll, setPrograms } = argv;
+        const { getAll, getLiquidity, getPositions, getLastRemovalTimes, setAll, setPrograms } = argv;
 
         if (getAll || getLiquidity) {
             await getLiquidityTask(env);
@@ -37,6 +38,10 @@ const main = async () => {
 
         if (getAll || getPositions) {
             await getPositionsTask(env);
+        }
+
+        if (getAll || getLastRemovalTimes) {
+            await getLastRemovalTimesTask(env);
         }
 
         if (setAll || setPrograms) {

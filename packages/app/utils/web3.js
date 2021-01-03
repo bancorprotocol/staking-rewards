@@ -16,10 +16,9 @@ let contracts = {};
 let defaultAccount;
 
 const setup = async () => {
-    const { externalContracts, systemContracts, web3Provider } = settings;
-    const { TokenGovernance: TokenGovernanceSettings } = externalContracts;
+    const setupEnv = async () => {
+        const { web3Provider } = settings;
 
-    try {
         if (!test) {
             info('Running against mainnet');
 
@@ -44,7 +43,7 @@ const setup = async () => {
                 network_id: 1,
                 db: memdown(),
                 default_balance_ether: 10000000000000000000,
-                unlocked_accounts: [TokenGovernanceSettings.governor]
+                unlocked_accounts: [TokenGovernance.governor]
             });
 
             info('Started forking the mainnet');
@@ -60,18 +59,39 @@ const setup = async () => {
             Contract.setProvider(provider);
             Contract.defaultAccount = defaultAccount;
         }
+    };
 
-        const { keccak256 } = web3.utils;
+    const setupExternalContracts = async () => {
+        const { externalContracts } = settings;
+
+        info('Setting up External Contracts');
+
+        const externalContractsDir = path.resolve(
+            __dirname,
+            '../../../node_modules/@bancor/contracts/solidity/build/contracts'
+        );
 
         let { abi, address } = externalContracts.LiquidityProtectionStoreOld;
         contracts.LiquidityProtectionStoreOld = new Contract(abi, address);
 
+        ({ address } = externalContracts.TokenGovernance);
+        rawData = fs.readFileSync(path.join(externalContractsDir, 'TokenGovernance.json'));
+        ({ abi } = JSON.parse(rawData));
+        contracts.TokenGovernance = new Contract(abi, address);
+
+        ({ address } = externalContracts.CheckpointStore);
+        rawData = fs.readFileSync(path.join(externalContractsDir, 'CheckpointStore.json'));
+        ({ abi } = JSON.parse(rawData));
+        contracts.CheckpointStore = new Contract(abi, address);
+    };
+
+    const setupSystemContracts = async () => {
+        const { externalContracts, systemContracts } = settings;
+
         if (init) {
-            info('Deploying new system contracts');
+            info('Deploying StakingRewardsStore');
 
             const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
-
-            info('Deploying StakingRewardsStore');
 
             let rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsStore.json'));
             let { abi, bytecode } = JSON.parse(rawData);
@@ -94,11 +114,13 @@ const setup = async () => {
             rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewards.json'));
             ({ abi, bytecode } = JSON.parse(rawData));
 
+            const { TokenGovernance } = externalContracts;
+
             const StakingRewards = new Contract(abi);
             const arguments = [
                 stakingStoreAddress,
-                TokenGovernanceSettings.address,
-                externalContracts.CheckpointStore.address,
+                contracts.TokenGovernance.address,
+                contracts.CheckpointStore.address,
                 externalContracts.ContractRegistry.address
             ];
 
@@ -116,6 +138,7 @@ const setup = async () => {
 
             info('Granting required permissions');
 
+            const { keccak256 } = web3.utils;
             const ROLE_OWNER = keccak256('ROLE_OWNER');
             const ROLE_MINTER = keccak256('ROLE_MINTER');
 
@@ -128,20 +151,14 @@ const setup = async () => {
                 .grantRole(ROLE_OWNER, stakingAddress)
                 .send({ from: defaultAccount, gas });
 
-            ({ address } = externalContracts.TokenGovernance);
-            rawData = fs.readFileSync(path.join(systemContractsDir, 'TokenGovernance.json'));
-            ({ abi } = JSON.parse(rawData));
-
-            contracts.TokenGovernance = new Contract(abi, address);
-
             info('Granting TokenGovernance minting permissions to StakingRewards');
 
             gas = await contracts.TokenGovernance.methods
                 .grantRole(ROLE_MINTER, stakingAddress)
-                .estimateGas({ from: TokenGovernanceSettings.governor });
+                .estimateGas({ from: TokenGovernance.governor });
             await contracts.TokenGovernance.methods
                 .grantRole(ROLE_MINTER, stakingAddress)
-                .send({ from: TokenGovernanceSettings.governor, gas });
+                .send({ from: TokenGovernance.governor, gas });
         } else {
             let { abi, address } = systemContracts.StakingRewardsStore;
             if (abi && address) {
@@ -157,6 +174,12 @@ const setup = async () => {
                 warning('Unable to retrieve StakingRewards settings');
             }
         }
+    };
+
+    try {
+        await setupEnv();
+        await setupExternalContracts();
+        await setupSystemContracts();
 
         return { settings, web3, contracts, defaultAccount, Contract, reorgOffset, test };
     } catch (e) {

@@ -20,7 +20,9 @@ const REMOVE_LIQUIDITY_ABI = [
 
 const getPositionsTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
-        const position = await contracts.LiquidityProtectionStore.methods.protectedLiquidity(id).call({}, blockNumber);
+        const position = await contracts.LiquidityProtectionStoreOld.methods
+            .protectedLiquidity(id)
+            .call({}, blockNumber);
 
         return {
             provider: position[0],
@@ -61,7 +63,7 @@ const getPositionsTask = async (env) => {
                 'blocks'
             );
 
-            const events = await contracts.LiquidityProtectionStore.getPastEvents('allEvents', {
+            const events = await contracts.LiquidityProtectionStoreOld.getPastEvents('allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
@@ -94,10 +96,10 @@ const getPositionsTask = async (env) => {
                         // Try to find the new positions which didn't exist in the previous block and match them to
                         // this position.
                         let matches = [];
-                        const currentBlockIds = await contracts.LiquidityProtectionStore.methods
+                        const currentBlockIds = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, blockNumber);
-                        const prevBLockIds = await contracts.LiquidityProtectionStore.methods
+                        const prevBLockIds = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, blockNumber - 1);
                         const ids = currentBlockIds.filter((id) => !prevBLockIds.includes(id));
@@ -206,7 +208,7 @@ const getPositionsTask = async (env) => {
                         // Please note that we are ignore the case when a single position was added and removed in the
                         // same block.
                         const matches = [];
-                        const ids = await contracts.LiquidityProtectionStore.methods
+                        const ids = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, blockNumber - 1);
                         for (const id of ids) {
@@ -289,10 +291,10 @@ const getPositionsTask = async (env) => {
                         // Please note that we are ignore the case when a single position was added and removed in the
                         // same block.
                         let matches = [];
-                        const currentBlockIds = await contracts.LiquidityProtectionStore.methods
+                        const currentBlockIds = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, blockNumber);
-                        const prevBLockIds = await contracts.LiquidityProtectionStore.methods
+                        const prevBLockIds = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, blockNumber - 1);
                         const ids = prevBLockIds.filter((id) => !currentBlockIds.includes(id));

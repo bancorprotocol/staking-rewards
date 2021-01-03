@@ -63,80 +63,78 @@ const setup = async () => {
 
         const { keccak256 } = web3.utils;
 
-        let { abi, address } = externalContracts.LiquidityProtectionStore;
-        contracts.LiquidityProtectionStore = new Contract(abi, address);
+        let { abi, address } = externalContracts.LiquidityProtectionStoreOld;
+        contracts.LiquidityProtectionStoreOld = new Contract(abi, address);
 
         if (init) {
             info('Deploying new system contracts');
 
             const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
-            info('Deploying StakingRewardsDistributionStore');
+            info('Deploying StakingRewardsStore');
 
-            let rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsDistributionStore.json'));
+            let rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsStore.json'));
             let { abi, bytecode } = JSON.parse(rawData);
 
-            const StakingRewardsDistributionStore = new Contract(abi);
-            let gas = await StakingRewardsDistributionStore.deploy({ data: bytecode }).estimateGas();
-            let instance = await StakingRewardsDistributionStore.deploy({ data: bytecode }).send({
+            const StakingRewardsStore = new Contract(abi);
+            let gas = await StakingRewardsStore.deploy({ data: bytecode }).estimateGas();
+            let instance = await StakingRewardsStore.deploy({ data: bytecode }).send({
                 from: defaultAccount,
                 gas
             });
 
             const { address: stakingStoreAddress } = instance.options;
 
-            info('Deployed new StakingRewardsDistributionStore to', arg('address', stakingStoreAddress));
+            info('Deployed new StakingRewardsStore to', arg('address', stakingStoreAddress));
 
-            contracts.StakingRewardsDistributionStore = new Contract(abi, stakingStoreAddress);
+            contracts.StakingRewardsStore = new Contract(abi, stakingStoreAddress);
 
-            info('Deploying StakingRewardsDistribution');
+            info('Deploying StakingRewards');
 
-            const {
-                rewards: { maxRewards }
-            } = settings;
-
-            rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsDistribution.json'));
+            rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewards.json'));
             ({ abi, bytecode } = JSON.parse(rawData));
 
-            const StakingRewardsDistribution = new Contract(abi);
+            const StakingRewards = new Contract(abi);
             const arguments = [
                 stakingStoreAddress,
                 TokenGovernanceSettings.address,
                 externalContracts.CheckpointStore.address,
-                maxRewards,
                 externalContracts.ContractRegistry.address
             ];
 
-            gas = await StakingRewardsDistribution.deploy({ data: bytecode, arguments }).estimateGas();
-            instance = await StakingRewardsDistribution.deploy({ data: bytecode, arguments }).send({
+            gas = await StakingRewards.deploy({ data: bytecode, arguments }).estimateGas();
+            instance = await StakingRewards.deploy({ data: bytecode, arguments }).send({
                 from: defaultAccount,
                 gas
             });
 
             const { address: stakingAddress } = instance.options;
 
-            info('Deployed new StakingRewardsDistribution to', arg('address', stakingAddress));
+            info('Deployed new StakingRewards to', arg('address', stakingAddress));
 
-            contracts.StakingRewardsDistribution = new Contract(abi, stakingAddress);
+            contracts.StakingRewards = new Contract(abi, stakingAddress);
 
             info('Granting required permissions');
 
             const ROLE_OWNER = keccak256('ROLE_OWNER');
             const ROLE_MINTER = keccak256('ROLE_MINTER');
 
-            info('Granting StakingRewardsDistributionStore ownership to StakingRewardsDistribution');
+            info('Granting StakingRewardsStore ownership to StakingRewards');
 
-            gas = await contracts.StakingRewardsDistributionStore.methods
+            gas = await contracts.StakingRewardsStore.methods
                 .grantRole(ROLE_OWNER, stakingAddress)
                 .estimateGas({ from: defaultAccount });
-            await contracts.StakingRewardsDistributionStore.methods
+            await contracts.StakingRewardsStore.methods
                 .grantRole(ROLE_OWNER, stakingAddress)
                 .send({ from: defaultAccount, gas });
 
-            ({ abi, address } = externalContracts.TokenGovernance);
+            ({ address } = externalContracts.TokenGovernance);
+            rawData = fs.readFileSync(path.join(systemContractsDir, 'TokenGovernance.json'));
+            ({ abi } = JSON.parse(rawData));
+
             contracts.TokenGovernance = new Contract(abi, address);
 
-            info('Granting TokenGovernance minting permissions to StakingRewardsDistribution');
+            info('Granting TokenGovernance minting permissions to StakingRewards');
 
             gas = await contracts.TokenGovernance.methods
                 .grantRole(ROLE_MINTER, stakingAddress)
@@ -145,18 +143,18 @@ const setup = async () => {
                 .grantRole(ROLE_MINTER, stakingAddress)
                 .send({ from: TokenGovernanceSettings.governor, gas });
         } else {
-            let { abi, address } = systemContracts.StakingRewardsDistributionStore;
+            let { abi, address } = systemContracts.StakingRewardsStore;
             if (abi && address) {
-                contracts.StakingRewardsDistributionStore = new Contract(abi, address);
+                contracts.StakingRewardsStore = new Contract(abi, address);
             } else {
-                warning('Unable to retrieve StakingRewardsDistributionStore settings');
+                warning('Unable to retrieve StakingRewardsStore settings');
             }
 
-            ({ abi, address } = systemContracts.StakingRewardsDistribution);
+            ({ abi, address } = systemContracts.StakingRewards);
             if (abi && address) {
-                contracts.StakingRewardsDistribution = new Contract(abi, address);
+                contracts.StakingRewards = new Contract(abi, address);
             } else {
-                warning('Unable to retrieve StakingRewardsDistribution settings');
+                warning('Unable to retrieve StakingRewards settings');
             }
         }
 

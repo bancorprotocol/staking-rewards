@@ -21,10 +21,10 @@ const setProgramsTask = async (env) => {
                 arg('rewardRate', rewardRate)
             );
 
-            const gas = await contracts.StakingRewardsDistributionStore.methods
+            const gas = await contracts.StakingRewardsStore.methods
                 .addPoolProgram(poolToken, startTime, endTime, rewardRate)
                 .estimateGas({ from: defaultAccount });
-            await contracts.StakingRewardsDistributionStore.methods
+            await contracts.StakingRewardsStore.methods
                 .addPoolProgram(poolToken, startTime, endTime, rewardRate)
                 .send({ from: defaultAccount, gas });
         }
@@ -38,7 +38,7 @@ const setProgramsTask = async (env) => {
 
             info('Verifying pool', arg('poolToken', poolToken));
 
-            const data = await contracts.StakingRewardsDistributionStore.methods.poolProgram(poolToken).call();
+            const data = await contracts.StakingRewardsStore.methods.poolProgram(poolToken).call();
 
             if (data[0] != startTime) {
                 error("Pool start times don't match", arg('expected', startTime), arg('actual', data[0]));

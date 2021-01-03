@@ -10,7 +10,9 @@ const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
 
 const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
-        const position = await contracts.LiquidityProtectionStore.methods.protectedLiquidity(id).call({}, blockNumber);
+        const position = await contracts.LiquidityProtectionStoreOld.methods
+            .protectedLiquidity(id)
+            .call({}, blockNumber);
 
         return {
             provider: position[0],
@@ -71,7 +73,7 @@ const getLiquidityTask = async (env) => {
                 'blocks'
             );
 
-            const events = await contracts.LiquidityProtectionStore.getPastEvents('allEvents', {
+            const events = await contracts.LiquidityProtectionStoreOld.getPastEvents('allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
@@ -168,7 +170,7 @@ const getLiquidityTask = async (env) => {
                         // same block.
                         const matches = [];
                         const prevBlock = blockNumber - 1;
-                        const ids = await contracts.LiquidityProtectionStore.methods
+                        const ids = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, prevBlock);
                         for (const id of ids) {
@@ -291,7 +293,7 @@ const getLiquidityTask = async (env) => {
 
                 const { reserveAmount } = data;
 
-                const actualAmount = await contracts.LiquidityProtectionStore.methods
+                const actualAmount = await contracts.LiquidityProtectionStoreOld.methods
                     .totalProtectedReserveAmount(poolToken, reserveToken)
                     .call({}, toBlock);
                 if (!new BN(reserveAmount).eq(new BN(actualAmount))) {
@@ -312,7 +314,7 @@ const getLiquidityTask = async (env) => {
                     const { blockNumber, timestamp, reserveAmount } = snapshot;
 
                     // Verify snapshot values.
-                    const actualSnapshotAmount = await contracts.LiquidityProtectionStore.methods
+                    const actualSnapshotAmount = await contracts.LiquidityProtectionStoreOld.methods
                         .totalProtectedReserveAmount(poolToken, reserveToken)
                         .call({}, blockNumber);
                     if (!new BN(actualSnapshotAmount).eq(new BN(reserveAmount))) {

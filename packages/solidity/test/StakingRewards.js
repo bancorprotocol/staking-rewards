@@ -44,7 +44,7 @@ const REWARDS_DURATION = duration.weeks(12);
 const BIG_POOL_BASE_REWARD_RATE = new BN(100000).mul(new BN(10).pow(new BN(18))).div(duration.weeks(1));
 const SMALL_POOL_BASE_REWARD_RATE = new BN(10000).mul(new BN(10).pow(new BN(18))).div(duration.weeks(1));
 
-describe.only('StakingRewards', () => {
+describe('StakingRewards', () => {
     let now;
     let prevNow;
     let contractRegistry;
@@ -723,7 +723,7 @@ describe.only('StakingRewards', () => {
                     const provider = providers[i];
 
                     describe('querying', async () => {
-                        it.only('should properly calculate all rewards', async () => {
+                        it('should properly calculate all rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
                             await testRewards(provider);

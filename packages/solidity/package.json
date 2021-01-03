@@ -22,7 +22,7 @@
         "format": "prettier --check --write solidity/**/*.sol solidity/**/*.js scripts/**/*.js *.js --config .prettierrc"
     },
     "devDependencies": {
-        "@bancor/contracts": "file:../../../contracts",
+        "@bancor/contracts": "bancorprotocol/contracts#0.6.29",
         "@bancor/token-governance": "bancorprotocol/token-governance",
         "@openzeppelin/contracts": "3.3.0",
         "@openzeppelin/test-environment": "^0.1.8",

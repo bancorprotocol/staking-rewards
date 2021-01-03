@@ -7,14 +7,14 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "@bancor/token-governance/contracts/ITokenGovernance.sol";
+import "@bancor/contracts/solidity/contracts/utility/ContractRegistryClient.sol";
+import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
+import "@bancor/contracts/solidity/contracts/utility/Time.sol";
+import "@bancor/contracts/solidity/contracts/utility/interfaces/ICheckpointStore.sol";
 
 import "./IStakingRewardsStore.sol";
-import "./ICheckpointStore.sol";
 import "./ILiquidityProtection.sol";
 import "./ILiquidityProtectionEventsSubscriber.sol";
-import "./Time.sol";
-import "./Utils.sol";
-import "./ContractRegistryClient.sol";
 
 /**
  * @dev This contract manages the distribution of the staking rewards
@@ -180,14 +180,41 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev returns the staking rewards store
+     *
+     * @return the staking rewards store
+     */
+    function store() external view returns (IStakingRewardsStore) {
+        return _store;
+    }
+
+    /**
+     * @dev returns the network token governance
+     *
+     * @return the network token governance
+     */
+    function networkTokenGovernance() external view returns (ITokenGovernance) {
+        return _networkTokenGovernance;
+    }
+
+    /**
+     * @dev returns the last remove times
+     *
+     * @return the last remove times
+     */
+    function lastRemoveTimes() external view returns (ICheckpointStore) {
+        return _lastRemoveTimes;
+    }
+
+    /**
      * @dev returns specific provider's pending rewards for all participating pools
      *
      * @param provider the owner of the liquidity
      *
      * @return all pending rewards
      */
-    function rewards(address provider) external returns (uint256) {
-        return rewards(provider, false, MAX_UINT256, liquidityProtectionStore());
+    function pendingRewards(address provider) external returns (uint256) {
+        return pendingRewards(provider, false, MAX_UINT256, liquidityProtectionStore());
     }
 
     /**
@@ -200,13 +227,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return all pending rewards
      */
-    function rewards(
+    function pendingRewards(
         address provider,
         bool claim,
         uint256 maxAmount,
         ILiquidityProtectionDataStore lpStore
     ) private returns (uint256) {
-        return rewards(provider, lpStore.providerPools(provider), claim, maxAmount, lpStore);
+        return pendingRewards(provider, lpStore.providerPools(provider), claim, maxAmount, lpStore);
     }
 
     /**
@@ -221,7 +248,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return all pending rewards
      */
-    function rewards(
+    function pendingRewards(
         address provider,
         IERC20[] memory poolTokens,
         bool claim,
@@ -232,7 +259,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         uint256 length = poolTokens.length;
         for (uint256 i = 0; i < length && maxAmount > 0; ++i) {
-            uint256 poolReward = rewards(provider, poolTokens[i], claim, maxAmount, lpStore);
+            uint256 poolReward = pendingRewards(provider, poolTokens[i], claim, maxAmount, lpStore);
             reward = reward.add(poolReward);
 
             if (claim && maxAmount != MAX_UINT256) {
@@ -254,7 +281,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return reward all pending rewards
      */
-    function rewards(
+    function pendingRewards(
         address provider,
         IERC20 poolToken,
         bool claim,
@@ -400,7 +427,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 maxAmount,
         ILiquidityProtectionDataStore lpStore
     ) private returns (uint256) {
-        uint256 amount = rewards(provider, poolTokens, true, maxAmount, lpStore);
+        uint256 amount = pendingRewards(provider, poolTokens, true, maxAmount, lpStore);
         if (amount == 0) {
             return amount;
         }
@@ -466,7 +493,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IERC20 newPoolToken,
         ILiquidityProtectionDataStore lpStore
     ) private returns (uint256, uint256) {
-        uint256 amount = rewards(provider, poolTokens, true, maxAmount, lpStore);
+        uint256 amount = pendingRewards(provider, poolTokens, true, maxAmount, lpStore);
         if (amount == 0) {
             return (amount, 0);
         }

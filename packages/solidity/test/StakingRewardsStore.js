@@ -5,17 +5,29 @@ const { expect } = require('../chai-local');
 const { ZERO_ADDRESS } = constants;
 
 const TestERC20Token = contract.fromArtifact('TestERC20Token');
-const TestConverter = contract.fromArtifact('TestConverter');
-const TestPoolToken = contract.fromArtifact('TestPoolToken');
+const ConverterRegistry = contract.fromArtifact('TestConverterRegistry');
+const ConverterRegistryData = contract.fromArtifact('ConverterRegistryData');
+const ContractRegistry = contract.fromArtifact('ContractRegistry');
+const ConverterFactory = contract.fromArtifact('ConverterFactory');
+const ConverterBase = contract.fromArtifact('ConverterBase');
+const StandardPoolConverterFactory = contract.fromArtifact('StandardPoolConverterFactory');
+
 const StakingRewardsStore = contract.fromArtifact('TestStakingRewardsStore');
 
+const CONVERTER_REGISTRY = web3.utils.asciiToHex('BancorConverterRegistry');
+const CONVERTER_REGISTRY_DATA = web3.utils.asciiToHex('BancorConverterRegistryData');
+const CONVERTER_FACTORY = web3.utils.asciiToHex('ConverterFactory');
+
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
+const PPM_RESOLUTION = new BN(1000000);
 const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
 const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
 
 describe('StakingRewardsStore', () => {
+    let converterRegistry;
     let store;
     let reserveToken;
+    let reserveToken2;
     let networkToken;
     let poolToken;
     let poolToken2;
@@ -47,16 +59,18 @@ describe('StakingRewardsStore', () => {
     const getPoolPrograms = async () => {
         const data = await store.poolPrograms.call();
 
-        const startTimes = data[0];
-        const endTimes = data[1];
-        const rewardRates = data[2];
-        const reserveTokens = data[3];
-        const rewardShares = data[4];
+        const poolTokens = data[0];
+        const startTimes = data[1];
+        const endTimes = data[2];
+        const rewardRates = data[3];
+        const reserveTokens = data[4];
+        const rewardShares = data[5];
 
         const programs = [];
 
-        for (let i = 0; i < startTimes.length; ++i) {
+        for (let i = 0; i < poolTokens.length; ++i) {
             programs.push({
+                poolToken: poolTokens[i],
                 startTime: startTimes[i],
                 endTime: endTimes[i],
                 rewardRate: rewardRates[i],
@@ -91,17 +105,50 @@ describe('StakingRewardsStore', () => {
         };
     };
 
+    const createPoolToken = async (reserveToken) => {
+        const weights = [500000, 500000];
+
+        await converterRegistry.newConverter(
+            3,
+            'PT',
+            'PT',
+            18,
+            PPM_RESOLUTION,
+            [reserveToken.address, networkToken.address],
+            weights
+        );
+
+        const anchorCount = await converterRegistry.getAnchorCount.call();
+        const poolTokenAddress = await converterRegistry.getAnchor.call(anchorCount - 1);
+
+        const converterAddress = await converterRegistry.createdConverter.call();
+        const converter = await ConverterBase.at(converterAddress);
+        await converter.acceptOwnership();
+
+        return TestERC20Token.at(poolTokenAddress);
+    };
+
+    before(async () => {
+        const contractRegistry = await ContractRegistry.new();
+        converterRegistry = await ConverterRegistry.new(contractRegistry.address);
+        const converterRegistryData = await ConverterRegistryData.new(contractRegistry.address);
+
+        const standardPoolConverterFactory = await StandardPoolConverterFactory.new();
+        const converterFactory = await ConverterFactory.new();
+        await converterFactory.registerTypedConverterFactory(standardPoolConverterFactory.address);
+
+        await contractRegistry.registerAddress(CONVERTER_FACTORY, converterFactory.address);
+        await contractRegistry.registerAddress(CONVERTER_REGISTRY, converterRegistry.address);
+        await contractRegistry.registerAddress(CONVERTER_REGISTRY_DATA, converterRegistryData.address);
+    });
+
     beforeEach(async () => {
         networkToken = await TestERC20Token.new('TKN1', 'TKN1');
         reserveToken = await TestERC20Token.new('RSV1', 'RSV1');
+        reserveToken2 = await TestERC20Token.new('RSV2', 'RSV2');
 
-        poolToken = await TestPoolToken.new('POOL1', 'POOL1');
-        const converter = await TestConverter.new(poolToken.address, networkToken.address, reserveToken.address);
-        await poolToken.setOwner(converter.address);
-
-        poolToken2 = await TestPoolToken.new('POOL2', 'POOL2');
-        const converter2 = await TestConverter.new(poolToken2.address, reserveToken.address, networkToken.address);
-        await poolToken2.setOwner(converter2.address);
+        poolToken = await createPoolToken(reserveToken);
+        poolToken2 = await createPoolToken(reserveToken2);
 
         store = await StakingRewardsStore.new();
 
@@ -278,9 +325,9 @@ describe('StakingRewardsStore', () => {
 
             const program1 = programs[0];
 
+            expect(program1.poolToken).to.eql(poolToken.address);
             expect(program1.startTime).to.be.bignumber.equal(startTime);
             expect(program1.endTime).to.be.bignumber.equal(endTime);
-
             expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
             expect(program1.reserveTokens[0]).to.eql(networkToken.address);
             expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
@@ -288,7 +335,7 @@ describe('StakingRewardsStore', () => {
             expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
 
             expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
-            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken.address)).to.be.false();
+            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.false();
 
             await setTime(now.add(new BN(100000)));
 
@@ -297,7 +344,7 @@ describe('StakingRewardsStore', () => {
             const rewardRate2 = startTime2.add(new BN(9999));
             const res2 = await store.addPoolProgram(
                 poolToken2.address,
-                [reserveToken.address, networkToken.address],
+                [reserveToken2.address, networkToken.address],
                 [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
                 endTime2,
                 rewardRate2,
@@ -313,13 +360,13 @@ describe('StakingRewardsStore', () => {
             });
 
             expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.true();
-            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken.address)).to.be.true();
+            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.true();
 
             const pool2 = await getPoolProgram(poolToken2);
             expect(pool2.startTime).to.be.bignumber.equal(startTime2);
             expect(pool2.endTime).to.be.bignumber.equal(endTime2);
             expect(pool2.rewardRate).to.be.bignumber.equal(rewardRate2);
-            expect(pool2.reserveTokens[0]).to.eql(reserveToken.address);
+            expect(pool2.reserveTokens[0]).to.eql(reserveToken2.address);
             expect(pool2.reserveTokens[1]).to.eql(networkToken.address);
             expect(pool2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
             expect(pool2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
@@ -328,10 +375,11 @@ describe('StakingRewardsStore', () => {
             expect(programs2.length).to.eql(2);
 
             const program2 = programs2[1];
+            expect(program2.poolToken).to.eql(poolToken2.address);
             expect(program2.startTime).to.be.bignumber.equal(startTime2);
             expect(program2.endTime).to.be.bignumber.equal(endTime2);
             expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
-            expect(program2.reserveTokens[0]).to.eql(reserveToken.address);
+            expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
             expect(program2.reserveTokens[1]).to.eql(networkToken.address);
             expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
             expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
@@ -339,7 +387,7 @@ describe('StakingRewardsStore', () => {
             await expectRevert(
                 store.addPoolProgram(
                     poolToken2.address,
-                    [networkToken.address, reserveToken.address],
+                    [networkToken.address, reserveToken2.address],
                     [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                     now.add(new BN(1)),
                     rewardRate,
@@ -347,6 +395,32 @@ describe('StakingRewardsStore', () => {
                 ),
                 'ERR_ALREADY_PARTICIPATING'
             );
+        });
+
+        it('should allow adding program with reverse order of reserve tokens', async () => {
+            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
+            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+
+            const startTime = now;
+            const endTime = startTime.add(new BN(2000));
+            const rewardRate = new BN(1000);
+            const res = await store.addPoolProgram(
+                poolToken.address,
+                [reserveToken.address, networkToken.address],
+                [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
+                endTime,
+                rewardRate,
+                { from: owner }
+            );
+            expectEvent(res, 'PoolProgramAdded', {
+                poolToken: poolToken.address,
+                startTime,
+                endTime,
+                rewardRate
+            });
+
+            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
+            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
         });
 
         context('with a registered pool', async () => {

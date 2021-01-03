@@ -5,11 +5,12 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
+import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
+import "@bancor/contracts/solidity/contracts/utility/Time.sol";
+import "@bancor/contracts/solidity/contracts/utility/interfaces/IOwned.sol";
+import "@bancor/contracts/solidity/contracts/converter/interfaces/IConverter.sol";
+
 import "./IStakingRewardsStore.sol";
-import "./IOwned.sol";
-import "./IConverter.sol";
-import "./Utils.sol";
-import "./Time.sol";
 
 /**
  * @dev This contract stores staking rewards liquidity and pool specific data
@@ -144,13 +145,15 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.rewardShares = rewardShares;
 
         // verify that reserve tokens correspond to the pool.
-        IConverter converter = IConverter(IOwned(address(poolToken)).owner());
+        IConverter converter = IConverter(payable(IConverterAnchor(address(poolToken)).owner()));
         uint256 length = converter.connectorTokenCount();
         require(length == 2, "ERR_POOL_NOT_SUPPORTED");
 
         require(
-            (converter.connectorTokens(0) == reserveTokens[0] && converter.connectorTokens(1) == reserveTokens[1]) ||
-                (converter.connectorTokens(0) == reserveTokens[1] && converter.connectorTokens(1) == reserveTokens[0]),
+            (address(converter.connectorTokens(0)) == address(reserveTokens[0]) &&
+                address(converter.connectorTokens(1)) == address(reserveTokens[1])) ||
+                (address(converter.connectorTokens(0)) == address(reserveTokens[1]) &&
+                    address(converter.connectorTokens(1)) == address(reserveTokens[0])),
             "ERR_INVALID_RESERVE_TOKENS"
         );
         program.reserveTokens = reserveTokens;
@@ -220,6 +223,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         view
         override
         returns (
+            IERC20[] memory,
             uint256[] memory,
             uint256[] memory,
             uint256[] memory,
@@ -229,6 +233,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     {
         uint256 length = _pools.length();
 
+        IERC20[] memory poolTokens = new IERC20[](length);
         uint256[] memory startTimes = new uint256[](length);
         uint256[] memory endTimes = new uint256[](length);
         uint256[] memory rewardRates = new uint256[](length);
@@ -236,8 +241,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint32[2][] memory rewardShares = new uint32[2][](length);
 
         for (uint256 i = 0; i < length; ++i) {
-            PoolProgram memory program = _programs[IERC20(_pools.at(i))];
+            IERC20 poolToken = IERC20(_pools.at(i));
+            PoolProgram memory program = _programs[poolToken];
 
+            poolTokens[i] = poolToken;
             startTimes[i] = program.startTime;
             endTimes[i] = program.endTime;
             rewardRates[i] = program.rewardRate;
@@ -245,7 +252,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             rewardShares[i] = program.rewardShares;
         }
 
-        return (startTimes, endTimes, rewardRates, reserveTokens, rewardShares);
+        return (poolTokens, startTimes, endTimes, rewardRates, reserveTokens, rewardShares);
     }
 
     /**

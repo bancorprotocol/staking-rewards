@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
-import "../ICheckpointStore.sol";
-import "../Utils.sol";
+import "@bancor/contracts/solidity/contracts/utility/interfaces/ICheckpointStore.sol";
 
 import "./TestTime.sol";
 
-contract TestCheckpointStore is ICheckpointStore, TestTime, Utils {
+contract TestCheckpointStore is ICheckpointStore, TestTime {
     mapping(address => uint256) private data;
 
     function addCheckpoint(address _address) external override {

@@ -23,6 +23,9 @@
     chalk "^2.0.0"
     js-tokens "^4.0.0"
 
+"@bancor/contracts@file:../contracts":
+  version "0.6.27"
+
 "@bancor/token-governance@bancorprotocol/token-governance":
   version "0.1.0"
   resolved "https://codeload.github.com/bancorprotocol/token-governance/tar.gz/c1197a0f2a128dc93fd3936fe2e7d60922f09a9a"

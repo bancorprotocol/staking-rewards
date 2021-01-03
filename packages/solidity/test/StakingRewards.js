@@ -8,17 +8,23 @@ const { ZERO_ADDRESS } = constants;
 const { duration } = time;
 
 const TestERC20Token = contract.fromArtifact('TestERC20Token');
-const TestConverter = contract.fromArtifact('TestConverter');
-const TestPoolToken = contract.fromArtifact('TestPoolToken');
 const CheckpointStore = contract.fromArtifact('TestCheckpointStore');
 const TokenGovernance = contract.fromArtifact('TestTokenGovernance');
 const LiquidityProtection = contract.fromArtifact('TestLiquidityProtection');
 const LiquidityProtectionDataStore = contract.fromArtifact('TestLiquidityProtectionDataStore');
+const ConverterRegistry = contract.fromArtifact('TestConverterRegistry');
+const ConverterRegistryData = contract.fromArtifact('ConverterRegistryData');
+const ContractRegistry = contract.fromArtifact('ContractRegistry');
+const ConverterFactory = contract.fromArtifact('ConverterFactory');
+const ConverterBase = contract.fromArtifact('ConverterBase');
+const StandardPoolConverterFactory = contract.fromArtifact('StandardPoolConverterFactory');
 
-const ContractRegistry = contract.fromArtifact('TestContractRegistry');
 const StakingRewardsStore = contract.fromArtifact('TestStakingRewardsStore');
 const StakingRewards = contract.fromArtifact('TestStakingRewards');
 
+const CONVERTER_REGISTRY = web3.utils.asciiToHex('BancorConverterRegistry');
+const CONVERTER_REGISTRY_DATA = web3.utils.asciiToHex('BancorConverterRegistryData');
+const CONVERTER_FACTORY = web3.utils.asciiToHex('ConverterFactory');
 const LIQUIDITY_PROTECTION = web3.utils.asciiToHex('LiquidityProtection');
 
 const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
@@ -38,11 +44,14 @@ const REWARDS_DURATION = duration.weeks(12);
 const BIG_POOL_BASE_REWARD_RATE = new BN(100000).mul(new BN(10).pow(new BN(18))).div(duration.weeks(1));
 const SMALL_POOL_BASE_REWARD_RATE = new BN(10000).mul(new BN(10).pow(new BN(18))).div(duration.weeks(1));
 
-describe('StakingRewards', () => {
+describe.only('StakingRewards', () => {
     let now;
     let prevNow;
     let contractRegistry;
+    let converterRegistry;
     let reserveToken;
+    let reserveToken2;
+    let reserveToken3;
     let networkToken;
     let poolToken;
     let poolToken2;
@@ -166,23 +175,52 @@ describe('StakingRewards', () => {
         }
     };
 
-    beforeEach(async () => {
-        contractRegistry = await ContractRegistry.new();
+    const createPoolToken = async (reserveToken) => {
+        const weights = [500000, 500000];
 
+        await converterRegistry.newConverter(
+            3,
+            'PT',
+            'PT',
+            18,
+            PPM_RESOLUTION,
+            [reserveToken.address, networkToken.address],
+            weights
+        );
+
+        const anchorCount = await converterRegistry.getAnchorCount.call();
+        const poolTokenAddress = await converterRegistry.getAnchor.call(anchorCount - 1);
+
+        const converterAddress = await converterRegistry.createdConverter.call();
+        const converter = await ConverterBase.at(converterAddress);
+        await converter.acceptOwnership();
+
+        return TestERC20Token.at(poolTokenAddress);
+    };
+
+    before(async () => {
+        contractRegistry = await ContractRegistry.new();
+        converterRegistry = await ConverterRegistry.new(contractRegistry.address);
+        const converterRegistryData = await ConverterRegistryData.new(contractRegistry.address);
+
+        const standardPoolConverterFactory = await StandardPoolConverterFactory.new();
+        const converterFactory = await ConverterFactory.new();
+        await converterFactory.registerTypedConverterFactory(standardPoolConverterFactory.address);
+
+        await contractRegistry.registerAddress(CONVERTER_FACTORY, converterFactory.address);
+        await contractRegistry.registerAddress(CONVERTER_REGISTRY, converterRegistry.address);
+        await contractRegistry.registerAddress(CONVERTER_REGISTRY_DATA, converterRegistryData.address);
+    });
+
+    beforeEach(async () => {
         networkToken = await TestERC20Token.new('TKN1', 'TKN1');
         reserveToken = await TestERC20Token.new('RSV1', 'RSV1');
+        reserveToken2 = await TestERC20Token.new('RSV2', 'RSV2');
+        reserveToken3 = await TestERC20Token.new('RSV3', 'RSV3');
 
-        poolToken = await TestPoolToken.new('POOL1', 'POOL1');
-        const converter = await TestConverter.new(poolToken.address, networkToken.address, reserveToken.address);
-        await poolToken.setOwner(converter.address);
-
-        poolToken2 = await TestPoolToken.new('POOL2', 'POOL2');
-        const converter2 = await TestConverter.new(poolToken2.address, networkToken.address, reserveToken.address);
-        await poolToken2.setOwner(converter2.address);
-
-        poolToken3 = await TestPoolToken.new('POOL3', 'POOL3');
-        const converter3 = await TestConverter.new(poolToken3.address, networkToken.address, reserveToken.address);
-        await poolToken3.setOwner(converter3.address);
+        poolToken = await createPoolToken(reserveToken);
+        poolToken2 = await createPoolToken(reserveToken2);
+        poolToken3 = await createPoolToken(reserveToken3);
 
         networkTokenGovernance = await TokenGovernance.new(networkToken.address);
         await networkTokenGovernance.grantRole(ROLE_GOVERNOR, supervisor);
@@ -339,6 +377,11 @@ describe('StakingRewards', () => {
 
         beforeEach(async () => {
             const poolTokens = [poolToken, poolToken2, poolToken3];
+            const reserveTokens = {
+                [poolToken.address]: reserveToken.address,
+                [poolToken2.address]: reserveToken2.address,
+                [poolToken3.address]: reserveToken3.address
+            };
 
             reserveAmounts = {};
             totalReserveAmounts = {};
@@ -346,25 +389,49 @@ describe('StakingRewards', () => {
             providerPools = {};
 
             for (const { address: poolToken } of poolTokens) {
+                const reserveToken = reserveTokens[poolToken];
+
                 reserveAmounts[poolToken] = {
-                    [reserveToken.address]: {},
+                    [reserveToken]: {},
                     [networkToken.address]: {}
                 };
 
                 totalReserveAmounts[poolToken] = {
-                    [reserveToken.address]: new BN(0),
+                    [reserveToken]: new BN(0),
                     [networkToken.address]: new BN(0)
                 };
 
                 programs[poolToken] = {
-                    [reserveToken.address]: new BN(0),
+                    [reserveToken]: new BN(0),
                     [networkToken.address]: new BN(0)
                 };
 
                 for (const provider of accounts) {
                     providerPools[provider] = {};
 
-                    reserveAmounts[poolToken][reserveToken.address][provider] = new BN(0);
+                    reserveAmounts[poolToken][reserveToken][provider] = new BN(0);
+                    reserveAmounts[poolToken][networkToken.address][provider] = new BN(0);
+                }
+
+                reserveAmounts[poolToken] = {
+                    [reserveToken]: {},
+                    [networkToken.address]: {}
+                };
+
+                totalReserveAmounts[poolToken] = {
+                    [reserveToken]: new BN(0),
+                    [networkToken.address]: new BN(0)
+                };
+
+                programs[poolToken] = {
+                    [reserveToken]: new BN(0),
+                    [networkToken.address]: new BN(0)
+                };
+
+                for (const provider of accounts) {
+                    providerPools[provider] = {};
+
+                    reserveAmounts[poolToken][reserveToken][provider] = new BN(0);
                     reserveAmounts[poolToken][networkToken.address][provider] = new BN(0);
                 }
             }
@@ -446,7 +513,7 @@ describe('StakingRewards', () => {
             removeTestLiquidity(provider, poolToken, reserveToken, reserveAmount);
         };
 
-        const addPoolProgram = async (poolToken, programEndTime, rewardRate) => {
+        const addPoolProgram = async (poolToken, reserveToken, programEndTime, rewardRate) => {
             programs[poolToken.address] = {
                 now,
                 programEndTime,
@@ -656,7 +723,7 @@ describe('StakingRewards', () => {
                     const provider = providers[i];
 
                     describe('querying', async () => {
-                        it('should properly calculate all rewards', async () => {
+                        it.only('should properly calculate all rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
                             await testRewards(provider);
@@ -1387,7 +1454,7 @@ describe('StakingRewards', () => {
 
                 await setTime(programStartTime);
 
-                await addPoolProgram(poolToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                await addPoolProgram(poolToken, reserveToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
                 await addLiquidity(
                     providers[0],
                     poolToken,
@@ -1458,9 +1525,9 @@ describe('StakingRewards', () => {
 
                 await setTime(programStartTime);
 
-                await addPoolProgram(poolToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
-                await addPoolProgram(poolToken2, programEndTime, SMALL_POOL_BASE_REWARD_RATE);
-                await addPoolProgram(poolToken3, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                await addPoolProgram(poolToken, reserveToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                await addPoolProgram(poolToken2, reserveToken2, programEndTime, SMALL_POOL_BASE_REWARD_RATE);
+                await addPoolProgram(poolToken3, reserveToken3, programEndTime, BIG_POOL_BASE_REWARD_RATE);
 
                 await addLiquidity(
                     providers[0],
@@ -1471,13 +1538,13 @@ describe('StakingRewards', () => {
                 await addLiquidity(
                     providers[0],
                     poolToken2,
-                    reserveToken,
+                    reserveToken2,
                     new BN(11111111111).mul(new BN(10).pow(new BN(18)))
                 );
                 await addLiquidity(
                     providers[0],
                     poolToken3,
-                    reserveToken,
+                    reserveToken3,
                     new BN(33333333333).mul(new BN(10).pow(new BN(18)))
                 );
             });
@@ -1498,13 +1565,13 @@ describe('StakingRewards', () => {
                         await addLiquidity(
                             providers[1],
                             poolToken2,
-                            reserveToken,
+                            reserveToken2,
                             new BN(88888888).mul(new BN(10).pow(new BN(18)))
                         );
                         await addLiquidity(
                             providers[1],
                             poolToken3,
-                            reserveToken,
+                            reserveToken3,
                             new BN(1111234).mul(new BN(10).pow(new BN(18)))
                         );
                     });
@@ -1550,13 +1617,13 @@ describe('StakingRewards', () => {
                         await addLiquidity(
                             providers[1],
                             poolToken2,
-                            reserveToken,
+                            reserveToken2,
                             new BN(322222222222).mul(new BN(10).pow(new BN(18)))
                         );
                         await addLiquidity(
                             providers[1],
                             poolToken3,
-                            reserveToken,
+                            reserveToken3,
                             new BN(11100008).mul(new BN(10).pow(new BN(18)))
                         );
 
@@ -1617,7 +1684,7 @@ describe('StakingRewards', () => {
                             expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
 
                             await setTime(programStartTime);
-                            await addPoolProgram(poolToken3, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+                            await addPoolProgram(poolToken3, reserveToken3, programEndTime, BIG_POOL_BASE_REWARD_RATE);
 
                             expect(await staking.rewards.call(provider)).to.be.bignumber.equal(new BN(0));
 

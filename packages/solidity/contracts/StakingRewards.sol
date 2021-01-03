@@ -7,14 +7,14 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "@bancor/token-governance/contracts/ITokenGovernance.sol";
+import "@bancor/contracts/solidity/contracts/utility/ContractRegistryClient.sol";
+import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
+import "@bancor/contracts/solidity/contracts/utility/Time.sol";
+import "@bancor/contracts/solidity/contracts/utility/interfaces/ICheckpointStore.sol";
 
 import "./IStakingRewardsStore.sol";
-import "./ICheckpointStore.sol";
 import "./ILiquidityProtection.sol";
 import "./ILiquidityProtectionEventsSubscriber.sol";
-import "./Time.sol";
-import "./Utils.sol";
-import "./ContractRegistryClient.sol";
 
 /**
  * @dev This contract manages the distribution of the staking rewards

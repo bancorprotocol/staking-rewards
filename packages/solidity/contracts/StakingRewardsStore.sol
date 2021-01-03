@@ -5,11 +5,12 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
+import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
+import "@bancor/contracts/solidity/contracts/utility/Time.sol";
+import "@bancor/contracts/solidity/contracts/utility/interfaces/IOwned.sol";
+import "@bancor/contracts/solidity/contracts/converter/interfaces/IConverter.sol";
+
 import "./IStakingRewardsStore.sol";
-import "./IOwned.sol";
-import "./IConverter.sol";
-import "./Utils.sol";
-import "./Time.sol";
 
 /**
  * @dev This contract stores staking rewards liquidity and pool specific data
@@ -144,13 +145,15 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         program.rewardShares = rewardShares;
 
         // verify that reserve tokens correspond to the pool.
-        IConverter converter = IConverter(IOwned(address(poolToken)).owner());
+        IConverter converter = IConverter(payable(IConverterAnchor(address(poolToken)).owner()));
         uint256 length = converter.connectorTokenCount();
         require(length == 2, "ERR_POOL_NOT_SUPPORTED");
 
         require(
-            (converter.connectorTokens(0) == reserveTokens[0] && converter.connectorTokens(1) == reserveTokens[1]) ||
-                (converter.connectorTokens(0) == reserveTokens[1] && converter.connectorTokens(1) == reserveTokens[0]),
+            (address(converter.connectorTokens(0)) == address(reserveTokens[0]) &&
+                address(converter.connectorTokens(1)) == address(reserveTokens[1])) ||
+                (address(converter.connectorTokens(0)) == address(reserveTokens[1]) &&
+                    address(converter.connectorTokens(1)) == address(reserveTokens[0])),
             "ERR_INVALID_RESERVE_TOKENS"
         );
         program.reserveTokens = reserveTokens;

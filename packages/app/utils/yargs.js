@@ -28,6 +28,11 @@ const { argv } = yargs(hideBin(process.argv))
         default: 500,
         description: 'Reorg blocks offset to take into account'
     })
+    .option('gas-price', {
+        alias: 'g',
+        type: 'number',
+        description: 'The gas price in wei to use for setting transactions (in gwei)'
+    })
     .option('get-all', {
         type: 'boolean',
         description: 'Get all data'
@@ -48,6 +53,10 @@ const { argv } = yargs(hideBin(process.argv))
     .option('set-all', {
         type: 'boolean',
         description: 'Set all data'
+    })
+    .option('set-last-removal-times', {
+        type: 'boolean',
+        description: 'Set last removal times for all providers'
     })
     .option('set-programs', {
         type: 'boolean',

@@ -3,13 +3,18 @@ const fs = require('fs');
 const ganache = require('ganache-core');
 const Web3 = require('web3');
 const Contract = require('web3-eth-contract');
+const { keccak256, toWei } = require('web3-utils');
 const memdown = require('memdown');
 
 const { info, error, warning, arg } = require('./logger');
 
-const { test, init, reorgOffset } = require('./yargs');
+const { test, init, reorgOffset, gasPrice } = require('./yargs');
 
 const settings = require('../settings.json');
+
+const ROLE_OWNER = keccak256('ROLE_OWNER');
+const ROLE_MINTER = keccak256('ROLE_MINTER');
+const ROLE_SEEDER = keccak256('ROLE_SEEDER');
 
 let web3;
 let contracts = {};
@@ -37,13 +42,15 @@ const setup = async () => {
         } else {
             info('Running against a mainnet fork (via Ganache)');
 
+            const { externalContracts } = settings;
+
             const provider = ganache.provider({
                 fork: web3Provider,
                 ws: true,
                 network_id: 1,
                 db: memdown(),
                 default_balance_ether: 10000000000000000000,
-                unlocked_accounts: [TokenGovernance.governor]
+                unlocked_accounts: [externalContracts.TokenGovernance.governor]
             });
 
             info('Started forking the mainnet');
@@ -114,13 +121,11 @@ const setup = async () => {
             rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewards.json'));
             ({ abi, bytecode } = JSON.parse(rawData));
 
-            const { TokenGovernance } = externalContracts;
-
             const StakingRewards = new Contract(abi);
             const arguments = [
                 stakingStoreAddress,
-                contracts.TokenGovernance.address,
-                contracts.CheckpointStore.address,
+                contracts.TokenGovernance.options.address,
+                contracts.CheckpointStore.options.address,
                 externalContracts.ContractRegistry.address
             ];
 
@@ -138,10 +143,6 @@ const setup = async () => {
 
             info('Granting required permissions');
 
-            const { keccak256 } = web3.utils;
-            const ROLE_OWNER = keccak256('ROLE_OWNER');
-            const ROLE_MINTER = keccak256('ROLE_MINTER');
-
             info('Granting StakingRewardsStore ownership to StakingRewards');
 
             gas = await contracts.StakingRewardsStore.methods
@@ -153,12 +154,26 @@ const setup = async () => {
 
             info('Granting TokenGovernance minting permissions to StakingRewards');
 
+            const {
+                TokenGovernance: { governor }
+            } = externalContracts;
             gas = await contracts.TokenGovernance.methods
                 .grantRole(ROLE_MINTER, stakingAddress)
-                .estimateGas({ from: TokenGovernance.governor });
+                .estimateGas({ from: governor });
             await contracts.TokenGovernance.methods
                 .grantRole(ROLE_MINTER, stakingAddress)
-                .send({ from: TokenGovernance.governor, gas });
+                .send({ from: governor, gas });
+
+            info('Granting CheckpointStore seeding permissions to the deployer');
+
+            const {
+                CheckpointStore: { owner }
+            } = externalContracts;
+
+            gas = await contracts.CheckpointStore.methods
+                .grantRole(ROLE_SEEDER, defaultAccount)
+                .estimateGas({ from: owner });
+            await contracts.CheckpointStore.methods.grantRole(ROLE_SEEDER, defaultAccount).send({ from: owner, gas });
         } else {
             let { abi, address } = systemContracts.StakingRewardsStore;
             if (abi && address) {
@@ -181,7 +196,16 @@ const setup = async () => {
         await setupExternalContracts();
         await setupSystemContracts();
 
-        return { settings, web3, contracts, defaultAccount, Contract, reorgOffset, test };
+        return {
+            settings,
+            web3,
+            contracts,
+            defaultAccount,
+            Contract,
+            reorgOffset,
+            gasPrice: toWei((gasPrice || 0).toString(), 'gwei'),
+            test
+        };
     } catch (e) {
         error(e);
 

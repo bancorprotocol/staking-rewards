@@ -11,6 +11,7 @@ const getLiquidityTask = require('./tasks/get-liquidity');
 const getPositionsTask = require('./tasks/get-positions');
 const getLastRemovalTimesTask = require('./tasks/get-last-removal-times');
 
+const setLastRemovalTimesTask = require('./tasks/set-last-removal-times');
 const setProgramsTask = require('./tasks/set-programs');
 
 const main = async () => {
@@ -30,7 +31,15 @@ const main = async () => {
         const env = await setup();
 
         // Handle all the tasks in the right order.
-        const { getAll, getLiquidity, getPositions, getLastRemovalTimes, setAll, setPrograms } = argv;
+        const {
+            getAll,
+            getLiquidity,
+            getPositions,
+            getLastRemovalTimes,
+            setAll,
+            setLastRemovalTimes,
+            setPrograms
+        } = argv;
 
         if (getAll || getLiquidity) {
             await getLiquidityTask(env);
@@ -42,6 +51,10 @@ const main = async () => {
 
         if (getAll || getLastRemovalTimes) {
             await getLastRemovalTimesTask(env);
+        }
+
+        if (setAll || setLastRemovalTimes) {
+            await setLastRemovalTimesTask(env);
         }
 
         if (setAll || setPrograms) {

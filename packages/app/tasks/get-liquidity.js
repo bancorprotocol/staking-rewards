@@ -37,7 +37,7 @@ const getLiquidityTask = async (env) => {
             name = 'MakerDAO';
             symbol = 'MKR';
         } else {
-            const ReserveToken = new Contract(settings.externalContracts.ERC20.abi, reserveToken);
+            const ReserveToken = new Contract(ERC20, reserveToken);
             name = await ReserveToken.methods.name().call();
             symbol = await ReserveToken.methods.symbol().call();
         }
@@ -103,7 +103,7 @@ const getLiquidityTask = async (env) => {
                         );
 
                         if (!liquidity[poolToken]) {
-                            const PoolToken = new Contract(settings.externalContracts.ERC20.abi, poolToken);
+                            const PoolToken = new Contract(ERC20, poolToken);
                             const name = await PoolToken.methods.name().call();
                             const symbol = await PoolToken.methods.symbol().call();
                             liquidity[poolToken] = { name, symbol };
@@ -411,6 +411,14 @@ const getLiquidityTask = async (env) => {
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
     }
+
+    const externalContractsDir = path.resolve(
+        __dirname,
+        '../../../node_modules/@bancor/contracts/solidity/build/contracts'
+    );
+
+    const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
+    const { abi: ERC20 } = JSON.parse(rawData);
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'liquidity.json');

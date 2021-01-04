@@ -20,8 +20,14 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     using SafeMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
 
+    // the supervisor role is used to globally govern the contract and its governing roles.
+    bytes32 public constant ROLE_SUPERVISOR = keccak256("ROLE_SUPERVISOR");
+
     // the owner role is used to set the values in the store.
     bytes32 public constant ROLE_OWNER = keccak256("ROLE_OWNER");
+
+    // the seeder roles is used to seed the store with past values.
+    bytes32 public constant ROLE_SEEDER = keccak256("ROLE_SEEDER");
 
     uint32 private constant PPM_RESOLUTION = 1000000;
 
@@ -46,7 +52,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
-     * @param rewardRate the program's weekly rewards
+     * @param rewardRate the program's rewards rate
      */
     event PoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
@@ -56,6 +62,16 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      */
     event PoolProgramRemoved(IERC20 indexed poolToken);
+
+    /**
+     * @dev triggered when a past program is being added
+     *
+     * @param poolToken the pool token representing the rewards pool
+     * @param startTime the starting time of the program
+     * @param endTime the ending time of the program
+     * @param rewardRate the program's rewards rate
+     */
+    event PastPoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
     /**
      * @dev triggered when provider's last claim time is being updated
@@ -69,11 +85,13 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev initializes a new StakingRewardsStore contract
      */
     constructor() public {
-        // Set up administrative roles.
-        _setRoleAdmin(ROLE_OWNER, ROLE_OWNER);
+        // set up administrative roles.
+        _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
+        _setRoleAdmin(ROLE_OWNER, ROLE_SUPERVISOR);
+        _setRoleAdmin(ROLE_SEEDER, ROLE_OWNER);
 
-        // Allow the deployer to initially govern the contract.
-        _setupRole(ROLE_OWNER, _msgSender());
+        // allow the deployer to initially govern the contract.
+        _setupRole(ROLE_SUPERVISOR, _msgSender());
     }
 
     modifier onlyOwner() {
@@ -83,6 +101,28 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
 
     function _onlyOwner() internal view {
         require(hasRole(ROLE_OWNER, msg.sender), "ERR_ACCESS_DENIED");
+    }
+
+    modifier onlySeeder() {
+        _onlySeeder();
+        _;
+    }
+
+    function _onlySeeder() internal view {
+        require(hasRole(ROLE_SEEDER, msg.sender), "ERR_ACCESS_DENIED");
+    }
+
+    /**
+     * @dev returns whether the specified pool is participating in the rewards program
+     *
+     * @param poolToken the pool token representing the rewards pool
+     *
+     * @return whether the specified pool is participating in the rewards program
+     */
+    function isPoolParticipating(IERC20 poolToken) public view override returns (bool) {
+        PoolProgram memory program = _programs[poolToken];
+
+        return program.endTime > time();
     }
 
     /**
@@ -103,24 +143,24 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev returns whether the specified pool  is participating in the rewards program
+     * @dev returns whether the specified pool is participating in the rewards program
      *
      * @param program the program data
      *
-     * @return whether the specified pool  is participating in the rewards program
+     * @return whether the specified pool is participating in the rewards program
      */
     function isPoolParticipating(PoolProgram memory program) private view returns (bool) {
         return program.endTime > time();
     }
 
     /**
-     * @dev adds or updates a program
+     * @dev adds a program
      *
      * @param poolToken the pool token representing the rewards pool
      * @param reserveTokens the reserve tokens representing the liqudiity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
-     * @param rewardRate the program's weekly rewards
+     * @param rewardRate the program's rewards rate
      */
     function addPoolProgram(
         IERC20 poolToken,
@@ -130,7 +170,95 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256 rewardRate
     ) external override onlyOwner validAddress(address(poolToken)) {
         uint256 currentTime = time();
-        require(endTime > currentTime, "ERR_INVALID_DURATION");
+
+        addPoolProgram(poolToken, reserveTokens, rewardShares, currentTime, endTime, rewardRate);
+
+        emit PoolProgramAdded(poolToken, currentTime, endTime, rewardRate);
+    }
+
+    /**
+     * @dev adds past programs
+     *
+     * @param poolTokens pool tokens representing the rewards pool
+     * @param reserveTokens reserve tokens representing the liqudiity in the pool
+     * @param rewardShares reserve reward shares
+     * @param startTime starting times of the program
+     * @param endTimes ending times of the program
+     * @param rewardRates program reward rates
+     */
+    function addPastPoolPrograms(
+        IERC20[] calldata poolTokens,
+        IERC20[2][] calldata reserveTokens,
+        uint32[2][] calldata rewardShares,
+        uint256[] calldata startTime,
+        uint256[] calldata endTimes,
+        uint256[] calldata rewardRates
+    ) external onlySeeder {
+        uint256 length = poolTokens.length;
+        require(
+            length == reserveTokens.length &&
+                length == rewardShares.length &&
+                length == startTime.length &&
+                length == endTimes.length &&
+                length == rewardRates.length,
+            "ERR_INVALID_LENGTH"
+        );
+
+        for (uint256 i = 0; i < length; ++i) {
+            addPastPoolProgram(
+                poolTokens[i],
+                reserveTokens[i],
+                rewardShares[i],
+                startTime[i],
+                endTimes[i],
+                rewardRates[i]
+            );
+        }
+    }
+
+    /**
+     * @dev adds a past program
+     *
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param rewardShares reserve reward shares
+     * @param startTime the starting time of the program
+     * @param endTime the ending time of the program
+     * @param rewardRate the program's rewards rate
+     */
+    function addPastPoolProgram(
+        IERC20 poolToken,
+        IERC20[2] calldata reserveTokens,
+        uint32[2] calldata rewardShares,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 rewardRate
+    ) private validAddress(address(poolToken)) {
+        require(startTime < time(), "ERR_INVALID_TIME");
+
+        addPoolProgram(poolToken, reserveTokens, rewardShares, startTime, endTime, rewardRate);
+
+        emit PastPoolProgramAdded(poolToken, startTime, endTime, rewardRate);
+    }
+
+    /**
+     * @dev adds a program
+     *
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param rewardShares reserve reward shares
+     * @param endTime the ending time of the program
+     * @param rewardRate the program's rewards rate
+     */
+    function addPoolProgram(
+        IERC20 poolToken,
+        IERC20[2] calldata reserveTokens,
+        uint32[2] calldata rewardShares,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 rewardRate
+    ) private {
+        require(startTime < endTime && endTime > time(), "ERR_INVALID_DURATION");
         require(rewardRate > 0, "ERR_ZERO_VALUE");
         require(rewardShares[0].add(rewardShares[1]) == PPM_RESOLUTION, "ERR_INVALID_REWARD_SHARES");
 
@@ -139,7 +267,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         PoolProgram storage program = _programs[poolToken];
         require(!isPoolParticipating(program), "ERR_ALREADY_PARTICIPATING");
 
-        program.startTime = currentTime;
+        program.startTime = startTime;
         program.endTime = endTime;
         program.rewardRate = rewardRate;
         program.rewardShares = rewardShares;
@@ -157,8 +285,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             "ERR_INVALID_RESERVE_TOKENS"
         );
         program.reserveTokens = reserveTokens;
-
-        emit PoolProgramAdded(poolToken, currentTime, endTime, rewardRate);
     }
 
     /**

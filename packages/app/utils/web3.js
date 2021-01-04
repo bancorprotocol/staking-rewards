@@ -11,6 +11,7 @@ const { info, error, warning, arg } = require('./logger');
 const { test, init, reorgOffset, gasPrice } = require('./yargs');
 
 const settings = require('../settings.json');
+const programs = require('../programs.json');
 
 const ROLE_OWNER = keccak256('ROLE_OWNER');
 const ROLE_MINTER = keccak256('ROLE_MINTER');
@@ -152,6 +153,24 @@ const setup = async () => {
                 .grantRole(ROLE_OWNER, stakingAddress)
                 .send({ from: defaultAccount, gas });
 
+            info('Granting the deployer owner permissions on StakingRewardsStore');
+
+            gas = await contracts.StakingRewardsStore.methods
+                .grantRole(ROLE_OWNER, defaultAccount)
+                .estimateGas({ from: defaultAccount });
+            await contracts.StakingRewardsStore.methods
+                .grantRole(ROLE_OWNER, defaultAccount)
+                .send({ from: defaultAccount, gas });
+
+            info('Granting the deployer seeding permissions on StakingRewardsStore');
+
+            gas = await contracts.StakingRewardsStore.methods
+                .grantRole(ROLE_SEEDER, defaultAccount)
+                .estimateGas({ from: defaultAccount });
+            await contracts.StakingRewardsStore.methods
+                .grantRole(ROLE_SEEDER, defaultAccount)
+                .send({ from: defaultAccount, gas });
+
             info('Granting TokenGovernance minting permissions to StakingRewards');
 
             const {
@@ -164,7 +183,7 @@ const setup = async () => {
                 .grantRole(ROLE_MINTER, stakingAddress)
                 .send({ from: governor, gas });
 
-            info('Granting CheckpointStore seeding permissions to the deployer');
+            info('Granting the deployer seeding permissions on CheckpointStore');
 
             const {
                 CheckpointStore: { owner }
@@ -198,13 +217,14 @@ const setup = async () => {
 
         return {
             settings,
-            web3,
-            contracts,
-            defaultAccount,
-            Contract,
+            programs,
             reorgOffset,
             gasPrice: toWei((gasPrice || 0).toString(), 'gwei'),
-            test
+            test,
+            web3,
+            Contract,
+            contracts,
+            defaultAccount
         };
     } catch (e) {
         error(e);

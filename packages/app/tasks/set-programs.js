@@ -1,65 +1,170 @@
 const humanizeDuration = require('humanize-duration');
 const BN = require('bn.js');
+const { fromWei } = require('web3-utils');
 
 const { info, error, arg } = require('../utils/logger');
 
+const BATCH_SIZE = 200;
+
 const setProgramsTask = async (env) => {
-    const { settings, contracts, defaultAccount } = env;
+    const setPrograms = async (programs) => {
+        info('Adding programs');
 
-    const setPools = async (pools) => {
-        info('Adding pools');
+        let totalGas = 0;
 
-        for (const pool of pools) {
-            const { poolToken, startTime, endTime, rewardRate } = pool;
+        for (let i = 0; i < programs.length; i += BATCH_SIZE) {
+            const programsBatch = programs.slice(i, i + BATCH_SIZE);
 
-            info(
-                'Adding pool program',
-                arg('poolToken', poolToken),
-                arg('startTime', startTime),
-                arg('endTime', endTime),
-                arg('duration', humanizeDuration((endTime - startTime) * 1000, { units: ['w'] })),
-                arg('rewardRate', rewardRate)
-            );
+            const poolTokens = [];
+            const reserveTokens = [];
+            const rewardShares = [];
+            const startTimes = [];
+            const endTimes = [];
+            const rewardRates = [];
+
+            for (const program of programsBatch) {
+                const {
+                    poolToken,
+                    networkToken,
+                    reserveToken,
+                    startTime,
+                    endTime,
+                    networkTokenRate,
+                    reserveTokenRate,
+                    rewardRate
+                } = program;
+
+                const participating = await contracts.StakingRewardsStore.methods.isPoolParticipating(poolToken).call();
+                if (participating) {
+                    info('Skipping already participating program', arg('poolToken', poolToken));
+
+                    continue;
+                }
+
+                info(
+                    'Adding program',
+                    arg('poolToken', poolToken),
+                    arg('networkToken', networkToken),
+                    arg('reserveToken', reserveToken),
+                    arg('startTime', startTime),
+                    arg('endTime', endTime),
+                    arg('duration', humanizeDuration((endTime - startTime) * 1000, { units: ['w'] })),
+                    arg('networkTokenRate', networkTokenRate),
+                    arg('reserveTokenRate', reserveTokenRate),
+                    arg('rewardRate', rewardRate)
+                );
+
+                poolTokens.push(poolToken);
+                reserveTokens.push([networkToken, reserveToken]);
+                rewardShares.push([networkTokenRate, reserveTokenRate]);
+                startTimes.push(startTime);
+                endTimes.push(endTime);
+                rewardRates.push(rewardRate);
+            }
+
+            if (poolTokens.length === 0) {
+                continue;
+            }
 
             const gas = await contracts.StakingRewardsStore.methods
-                .addPoolProgram(poolToken, startTime, endTime, rewardRate)
+                .addPastPoolPrograms(poolTokens, reserveTokens, rewardShares, startTimes, endTimes, rewardRates)
                 .estimateGas({ from: defaultAccount });
-            await contracts.StakingRewardsStore.methods
-                .addPoolProgram(poolToken, startTime, endTime, rewardRate)
-                .send({ from: defaultAccount, gas });
+            const tx = await contracts.StakingRewardsStore.methods
+                .addPastPoolPrograms(poolTokens, reserveTokens, rewardShares, startTimes, endTimes, rewardRates)
+                .send({ from: defaultAccount, gas, gasPrice });
+            totalGas += tx.gasUsed;
         }
+
+        info('Finished adding new pools times', arg('totalGas', totalGas));
     };
 
-    const verifyPools = async (pools) => {
+    const verityPrograms = async (programs) => {
         info('Verifying pools');
 
-        for (const pool of pools) {
-            const { poolToken, startTime, endTime, rewardRate } = pool;
+        for (const program of programs) {
+            const {
+                poolToken,
+                networkToken,
+                reserveToken,
+                startTime,
+                endTime,
+                networkTokenRate,
+                reserveTokenRate,
+                rewardRate
+            } = program;
 
-            info('Verifying pool', arg('poolToken', poolToken));
+            info('Verifying program', arg('poolToken', poolToken));
 
             const data = await contracts.StakingRewardsStore.methods.poolProgram(poolToken).call();
 
-            if (data[0] != startTime) {
-                error("Pool start times don't match", arg('expected', startTime), arg('actual', data[0]));
+            const actualStartTime = data[0];
+            const actualEndTime = data[1];
+            const actualRewardRate = data[2];
+            const [actualNetworkToken, actualReserveToken] = data[3];
+            const [actualNetworkTokenRate, actualReserveTokenRate] = data[4];
+
+            if (actualStartTime != startTime) {
+                error("Program start times don't match", arg('expected', startTime), arg('actual', actualStartTime));
             }
 
-            if (data[1] != endTime) {
-                error("Pool end times don't match", arg('expected', endTime), arg('actual', data[1]));
+            if (actualEndTime != endTime) {
+                error("Program end times don't match", arg('expected', endTime), arg('actual', actualEndTime));
             }
 
-            if (!new BN(data[2]).eq(new BN(rewardRate))) {
-                error("Pool weekly rewards times don't match", arg('expected', rewardRate), arg('actual', data[2]));
+            if (!new BN(actualRewardRate).eq(new BN(rewardRate))) {
+                error("Program reward rates don't match", arg('expected', rewardRate), arg('actual', actualRewardRate));
+            }
+
+            if (actualNetworkToken.toLowerCase() != networkToken.toLowerCase()) {
+                error(
+                    "Program first reserve tokens don't match",
+                    arg('expected', networkToken.toLowerCase()),
+                    arg('actual', actualNetworkToken.toLowerCase())
+                );
+            }
+
+            if (actualReserveToken.toLowerCase() != reserveToken.toLowerCase()) {
+                error(
+                    "Program second reserve tokens don't match",
+                    arg('expected', reserveToken.toLowerCase()),
+                    arg('actual', actualReserveToken.toLowerCase())
+                );
+            }
+
+            if (!new BN(actualNetworkTokenRate).eq(new BN(networkTokenRate))) {
+                error(
+                    "Program first token rates don't match",
+                    arg('expected', networkTokenRate),
+                    arg('actual', actualNetworkTokenRate)
+                );
+            }
+
+            if (!new BN(actualReserveTokenRate).eq(new BN(reserveTokenRate))) {
+                error(
+                    "Program second token rates don't match",
+                    arg('expected', reserveTokenRate),
+                    arg('actual', actualReserveTokenRate)
+                );
             }
         }
     };
 
-    const {
-        rewards: { pools }
-    } = settings;
+    const { programs, contracts, defaultAccount, gasPrice } = env;
 
-    await setPools(pools);
-    await verifyPools(pools);
+    if (!gasPrice) {
+        error("Gas price isn't set. Aborting");
+    }
+
+    info(
+        'Gas price is set to',
+        arg('gasPrice', gasPrice),
+        '(wei)',
+        arg('gasPrice', fromWei(gasPrice.toString(), 'gwei')),
+        '(gwei)'
+    );
+
+    await setPrograms(programs);
+    await verityPrograms(programs);
 };
 
 module.exports = setProgramsTask;

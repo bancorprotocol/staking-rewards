@@ -13,12 +13,11 @@ const setLastRemovalTimes = async (env) => {
 
         let totalGas = 0;
 
-        const providers = Object.keys(lastRemovalTimes);
-        const data = Object.values(lastRemovalTimes);
-
-        for (let i = 0; i < providers.length; i += BATCH_SIZE) {
-            const providersBatch = providers.slice(i, i + BATCH_SIZE);
-            const timestampsBatch = data.slice(i, i + BATCH_SIZE).map((d) => d.timestamp);
+        const entries = Object.entries(lastRemovalTimes);
+        for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+            const batch = entries.slice(i, i + BATCH_SIZE);
+            const providersBatch = batch.map((e) => e[0]);
+            const timestampsBatch = batch.map((e) => e[1].timestamp);
 
             for (let j = 0; j < providersBatch.length; ++j) {
                 const provider = providersBatch[j];

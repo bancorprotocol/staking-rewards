@@ -24,21 +24,13 @@ const setup = async () => {
     const setupEnv = async () => {
         const { web3Provider } = settings;
 
+        const { privateKey } = require('../credentials.json');
+
         if (!test) {
             info('Running against mainnet');
 
             web3 = new Web3(web3Provider);
-
-            const { privateKey } = require('../credentials.json');
-            const account = web3.eth.accounts.privateKeyToAccount(privateKey);
-            web3.eth.accounts.wallet.add(account);
-
-            defaultAccount = account.address;
-
-            web3.eth.defaultAccount = defaultAccount;
-
             Contract.setProvider(web3Provider);
-            Contract.defaultAccount = defaultAccount;
         } else {
             info('Running against a mainnet fork (via Ganache)');
 
@@ -46,6 +38,7 @@ const setup = async () => {
 
             const provider = ganache.provider({
                 fork: web3Provider,
+                accounts: [{ secretKey: privateKey, balance: 10000000000000000000 }],
                 ws: true,
                 network_id: 1,
                 db: memdown(),
@@ -57,15 +50,17 @@ const setup = async () => {
 
             web3 = new Web3(provider);
 
-            defaultAccount = (await web3.eth.getAccounts())[0];
-
             info('Finished forking the mainnet');
 
-            web3.eth.defaultAccount = defaultAccount;
-
             Contract.setProvider(provider);
-            Contract.defaultAccount = defaultAccount;
         }
+
+        const account = web3.eth.accounts.privateKeyToAccount(privateKey);
+        web3.eth.accounts.wallet.add(account);
+
+        defaultAccount = account.address;
+        web3.eth.defaultAccount = defaultAccount;
+        Contract.defaultAccount = defaultAccount;
     };
 
     const setupExternalContracts = async () => {

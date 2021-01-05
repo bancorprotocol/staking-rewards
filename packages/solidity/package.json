@@ -14,6 +14,7 @@
     "license": "MIT",
     "scripts": {
         "compile": "truffle compile",
+        "build": "yarn build",
         "test": "yarn compile && yarn qtest",
         "qtest": "mocha",
         "coverage": "truffle run coverage",

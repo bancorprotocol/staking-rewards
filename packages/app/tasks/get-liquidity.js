@@ -10,9 +10,12 @@ const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
 
 const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
-        const position = await contracts.LiquidityProtectionStore.methods.protectedLiquidity(id).call({}, blockNumber);
+        const position = await contracts.LiquidityProtectionStoreOld.methods
+            .protectedLiquidity(id)
+            .call({}, blockNumber);
 
         return {
+            id,
             provider: position[0],
             poolToken: position[1],
             reserveToken: position[2],
@@ -71,7 +74,7 @@ const getLiquidityTask = async (env) => {
                 'blocks'
             );
 
-            const events = await contracts.LiquidityProtectionStore.getPastEvents('allEvents', {
+            const events = await contracts.LiquidityProtectionStoreOld.getPastEvents('allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
@@ -168,14 +171,14 @@ const getLiquidityTask = async (env) => {
                         // same block.
                         const matches = [];
                         const prevBlock = blockNumber - 1;
-                        const ids = await contracts.LiquidityProtectionStore.methods
+                        let ids = await contracts.LiquidityProtectionStoreOld.methods
                             .protectedLiquidityIds(provider)
                             .call({}, prevBlock);
                         for (const id of ids) {
                             const position = await getPosition(id, prevBlock);
                             if (
-                                new BN(position.reserveAmount).eq(new BN(new BN(prevReserveAmount))) &&
-                                new BN(position.poolAmount).eq(new BN(new BN(prevPoolAmount)))
+                                new BN(position.reserveAmount).eq(new BN(prevReserveAmount)) &&
+                                new BN(position.poolAmount).eq(new BN(prevPoolAmount))
                             ) {
                                 matches.push({
                                     poolToken: position.poolToken,
@@ -184,7 +187,34 @@ const getLiquidityTask = async (env) => {
                             }
                         }
 
-                        if (matches.length !== 1) {
+                        if (matches.length === 0) {
+                            warning(
+                                'Failed to fully match pool and reserve tokens. Trying to look for an updated position in the same block (assuming no more than a two updates in the same block)'
+                            );
+
+                            ids = await contracts.LiquidityProtectionStoreOld.methods
+                                .protectedLiquidityIds(provider)
+                                .call({}, blockNumber);
+                            for (const id of ids) {
+                                const position = await getPosition(id, blockNumber);
+                                if (
+                                    new BN(position.reserveAmount).eq(new BN(newReserveAmount)) &&
+                                    new BN(position.poolAmount).eq(new BN(newPoolAmount))
+                                ) {
+                                    matches.push({
+                                        poolToken: position.poolToken,
+                                        reserveToken: position.reserveToken
+                                    });
+                                }
+                            }
+
+                            if (matches.length !== 1) {
+                                error(
+                                    'Failed to fully match pool and reserve tokens. Expected to find a single match, but found',
+                                    arg('matches', matches.length)
+                                );
+                            }
+                        } else if (matches.length !== 1) {
                             error(
                                 'Failed to fully match pool and reserve tokens. Expected to find a single match, but found',
                                 arg('matches', matches.length)
@@ -291,7 +321,7 @@ const getLiquidityTask = async (env) => {
 
                 const { reserveAmount } = data;
 
-                const actualAmount = await contracts.LiquidityProtectionStore.methods
+                const actualAmount = await contracts.LiquidityProtectionStoreOld.methods
                     .totalProtectedReserveAmount(poolToken, reserveToken)
                     .call({}, toBlock);
                 if (!new BN(reserveAmount).eq(new BN(actualAmount))) {
@@ -312,11 +342,10 @@ const getLiquidityTask = async (env) => {
                     const { blockNumber, timestamp, reserveAmount } = snapshot;
 
                     // Verify snapshot values.
-                    const actualSnapshotAmount = await contracts.LiquidityProtectionStore.methods
+                    const actualSnapshotAmount = await contracts.LiquidityProtectionStoreOld.methods
                         .totalProtectedReserveAmount(poolToken, reserveToken)
                         .call({}, blockNumber);
                     if (!new BN(actualSnapshotAmount).eq(new BN(reserveAmount))) {
-                        console.log(data);
                         error(
                             'Wrong snapshot liquidity',
                             arg('poolToken', poolToken),

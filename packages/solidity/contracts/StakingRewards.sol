@@ -218,6 +218,21 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev returns specific provider's pending rewards for a specific participating pool
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool token representing the new rewards pool
+     *
+     * @return all pending rewards
+     */
+    function pendingRewards(address provider, IERC20 poolToken) external returns (uint256) {
+        IERC20[] memory poolTokens = new IERC20[](1);
+        poolTokens[0] = poolToken;
+
+        return pendingRewards(provider, poolTokens, false, MAX_UINT256, liquidityProtectionStore());
+    }
+
+    /**
      * @dev returns specific provider's pending rewards for all participating pools and optionally claims them
      *
      * @param provider the owner of the liquidity

@@ -17,6 +17,10 @@ contract TestStakingRewards is StakingRewards, TestTime {
         return TestTime.time();
     }
 
+    function pendingPoolRewards(address provider, IERC20 poolToken) external returns (uint256) {
+        return this.pendingRewards(provider, poolToken);
+    }
+
     function baseRewards(
         address provider,
         IERC20 poolToken,

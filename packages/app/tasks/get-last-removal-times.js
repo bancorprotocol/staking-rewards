@@ -95,7 +95,7 @@ const getLastRemovalTimes = async (env) => {
             const { timestamp, blockNumber } = data;
 
             const lastRemovalTime = await contracts.CheckpointStore.methods.checkpoint(provider).call({});
-            if (new BN(lastRemovalTime).eq(new BN(timestamp))) {
+            if (new BN(lastRemovalTime).gte(new BN(timestamp))) {
                 trace('Skipping already up to date last removal time for', arg('provider', provider));
 
                 filtered++;

@@ -151,7 +151,7 @@ const setProgramsTask = async (env) => {
 
     const { programs, contracts, defaultAccount, gasPrice } = env;
 
-    if (!gasPrice) {
+    if (new BN(gasPrice).eq(new BN(0))) {
         error("Gas price isn't set. Aborting");
     }
 

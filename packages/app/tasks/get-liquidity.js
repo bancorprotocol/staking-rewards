@@ -39,7 +39,7 @@ const getLiquidityTask = async (env) => {
             name = 'MakerDAO';
             symbol = 'MKR';
         } else {
-            const ReserveToken = new Contract(settings.externalContracts.ERC20.abi, reserveToken);
+            const ReserveToken = new Contract(ERC20, reserveToken);
             name = await web3Provider.call(ReserveToken.methods.name());
             symbol = await web3Provider.call(ReserveToken.methods.symbol());
         }
@@ -105,7 +105,7 @@ const getLiquidityTask = async (env) => {
                         );
 
                         if (!liquidity[poolToken]) {
-                            const PoolToken = new Contract(settings.externalContracts.ERC20.abi, poolToken);
+                            const PoolToken = new Contract(ERC20, poolToken);
                             const name = await web3Provider.call(PoolToken.methods.name());
                             const symbol = await web3Provider.call(PoolToken.methods.symbol());
                             liquidity[poolToken] = { name, symbol };

@@ -18,7 +18,10 @@ const CONVERTER_REGISTRY = web3.utils.asciiToHex('BancorConverterRegistry');
 const CONVERTER_REGISTRY_DATA = web3.utils.asciiToHex('BancorConverterRegistryData');
 const CONVERTER_FACTORY = web3.utils.asciiToHex('ConverterFactory');
 
+const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
+const ROLE_SEEDER = web3.utils.keccak256('ROLE_SEEDER');
+
 const PPM_RESOLUTION = new BN(1000000);
 const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
 const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
@@ -31,7 +34,8 @@ describe('StakingRewardsStore', () => {
     let networkToken;
     let poolToken;
     let poolToken2;
-    const owner = defaultSender;
+    const supervisor = defaultSender;
+    const owner = accounts[0];
     const nonOwner = accounts[1];
 
     const setTime = async (time) => {
@@ -152,286 +156,146 @@ describe('StakingRewardsStore', () => {
 
         store = await StakingRewardsStore.new();
 
+        await store.grantRole(ROLE_OWNER, owner, { from: supervisor });
+
         await setTime(new BN(1000));
     });
 
     describe('construction', () => {
         it('should properly initialize roles', async () => {
-            expect(await store.getRoleMemberCount.call(ROLE_OWNER)).to.be.bignumber.equal(new BN(1));
+            const newStore = await StakingRewardsStore.new();
 
-            expect(await store.getRoleAdmin.call(ROLE_OWNER)).to.eql(ROLE_OWNER);
+            expect(await newStore.getRoleMemberCount.call(ROLE_SUPERVISOR)).to.be.bignumber.equal(new BN(1));
+            expect(await newStore.getRoleMemberCount.call(ROLE_OWNER)).to.be.bignumber.equal(new BN(0));
+            expect(await newStore.getRoleMemberCount.call(ROLE_SEEDER)).to.be.bignumber.equal(new BN(0));
 
-            expect(await store.hasRole.call(ROLE_OWNER, owner)).to.be.true();
+            expect(await newStore.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStore.getRoleAdmin.call(ROLE_OWNER)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStore.getRoleAdmin.call(ROLE_SEEDER)).to.eql(ROLE_OWNER);
+
+            expect(await newStore.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
+            expect(await newStore.hasRole.call(ROLE_OWNER, supervisor)).to.be.false();
+            expect(await newStore.hasRole.call(ROLE_SEEDER, supervisor)).to.be.false();
         });
     });
 
     describe('pool programs', () => {
-        it('should revert when a non-owner attempts to add a pool', async () => {
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [networkToken.address, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(2000)),
-                    new BN(1000),
-                    { from: nonOwner }
-                ),
-                'ERR_ACCESS_DENIED'
-            );
-        });
-
-        it('should revert when adding a zero address pool', async () => {
-            await expectRevert(
-                store.addPoolProgram(
-                    ZERO_ADDRESS,
-                    [networkToken.address, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(2000)),
-                    new BN(1000),
-                    { from: owner }
-                ),
-                'ERR_INVALID_ADDRESS'
-            );
-        });
-
-        it('should revert when adding a pool with invalid ending time', async () => {
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [networkToken.address, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.sub(new BN(1)),
-                    new BN(1000),
-                    {
-                        from: owner
-                    }
-                ),
-                'ERR_INVALID_DURATION'
-            );
-        });
-
-        it('should revert when adding a pool with reward shares', async () => {
-            const invalidToken = accounts[5];
-
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [networkToken.address, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE.sub(new BN(1)), BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(2000)),
-                    new BN(1000),
-                    {
-                        from: owner
-                    }
-                ),
-                'ERR_INVALID_REWARD_SHARES'
-            );
-        });
-
-        it('should revert when adding a pool with invalid reserve tokens', async () => {
-            const invalidToken = accounts[5];
-
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [invalidToken, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(2000)),
-                    new BN(1000),
-                    {
-                        from: owner
-                    }
-                ),
-                'ERR_INVALID_RESERVE_TOKENS'
-            );
-
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [networkToken.address, invalidToken],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(2000)),
-                    new BN(1000),
-                    {
-                        from: owner
-                    }
-                ),
-                'ERR_INVALID_RESERVE_TOKENS'
-            );
-        });
-
-        it('should revert when adding without any weekly rewards', async () => {
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [networkToken.address, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(2000)),
-                    new BN(0),
-                    { from: owner }
-                ),
-                'ERR_ZERO_VALUE'
-            );
-        });
-
-        it('should allow managing pools', async () => {
-            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
-            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
-
-            const startTime = now;
-            const endTime = startTime.add(new BN(2000));
-            const rewardRate = new BN(1000);
-            const res = await store.addPoolProgram(
-                poolToken.address,
-                [networkToken.address, reserveToken.address],
-                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                endTime,
-                rewardRate,
-                { from: owner }
-            );
-            expectEvent(res, 'PoolProgramAdded', {
-                poolToken: poolToken.address,
-                startTime,
-                endTime,
-                rewardRate
+        context('owner', async () => {
+            it('should revert when a non-owner attempts to add a pool', async () => {
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        new BN(1000),
+                        { from: nonOwner }
+                    ),
+                    'ERR_ACCESS_DENIED'
+                );
             });
 
-            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
-            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
-
-            const program = await getPoolProgram(poolToken);
-            expect(program.startTime).to.be.bignumber.equal(startTime);
-            expect(program.endTime).to.be.bignumber.equal(endTime);
-            expect(program.rewardRate).to.be.bignumber.equal(rewardRate);
-            expect(program.reserveTokens[0]).to.eql(networkToken.address);
-            expect(program.reserveTokens[1]).to.eql(reserveToken.address);
-            expect(program.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-            expect(program.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
-
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken.address,
-                    [networkToken.address, reserveToken.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(1)),
-                    rewardRate,
-                    { from: owner }
-                ),
-                'ERR_ALREADY_PARTICIPATING'
-            );
-
-            const programs = await getPoolPrograms();
-            expect(programs.length).to.eql(1);
-
-            const program1 = programs[0];
-
-            expect(program1.poolToken).to.eql(poolToken.address);
-            expect(program1.startTime).to.be.bignumber.equal(startTime);
-            expect(program1.endTime).to.be.bignumber.equal(endTime);
-            expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
-            expect(program1.reserveTokens[0]).to.eql(networkToken.address);
-            expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
-            expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-            expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
-
-            expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
-            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.false();
-
-            await setTime(now.add(new BN(100000)));
-
-            const startTime2 = now;
-            const endTime2 = startTime2.add(new BN(6000));
-            const rewardRate2 = startTime2.add(new BN(9999));
-            const res2 = await store.addPoolProgram(
-                poolToken2.address,
-                [reserveToken2.address, networkToken.address],
-                [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
-                endTime2,
-                rewardRate2,
-                {
-                    from: owner
-                }
-            );
-            expectEvent(res2, 'PoolProgramAdded', {
-                poolToken: poolToken2.address,
-                startTime: startTime2,
-                endTime: endTime2,
-                rewardRate: rewardRate2
+            it('should revert when adding a zero address pool', async () => {
+                await expectRevert(
+                    store.addPoolProgram(
+                        ZERO_ADDRESS,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        new BN(1000),
+                        { from: owner }
+                    ),
+                    'ERR_INVALID_ADDRESS'
+                );
             });
 
-            expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.true();
-            expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.true();
-
-            const pool2 = await getPoolProgram(poolToken2);
-            expect(pool2.startTime).to.be.bignumber.equal(startTime2);
-            expect(pool2.endTime).to.be.bignumber.equal(endTime2);
-            expect(pool2.rewardRate).to.be.bignumber.equal(rewardRate2);
-            expect(pool2.reserveTokens[0]).to.eql(reserveToken2.address);
-            expect(pool2.reserveTokens[1]).to.eql(networkToken.address);
-            expect(pool2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
-            expect(pool2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-
-            const programs2 = await getPoolPrograms();
-            expect(programs2.length).to.eql(2);
-
-            const program2 = programs2[1];
-            expect(program2.poolToken).to.eql(poolToken2.address);
-            expect(program2.startTime).to.be.bignumber.equal(startTime2);
-            expect(program2.endTime).to.be.bignumber.equal(endTime2);
-            expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
-            expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
-            expect(program2.reserveTokens[1]).to.eql(networkToken.address);
-            expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
-            expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-
-            await expectRevert(
-                store.addPoolProgram(
-                    poolToken2.address,
-                    [networkToken.address, reserveToken2.address],
-                    [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                    now.add(new BN(1)),
-                    rewardRate,
-                    { from: owner }
-                ),
-                'ERR_ALREADY_PARTICIPATING'
-            );
-        });
-
-        it('should allow adding program with reverse order of reserve tokens', async () => {
-            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
-            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
-
-            const startTime = now;
-            const endTime = startTime.add(new BN(2000));
-            const rewardRate = new BN(1000);
-            const res = await store.addPoolProgram(
-                poolToken.address,
-                [reserveToken.address, networkToken.address],
-                [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
-                endTime,
-                rewardRate,
-                { from: owner }
-            );
-            expectEvent(res, 'PoolProgramAdded', {
-                poolToken: poolToken.address,
-                startTime,
-                endTime,
-                rewardRate
+            it('should revert when adding a pool with invalid ending time', async () => {
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.sub(new BN(1)),
+                        new BN(1000),
+                        {
+                            from: owner
+                        }
+                    ),
+                    'ERR_INVALID_DURATION'
+                );
             });
 
-            expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
-            expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
-        });
+            it('should revert when adding a pool with invalid reward shares', async () => {
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE.sub(new BN(1)), BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        new BN(1000),
+                        {
+                            from: owner
+                        }
+                    ),
+                    'ERR_INVALID_REWARD_SHARES'
+                );
+            });
 
-        context('with a registered pool', async () => {
-            let startTime;
-            let endTime;
+            it('should revert when adding a pool with invalid reserve tokens', async () => {
+                const invalidToken = accounts[5];
 
-            beforeEach(async () => {
-                startTime = now;
-                endTime = startTime.add(new BN(2000));
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [invalidToken, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        new BN(1000),
+                        {
+                            from: owner
+                        }
+                    ),
+                    'ERR_INVALID_RESERVE_TOKENS'
+                );
+
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, invalidToken],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        new BN(1000),
+                        {
+                            from: owner
+                        }
+                    ),
+                    'ERR_INVALID_RESERVE_TOKENS'
+                );
+            });
+
+            it('should revert when adding pools without any rewards', async () => {
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        new BN(0),
+                        { from: owner }
+                    ),
+                    'ERR_ZERO_VALUE'
+                );
+            });
+
+            it('should allow managing pools', async () => {
+                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+
+                const startTime = now;
+                const endTime = startTime.add(new BN(2000));
                 const rewardRate = new BN(1000);
-                await store.addPoolProgram(
+                const res = await store.addPoolProgram(
                     poolToken.address,
                     [networkToken.address, reserveToken.address],
                     [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
@@ -439,81 +303,579 @@ describe('StakingRewardsStore', () => {
                     rewardRate,
                     { from: owner }
                 );
-            });
+                expectEvent(res, 'PoolProgramAdded', {
+                    poolToken: poolToken.address,
+                    startTime,
+                    endTime,
+                    rewardRate
+                });
 
-            it('should revert when a non-owner attempts to remove a pool', async () => {
-                await expectRevert(store.removePoolProgram(poolToken.address, { from: nonOwner }), 'ERR_ACCESS_DENIED');
-            });
-
-            it('should revert when removing an unregistered pool', async () => {
-                await expectRevert(
-                    store.removePoolProgram(poolToken2.address, { from: owner }),
-                    'ERR_POOL_NOT_PARTICIPATING'
-                );
-            });
-
-            it('should allow removing pools', async () => {
-                let programs = await getPoolPrograms();
-                expect(programs.length).to.eql(1);
-
-                const res = await store.removePoolProgram(poolToken.address, { from: owner });
-                expectEvent(res, 'PoolProgramRemoved', { poolToken: poolToken.address });
-
-                programs = await getPoolPrograms();
-                expect(programs.length).to.eql(0);
-
-                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
-                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
-            });
-
-            it('should treat as non-participating pool after the ending time of the program', async () => {
+                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.true();
                 expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
 
-                await setTime(endTime);
+                let program1 = await getPoolProgram(poolToken);
+                expect(program1.startTime).to.be.bignumber.equal(startTime);
+                expect(program1.endTime).to.be.bignumber.equal(endTime);
+                expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+                expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+                expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+                expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
 
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(1)),
+                        rewardRate,
+                        { from: owner }
+                    ),
+                    'ERR_ALREADY_PARTICIPATING'
+                );
+
+                const programs = await getPoolPrograms();
+                expect(programs.length).to.eql(1);
+
+                program1 = programs[0];
+                expect(program1.poolToken).to.eql(poolToken.address);
+                expect(program1.startTime).to.be.bignumber.equal(startTime);
+                expect(program1.endTime).to.be.bignumber.equal(endTime);
+                expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+                expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+                expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+                expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+
+                expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
+                expect(
+                    await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)
+                ).to.be.false();
+
+                await setTime(now.add(new BN(100000)));
+
+                const startTime2 = now;
+                const endTime2 = startTime2.add(new BN(6000));
+                const rewardRate2 = startTime2.add(new BN(9999));
+                const res2 = await store.addPoolProgram(
+                    poolToken2.address,
+                    [reserveToken2.address, networkToken.address],
+                    [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
+                    endTime2,
+                    rewardRate2,
+                    {
+                        from: owner
+                    }
+                );
+                expectEvent(res2, 'PoolProgramAdded', {
+                    poolToken: poolToken2.address,
+                    startTime: startTime2,
+                    endTime: endTime2,
+                    rewardRate: rewardRate2
+                });
+
+                expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.true();
+
+                let program2 = await getPoolProgram(poolToken2);
+                expect(program2.startTime).to.be.bignumber.equal(startTime2);
+                expect(program2.endTime).to.be.bignumber.equal(endTime2);
+                expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+                expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
+                expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+                expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+
+                programs2 = await getPoolPrograms();
+                expect(programs2.length).to.eql(2);
+
+                program2 = programs2[1];
+                expect(program2.poolToken).to.eql(poolToken2.address);
+                expect(program2.startTime).to.be.bignumber.equal(startTime2);
+                expect(program2.endTime).to.be.bignumber.equal(endTime2);
+                expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+                expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
+                expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+                expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken2.address,
+                        [networkToken.address, reserveToken2.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(1)),
+                        rewardRate,
+                        { from: owner }
+                    ),
+                    'ERR_ALREADY_PARTICIPATING'
+                );
+            });
+
+            it('should allow adding program with reverse order of reserve tokens', async () => {
+                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
                 expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+
+                const startTime = now;
+                const endTime = startTime.add(new BN(2000));
+                const rewardRate = new BN(1000);
+                const res = await store.addPoolProgram(
+                    poolToken.address,
+                    [reserveToken.address, networkToken.address],
+                    [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
+                    endTime,
+                    rewardRate,
+                    { from: owner }
+                );
+                expectEvent(res, 'PoolProgramAdded', {
+                    poolToken: poolToken.address,
+                    startTime,
+                    endTime,
+                    rewardRate
+                });
+
+                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
             });
 
-            it('should revert when trying to extend a non-existing program', async () => {
+            context('with a registered pool', async () => {
+                let startTime;
+                let endTime;
+
+                beforeEach(async () => {
+                    startTime = now;
+                    endTime = startTime.add(new BN(2000));
+                    const rewardRate = new BN(1000);
+                    await store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        endTime,
+                        rewardRate,
+                        { from: owner }
+                    );
+                });
+
+                it('should revert when a non-owner attempts to remove a pool', async () => {
+                    await expectRevert(
+                        store.removePoolProgram(poolToken.address, { from: nonOwner }),
+                        'ERR_ACCESS_DENIED'
+                    );
+                });
+
+                it('should revert when removing an unregistered pool', async () => {
+                    await expectRevert(
+                        store.removePoolProgram(poolToken2.address, { from: owner }),
+                        'ERR_POOL_NOT_PARTICIPATING'
+                    );
+                });
+
+                it('should allow removing pools', async () => {
+                    let programs = await getPoolPrograms();
+                    expect(programs.length).to.eql(1);
+
+                    const res = await store.removePoolProgram(poolToken.address, { from: owner });
+                    expectEvent(res, 'PoolProgramRemoved', { poolToken: poolToken.address });
+
+                    programs = await getPoolPrograms();
+                    expect(programs.length).to.eql(0);
+
+                    expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, networkToken.address)
+                    ).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, reserveToken.address)
+                    ).to.be.false();
+                });
+
+                it('should treat as non-participating pool after the ending time of the program', async () => {
+                    expect(await store.isPoolParticipating.call(poolToken.address)).to.be.true();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, networkToken.address)
+                    ).to.be.true();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, reserveToken.address)
+                    ).to.be.true();
+
+                    await setTime(endTime);
+
+                    expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, networkToken.address)
+                    ).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, reserveToken.address)
+                    ).to.be.false();
+                });
+
+                it('should revert when trying to extend a non-existing program', async () => {
+                    await expectRevert(
+                        store.extendPoolProgram(poolToken2.address, endTime.add(new BN(1)), { from: owner }),
+                        'ERR_POOL_NOT_PARTICIPATING'
+                    );
+                });
+
+                it('should revert when trying to extend an ended program', async () => {
+                    const newEndTime = endTime.add(new BN(10000));
+
+                    await setTime(endTime);
+
+                    await expectRevert(
+                        store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
+                        'ERR_POOL_NOT_PARTICIPATING'
+                    );
+
+                    await setTime(endTime.add(new BN(1000)));
+
+                    await expectRevert(
+                        store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
+                        'ERR_POOL_NOT_PARTICIPATING'
+                    );
+                });
+
+                it('should revert when trying to reduce a program', async () => {
+                    await expectRevert(
+                        store.extendPoolProgram(poolToken.address, endTime.sub(new BN(1)), { from: owner }),
+                        'ERR_INVALID_DURATION'
+                    );
+                });
+
+                it('should allow extending an ongoing program', async () => {
+                    const newEndTime = endTime.add(new BN(10000));
+                    await store.extendPoolProgram(poolToken.address, newEndTime, { from: owner });
+
+                    const program = await getPoolProgram(poolToken);
+                    expect(program.endTime).to.be.bignumber.equal(newEndTime);
+                });
+            });
+        });
+
+        context('seeder', async () => {
+            const seeder = accounts[5];
+
+            beforeEach(async () => {
+                await store.grantRole(ROLE_SEEDER, seeder, { from: owner });
+            });
+
+            it('should revert when a non-seeder attempts to add pools', async () => {
                 await expectRevert(
-                    store.extendPoolProgram(poolToken2.address, endTime.add(new BN(1)), { from: owner }),
-                    'ERR_POOL_NOT_PARTICIPATING'
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(1))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: owner }
+                    ),
+                    'ERR_ACCESS_DENIED'
                 );
             });
 
-            it('should revert when trying to extend an ended program', async () => {
-                const newEndTime = endTime.add(new BN(10000));
-
-                await setTime(endTime);
-
+            it('should revert when adding zero address pools', async () => {
                 await expectRevert(
-                    store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
-                    'ERR_POOL_NOT_PARTICIPATING'
-                );
-
-                await setTime(endTime.add(new BN(1000)));
-
-                await expectRevert(
-                    store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
-                    'ERR_POOL_NOT_PARTICIPATING'
+                    store.addPastPoolPrograms(
+                        [ZERO_ADDRESS],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(1))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_ADDRESS'
                 );
             });
 
-            it('should revert when trying to reduce a program', async () => {
+            it('should revert when adding pools with invalid starting time', async () => {
                 await expectRevert(
-                    store.extendPoolProgram(poolToken.address, endTime.sub(new BN(1)), { from: owner }),
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now],
+                        [new BN(1000)],
+                        [now.add(new BN(2000))],
+                        {
+                            from: seeder
+                        }
+                    ),
+                    'ERR_INVALID_TIME'
+                );
+            });
+
+            it('should revert when adding pools with invalid ending time', async () => {
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.sub(new BN(1))],
+                        [new BN(1000)],
+                        {
+                            from: seeder
+                        }
+                    ),
                     'ERR_INVALID_DURATION'
                 );
             });
 
-            it('should allow extending an ongoing program', async () => {
-                const newEndTime = endTime.add(new BN(10000));
-                await store.extendPoolProgram(poolToken.address, newEndTime, { from: owner });
+            it('should revert when adding pools with invalid reward shares', async () => {
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE.sub(new BN(1)), BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        {
+                            from: seeder
+                        }
+                    ),
+                    'ERR_INVALID_REWARD_SHARES'
+                );
+            });
 
-                const program = await getPoolProgram(poolToken);
-                expect(program.endTime).to.be.bignumber.equal(newEndTime);
+            it('should revert when adding pools with invalid reserve tokens', async () => {
+                const invalidToken = accounts[5];
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[invalidToken, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        {
+                            from: seeder
+                        }
+                    ),
+                    'ERR_INVALID_RESERVE_TOKENS'
+                );
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, invalidToken]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        {
+                            from: seeder
+                        }
+                    ),
+                    'ERR_INVALID_RESERVE_TOKENS'
+                );
+            });
+
+            it('should revert when adding pools without any rewards', async () => {
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(0)],
+                        { from: seeder }
+                    ),
+                    'ERR_ZERO_VALUE'
+                );
+            });
+
+            it('should revert when adding pools with invalid length data', async () => {
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address, poolToken2.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_LENGTH'
+                );
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [
+                            [networkToken.address, reserveToken.address],
+                            [networkToken.address, reserveToken.address]
+                        ],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_LENGTH'
+                );
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [
+                            [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                            [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]
+                        ],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_LENGTH'
+                );
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100)), now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_LENGTH'
+                );
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000)), now.add(new BN(2000))],
+                        [new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_LENGTH'
+                );
+
+                await expectRevert(
+                    store.addPastPoolPrograms(
+                        [poolToken.address],
+                        [[networkToken.address, reserveToken.address]],
+                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                        [now.sub(new BN(100))],
+                        [now.add(new BN(2000))],
+                        [new BN(1000), new BN(1000)],
+                        { from: seeder }
+                    ),
+                    'ERR_INVALID_LENGTH'
+                );
+            });
+
+            it('should allow managing pools', async () => {
+                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+
+                expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.false();
+                expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
+                expect(
+                    await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)
+                ).to.be.false();
+
+                const startTime = now.sub(new BN(1000));
+                const endTime = startTime.add(new BN(2000));
+                const rewardRate = new BN(1000);
+
+                const startTime2 = now.sub(new BN(10));
+                const endTime2 = startTime2.add(new BN(6000));
+                const rewardRate2 = startTime2.add(new BN(9999));
+
+                const res = await store.addPastPoolPrograms(
+                    [poolToken.address, poolToken2.address],
+                    [
+                        [networkToken.address, reserveToken.address],
+                        [reserveToken2.address, networkToken.address]
+                    ],
+                    [
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE]
+                    ],
+                    [startTime, startTime2],
+                    [endTime, endTime2],
+                    [rewardRate, rewardRate2],
+                    {
+                        from: seeder
+                    }
+                );
+                expectEvent(res, 'PastPoolProgramAdded', {
+                    poolToken: poolToken.address,
+                    startTime,
+                    endTime,
+                    rewardRate
+                });
+                expectEvent(res, 'PastPoolProgramAdded', {
+                    poolToken: poolToken2.address,
+                    startTime: startTime2,
+                    endTime: endTime2,
+                    rewardRate: rewardRate2
+                });
+
+                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
+
+                expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.true();
+                expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.true();
+
+                let program1 = await getPoolProgram(poolToken);
+                expect(program1.startTime).to.be.bignumber.equal(startTime);
+                expect(program1.endTime).to.be.bignumber.equal(endTime);
+                expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+                expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+                expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+                expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+
+                const programs = await getPoolPrograms();
+                expect(programs.length).to.eql(2);
+
+                program1 = programs[0];
+                expect(program1.poolToken).to.eql(poolToken.address);
+                expect(program1.startTime).to.be.bignumber.equal(startTime);
+                expect(program1.endTime).to.be.bignumber.equal(endTime);
+                expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+                expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+                expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+                expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+
+                let program2 = await getPoolProgram(poolToken2);
+                expect(program2.startTime).to.be.bignumber.equal(startTime2);
+                expect(program2.endTime).to.be.bignumber.equal(endTime2);
+                expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+                expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
+                expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+                expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+
+                program2 = programs[1];
+                expect(program2.poolToken).to.eql(poolToken2.address);
+                expect(program2.startTime).to.be.bignumber.equal(startTime2);
+                expect(program2.endTime).to.be.bignumber.equal(endTime2);
+                expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+                expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
+                expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+                expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
             });
         });
     });

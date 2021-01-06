@@ -9,6 +9,7 @@ const Provider = require('./provider');
 const { test, init, reorgOffset } = require('./yargs');
 
 const settings = require('../settings.json');
+const programs = require('../programs.json');
 
 const ROLE_OWNER = keccak256('ROLE_OWNER');
 const ROLE_MINTER = keccak256('ROLE_MINTER');
@@ -94,6 +95,18 @@ const setup = async () => {
 
             await web3Provider.send(contracts.StakingRewardsStore.methods.grantRole(ROLE_OWNER, stakingAddress));
 
+            info('Granting the deployer owner permissions on StakingRewardsStore');
+
+            await web3Provider.send(
+                contracts.StakingRewardsStore.methods.grantRole(ROLE_OWNER, web3Provider.getDefaultAccount())
+            );
+
+            info('Granting the deployer seeding permissions on StakingRewardsStore');
+
+            await web3Provider.send(
+                contracts.StakingRewardsStore.methods.grantRole(ROLE_SEEDER, web3Provider.getDefaultAccount())
+            );
+
             info('Granting TokenGovernance minting permissions to StakingRewards');
 
             const {
@@ -104,7 +117,7 @@ const setup = async () => {
                 from: governor
             });
 
-            info('Granting CheckpointStore seeding permissions to the deployer');
+            info('Granting the deployer seeding permissions on CheckpointStore');
 
             const {
                 CheckpointStore: { owner }
@@ -140,6 +153,7 @@ const setup = async () => {
 
         return {
             settings,
+            programs,
             web3Provider,
             contracts,
             Contract,

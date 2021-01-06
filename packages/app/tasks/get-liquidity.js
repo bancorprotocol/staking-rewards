@@ -425,6 +425,14 @@ const getLiquidityTask = async (env) => {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
     }
 
+    const externalContractsDir = path.resolve(
+        __dirname,
+        '../../../node_modules/@bancor/contracts/solidity/build/contracts'
+    );
+
+    const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
+    const { abi: ERC20 } = JSON.parse(rawData);
+
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'liquidity.json');
     let data = {};

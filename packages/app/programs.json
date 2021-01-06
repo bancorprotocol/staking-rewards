@@ -1,0 +1,12 @@
+[
+    {
+        "poolToken": "0x6b181C478b315bE3f9E99c57CE926436c32e17a7",
+        "networkToken": "0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c",
+        "reserveToken": "0x408e41876cCCDC0F92210600ef50372656052a38",
+        "startTime": 1607018040,
+        "endTime": 1614275640,
+        "reserveTokenRate": 300000,
+        "networkTokenRate": 700000,
+        "rewardRate": "165343915343915343"
+    }
+]

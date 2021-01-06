@@ -10,9 +10,11 @@ const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
 
 const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
-        const position = await contracts.LiquidityProtectionStoreOld.methods
-            .protectedLiquidity(id)
-            .call({}, blockNumber);
+        const position = await web3Provider.call(
+            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidity(id),
+            {},
+            blockNumber
+        );
 
         return {
             id,
@@ -38,8 +40,8 @@ const getLiquidityTask = async (env) => {
             symbol = 'MKR';
         } else {
             const ReserveToken = new Contract(settings.externalContracts.ERC20.abi, reserveToken);
-            name = await ReserveToken.methods.name().call();
-            symbol = await ReserveToken.methods.symbol().call();
+            name = await web3Provider.call(ReserveToken.methods.name());
+            symbol = await web3Provider.call(ReserveToken.methods.symbol());
         }
 
         return { name, symbol };
@@ -74,14 +76,14 @@ const getLiquidityTask = async (env) => {
                 'blocks'
             );
 
-            const events = await contracts.LiquidityProtectionStoreOld.getPastEvents('allEvents', {
+            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStoreOld, 'allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
 
             for (const event of events) {
                 const { blockNumber, returnValues, transactionHash } = event;
-                const block = await web3.eth.getBlock(blockNumber);
+                const block = await web3Provider.getBlock(blockNumber);
                 const { timestamp } = block;
 
                 switch (event.event) {
@@ -104,8 +106,8 @@ const getLiquidityTask = async (env) => {
 
                         if (!liquidity[poolToken]) {
                             const PoolToken = new Contract(settings.externalContracts.ERC20.abi, poolToken);
-                            const name = await PoolToken.methods.name().call();
-                            const symbol = await PoolToken.methods.symbol().call();
+                            const name = await web3Provider.call(PoolToken.methods.name());
+                            const symbol = await web3Provider.call(PoolToken.methods.symbol());
                             liquidity[poolToken] = { name, symbol };
                         }
 
@@ -171,9 +173,11 @@ const getLiquidityTask = async (env) => {
                         // same block.
                         const matches = [];
                         const prevBlock = blockNumber - 1;
-                        let ids = await contracts.LiquidityProtectionStoreOld.methods
-                            .protectedLiquidityIds(provider)
-                            .call({}, prevBlock);
+                        let ids = await web3Provider.call(
+                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            {},
+                            prevBlock
+                        );
                         for (const id of ids) {
                             const position = await getPosition(id, prevBlock);
                             if (
@@ -192,9 +196,11 @@ const getLiquidityTask = async (env) => {
                                 'Failed to fully match pool and reserve tokens. Trying to look for an updated position in the same block (assuming no more than a two updates in the same block)'
                             );
 
-                            ids = await contracts.LiquidityProtectionStoreOld.methods
-                                .protectedLiquidityIds(provider)
-                                .call({}, blockNumber);
+                            ids = await web3Provider.call(
+                                contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                                {},
+                                blockNumber
+                            );
                             for (const id of ids) {
                                 const position = await getPosition(id, blockNumber);
                                 if (
@@ -321,9 +327,11 @@ const getLiquidityTask = async (env) => {
 
                 const { reserveAmount } = data;
 
-                const actualAmount = await contracts.LiquidityProtectionStoreOld.methods
-                    .totalProtectedReserveAmount(poolToken, reserveToken)
-                    .call({}, toBlock);
+                const actualAmount = await web3Provider.call(
+                    contracts.LiquidityProtectionStoreOld.methods.totalProtectedReserveAmount(poolToken, reserveToken),
+                    {},
+                    toBlock
+                );
                 if (!new BN(reserveAmount).eq(new BN(actualAmount))) {
                     error(
                         'Wrong liquidity',
@@ -342,9 +350,14 @@ const getLiquidityTask = async (env) => {
                     const { blockNumber, timestamp, reserveAmount } = snapshot;
 
                     // Verify snapshot values.
-                    const actualSnapshotAmount = await contracts.LiquidityProtectionStoreOld.methods
-                        .totalProtectedReserveAmount(poolToken, reserveToken)
-                        .call({}, blockNumber);
+                    const actualSnapshotAmount = await web3Provider.call(
+                        contracts.LiquidityProtectionStoreOld.methods.totalProtectedReserveAmount(
+                            poolToken,
+                            reserveToken
+                        ),
+                        {},
+                        blockNumber
+                    );
                     if (!new BN(actualSnapshotAmount).eq(new BN(reserveAmount))) {
                         error(
                             'Wrong snapshot liquidity',
@@ -360,7 +373,7 @@ const getLiquidityTask = async (env) => {
                     }
 
                     // Verify snapshot timestamps.
-                    const block = await web3.eth.getBlock(blockNumber);
+                    const block = await web3Provider.getBlock(blockNumber);
                     const { timestamp: blockTimeStamp } = block;
                     if (timestamp != blockTimeStamp) {
                         error(
@@ -406,7 +419,7 @@ const getLiquidityTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, reorgOffset, web3, contracts, Contract, test } = env;
+    const { settings, web3Provider, reorgOffset, contracts, Contract, test } = env;
 
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
@@ -428,7 +441,7 @@ const getLiquidityTask = async (env) => {
         fromBlock = data.lastBlockNumber + 1;
     }
 
-    const latestBlock = await web3.eth.getBlockNumber();
+    const latestBlock = await web3Provider.getBlockNumber();
     if (latestBlock === 0) {
         error('Node is out of sync. Please try again later');
     }

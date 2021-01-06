@@ -218,7 +218,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specific participating pool and reserve
+     * @dev returns specific provider's pending rewards for a specific participating pool/reserve
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the new rewards pool
@@ -233,7 +233,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ) external returns (uint256) {
         PoolProgram memory program = poolProgram(poolToken);
 
-        return pendingRewards(provider, poolToken, reserveToken, program, false, MAX_UINT256, liquidityProtectionStore());
+        return
+            pendingRewards(provider, poolToken, reserveToken, program, false, MAX_UINT256, liquidityProtectionStore());
     }
 
     /**
@@ -324,7 +325,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specific pool and optionally claims them
+     * @dev returns specific provider's pending rewards for a specific pool/reserve and optionally claims them
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool to query

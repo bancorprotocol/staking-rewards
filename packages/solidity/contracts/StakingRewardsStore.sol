@@ -52,7 +52,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate
+     * @param rewardRate the program's rewards rate per-second
      */
     event PoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
@@ -69,7 +69,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate
+     * @param rewardRate the program's rewards rate per-second
      */
     event PastPoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
@@ -160,7 +160,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param reserveTokens the reserve tokens representing the liqudiity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate
+     * @param rewardRate the program's rewards rate per-second
      */
     function addPoolProgram(
         IERC20 poolToken,
@@ -184,7 +184,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param rewardShares reserve reward shares
      * @param startTime starting times of the program
      * @param endTimes ending times of the program
-     * @param rewardRates program reward rates
+     * @param rewardRates program's rewards rate per-second
      */
     function addPastPoolPrograms(
         IERC20[] calldata poolTokens,
@@ -224,7 +224,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param rewardShares reserve reward shares
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate
+     * @param rewardRate the program's rewards rate per-second
      */
     function addPastPoolProgram(
         IERC20 poolToken,
@@ -248,7 +248,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param reserveTokens the reserve tokens representing the liqudiity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate
+     * @param rewardRate the program's rewards rate per-second
      */
     function addPoolProgram(
         IERC20 poolToken,

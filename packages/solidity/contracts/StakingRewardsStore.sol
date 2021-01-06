@@ -134,23 +134,13 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @return whether the specified reserve is participating in the rewards program
      */
     function isReserveParticipating(IERC20 poolToken, IERC20 reserveToken) public view override returns (bool) {
-        PoolProgram memory program = _programs[poolToken];
-        if (!isPoolParticipating(program)) {
+        if (!isPoolParticipating(poolToken)) {
             return false;
         }
 
-        return program.reserveTokens[0] == reserveToken || program.reserveTokens[1] == reserveToken;
-    }
+        PoolProgram memory program = _programs[poolToken];
 
-    /**
-     * @dev returns whether the specified pool is participating in the rewards program
-     *
-     * @param program the program data
-     *
-     * @return whether the specified pool is participating in the rewards program
-     */
-    function isPoolParticipating(PoolProgram memory program) private view returns (bool) {
-        return program.endTime > time();
+        return program.reserveTokens[0] == reserveToken || program.reserveTokens[1] == reserveToken;
     }
 
     /**
@@ -265,8 +255,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(_pools.add(address(poolToken)), "ERR_ALREADY_PARTICIPATING");
 
         PoolProgram storage program = _programs[poolToken];
-        require(!isPoolParticipating(program), "ERR_ALREADY_PARTICIPATING");
-
         program.startTime = startTime;
         program.endTime = endTime;
         program.rewardRate = rewardRate;
@@ -293,11 +281,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      */
     function removePoolProgram(IERC20 poolToken) external override onlyOwner {
-        require(isPoolParticipating(_programs[poolToken]), "ERR_POOL_NOT_PARTICIPATING");
+        require(_pools.remove(address(poolToken)), "ERR_POOL_NOT_PARTICIPATING");
 
         delete _programs[poolToken];
-
-        require(_pools.remove(address(poolToken)), "ERR_POOL_NOT_PARTICIPATING");
 
         emit PoolProgramRemoved(poolToken);
     }
@@ -309,9 +295,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param newEndTime the new ending time of the program
      */
     function extendPoolProgram(IERC20 poolToken, uint256 newEndTime) external override onlyOwner {
-        PoolProgram storage program = _programs[poolToken];
+        require(isPoolParticipating(poolToken), "ERR_POOL_NOT_PARTICIPATING");
 
-        require(isPoolParticipating(program), "ERR_POOL_NOT_PARTICIPATING");
+        PoolProgram storage program = _programs[poolToken];
         require(newEndTime > program.endTime, "ERR_INVALID_DURATION");
 
         program.endTime = newEndTime;

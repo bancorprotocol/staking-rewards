@@ -10,6 +10,7 @@ const argv = require('./utils/yargs');
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPositionsTask = require('./tasks/get-positions');
 const getLastRemovalTimesTask = require('./tasks/get-last-removal-times');
+const getRewards = require('./tasks/get-rewards');
 
 const setLastRemovalTimesTask = require('./tasks/set-last-removal-times');
 const setProgramsTask = require('./tasks/set-programs');
@@ -36,6 +37,7 @@ const main = async () => {
             getLiquidity,
             getPositions,
             getLastRemovalTimes,
+            getRewards,
             setAll,
             setLastRemovalTimes,
             setPrograms
@@ -51,6 +53,10 @@ const main = async () => {
 
         if (getAll || getLastRemovalTimes) {
             await getLastRemovalTimesTask(env);
+        }
+
+        if (getAll || getRewards) {
+            await getRewardsTask(env);
         }
 
         if (setAll || setLastRemovalTimes) {

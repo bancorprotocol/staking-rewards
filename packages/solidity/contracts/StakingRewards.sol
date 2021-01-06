@@ -218,6 +218,25 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev returns specific provider's pending rewards for a specific participating pool and reserve
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool token representing the new rewards pool
+     * @param reserveToken the reserve token representing the liquidity in the pool
+     *
+     * @return all pending rewards
+     */
+    function pendingReserveRewards(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken
+    ) external returns (uint256) {
+        PoolProgram memory program = poolProgram(poolToken);
+
+        return pendingRewards(provider, poolToken, reserveToken, program, false, MAX_UINT256, liquidityProtectionStore());
+    }
+
+    /**
      * @dev returns specific provider's pending rewards for all participating pools and optionally claims them
      *
      * @param provider the owner of the liquidity
@@ -237,7 +256,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specifc list of participating pools and optionally
+     * @dev returns specific provider's pending rewards for a specific list of participating pools and optionally
      * claims them
      *
      * @param provider the owner of the liquidity
@@ -271,7 +290,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specifc pool and optionally claims them
+     * @dev returns specific provider's pending rewards for a specific pool and optionally claims them
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool to query
@@ -287,78 +306,107 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         bool claim,
         uint256 maxAmount,
         ILiquidityProtectionDataStore lpStore
-    ) private returns (uint256 reward) {
+    ) private returns (uint256) {
+        uint256 reward = 0;
         PoolProgram memory program = poolProgram(poolToken);
 
         for (uint256 i = 0; i < program.reserveTokens.length && maxAmount > 0; ++i) {
-            IERC20 reserveToken = program.reserveTokens[i];
+            uint256 reserveReward =
+                pendingRewards(provider, poolToken, program.reserveTokens[i], program, claim, maxAmount, lpStore);
+            reward = reward.add(reserveReward);
 
-            // update all provider's pending rewards, in order to apply retroactive reward multipliers.
-            (Rewards memory rewardsData, ProviderRewards memory providerRewards) =
-                updateRewards(provider, poolToken, reserveToken, lpStore);
-
-            // get full rewards and the respective rewards mutliplier.
-            (uint256 fullReward, uint32 multiplier) =
-                fullRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
-
-            if (!claim) {
-                reward = reward.add(fullReward);
-
-                continue;
+            if (claim && maxAmount != MAX_UINT256) {
+                maxAmount = maxAmount.sub(reserveReward);
             }
-
-            // mark any debt as repaid.
-            providerRewards.baseRewardsDebt = 0;
-            providerRewards.baseRewardsDebtMultiplier = 0;
-
-            if (maxAmount != MAX_UINT256) {
-                if (fullReward > maxAmount) {
-                    // get the amount of the actual base rewards that were claimed.
-                    if (multiplier == PPM_RESOLUTION) {
-                        providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
-                    } else {
-                        providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
-                    }
-
-                    // store the current multiplier for future retroactive rewards correction.
-                    providerRewards.baseRewardsDebtMultiplier = multiplier;
-
-                    // grant only maxAmount rewards.
-                    fullReward = maxAmount;
-
-                    maxAmount = 0;
-                } else {
-                    maxAmount = maxAmount.sub(fullReward);
-                }
-            }
-
-            reward = reward.add(fullReward);
-
-            // update pool rewards data total claimed rewards.
-            _store.updateRewardsData(
-                poolToken,
-                reserveToken,
-                rewardsData.lastUpdateTime,
-                rewardsData.rewardPerToken,
-                rewardsData.totalClaimedRewards.add(fullReward)
-            );
-
-            // update provider rewards data with the remaining pending rewards and set the last update time to the
-            // timestamp of the current block.
-            _store.updateProviderRewardsData(
-                provider,
-                poolToken,
-                reserveToken,
-                providerRewards.rewardPerToken,
-                0,
-                providerRewards.totalClaimedRewards.add(fullReward),
-                time(),
-                providerRewards.baseRewardsDebt,
-                providerRewards.baseRewardsDebtMultiplier
-            );
         }
 
         return reward;
+    }
+
+    /**
+     * @dev returns specific provider's pending rewards for a specific pool and optionally claims them
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool to query
+     * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param program the pool program info
+     * @param claim whether to actually claim the rewards
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
+     * @param lpStore liquidity protection data store
+     *
+     * @return reward all pending rewards
+     */
+
+    function pendingRewards(
+        address provider,
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        PoolProgram memory program,
+        bool claim,
+        uint256 maxAmount,
+        ILiquidityProtectionDataStore lpStore
+    ) private returns (uint256) {
+        // update all provider's pending rewards, in order to apply retroactive reward multipliers.
+        (Rewards memory rewardsData, ProviderRewards memory providerRewards) =
+            updateRewards(provider, poolToken, reserveToken, lpStore);
+
+        // get full rewards and the respective rewards mutliplier.
+        (uint256 fullReward, uint32 multiplier) =
+            fullRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
+
+        if (!claim) {
+            return fullReward;
+        }
+
+        // mark any debt as repaid.
+        providerRewards.baseRewardsDebt = 0;
+        providerRewards.baseRewardsDebtMultiplier = 0;
+
+        if (maxAmount != MAX_UINT256) {
+            if (fullReward > maxAmount) {
+                // get the amount of the actual base rewards that were claimed.
+                if (multiplier == PPM_RESOLUTION) {
+                    providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
+                } else {
+                    providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
+                }
+
+                // store the current multiplier for future retroactive rewards correction.
+                providerRewards.baseRewardsDebtMultiplier = multiplier;
+
+                // grant only maxAmount rewards.
+                fullReward = maxAmount;
+
+                maxAmount = 0;
+            } else {
+                maxAmount = maxAmount.sub(fullReward);
+            }
+        }
+
+        // update pool rewards data total claimed rewards.
+        _store.updateRewardsData(
+            poolToken,
+            reserveToken,
+            rewardsData.lastUpdateTime,
+            rewardsData.rewardPerToken,
+            rewardsData.totalClaimedRewards.add(fullReward)
+        );
+
+        // update provider rewards data with the remaining pending rewards and set the last update time to the
+        // timestamp of the current block.
+        _store.updateProviderRewardsData(
+            provider,
+            poolToken,
+            reserveToken,
+            providerRewards.rewardPerToken,
+            0,
+            providerRewards.totalClaimedRewards.add(fullReward),
+            time(),
+            providerRewards.baseRewardsDebt,
+            providerRewards.baseRewardsDebtMultiplier
+        );
+
+        return fullReward;
     }
 
     /**
@@ -412,7 +460,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewards for a specifc list of participating pools
+     * @dev claims specific provider's pending rewards for a specific list of participating pools
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
@@ -476,7 +524,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewards for a specifc list of participating pools
+     * @dev claims specific provider's pending rewards for a specific list of participating pools
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query

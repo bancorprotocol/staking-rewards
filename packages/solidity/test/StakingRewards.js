@@ -546,41 +546,49 @@ describe('StakingRewards', () => {
             }
 
             for (const poolToken of Object.keys(providerPools[provider])) {
-                reward = reward.add(getExpectedPoolRewards(provider, poolToken, duration, multiplierDuration));
+                const reserveTokens = providerPools[provider][poolToken];
+
+                for (const reserveToken of reserveTokens) {
+                    reward = reward.add(
+                        getExpectedReserveRewards(provider, poolToken, reserveToken, duration, multiplierDuration)
+                    );
+                }
             }
 
             return reward;
         };
 
-        const getExpectedPoolRewards = (provider, poolToken, duration, multiplierDuration = undefined) => {
+        const getExpectedReserveRewards = (
+            provider,
+            poolToken,
+            reserveToken,
+            duration,
+            multiplierDuration = undefined
+        ) => {
             let reward = new BN(0);
             if (duration.lte(new BN(0))) {
                 return reward;
             }
 
-            const reserveTokens = providerPools[provider][poolToken];
+            const rewardShare =
+                reserveToken === networkToken.address ? NETWORK_TOKEN_REWARDS_SHARE : BASE_TOKEN_REWARDS_SHARE;
 
-            for (const reserveToken of reserveTokens) {
-                const rewardShare =
-                    reserveToken === networkToken.address ? NETWORK_TOKEN_REWARDS_SHARE : BASE_TOKEN_REWARDS_SHARE;
-
-                const currentReward = reserveAmounts[poolToken][reserveToken][provider]
-                    .mul(
-                        duration
-                            .mul(programs[poolToken].rewardRate)
-                            .mul(REWARD_RATE_FACTOR)
-                            .mul(rewardShare)
-                            .div(PPM_RESOLUTION)
-                            .div(totalReserveAmounts[poolToken][reserveToken])
-                    )
-                    .div(REWARD_RATE_FACTOR)
-                    .mul(getRewardsMultiplier(multiplierDuration || duration))
-                    .div(PPM_RESOLUTION);
-
-                reward = reward.add(currentReward);
+            if (totalReserveAmounts[poolToken][reserveToken].eq(new BN(0))) {
+                return new BN(0);
             }
 
-            return reward;
+            return reserveAmounts[poolToken][reserveToken][provider]
+                .mul(
+                    duration
+                        .mul(programs[poolToken].rewardRate)
+                        .mul(REWARD_RATE_FACTOR)
+                        .mul(rewardShare)
+                        .div(PPM_RESOLUTION)
+                        .div(totalReserveAmounts[poolToken][reserveToken])
+                )
+                .div(REWARD_RATE_FACTOR)
+                .mul(getRewardsMultiplier(multiplierDuration || duration))
+                .div(PPM_RESOLUTION);
         };
 
         let programStartTime;
@@ -602,13 +610,14 @@ describe('StakingRewards', () => {
             expect(totalProviderClaimedRewards).to.be.bignumber.equal(new BN(0));
         };
 
-        const testPoolRewards = async (provider, poolToken, multiplierDuration = undefined) => {
-            const reward = await staking.pendingPoolRewards.call(provider, poolToken.address);
+        const testReserveRewards = async (provider, poolToken, reserveToken, multiplierDuration = undefined) => {
+            const reward = await staking.pendingReserveRewards.call(provider, poolToken.address, reserveToken.address);
 
             const effectiveTime = BN.min(now, programEndTime);
-            const expectedReward = getExpectedPoolRewards(
+            const expectedReward = getExpectedReserveRewards(
                 provider,
                 poolToken.address,
+                reserveToken.address,
                 effectiveTime.sub(programStartTime),
                 multiplierDuration
             );
@@ -788,23 +797,26 @@ describe('StakingRewards', () => {
                         it('should properly calculate pool specific rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
-                            await testPoolRewards(provider, poolToken);
+                            await testReserveRewards(provider, poolToken, networkToken);
+                            await testReserveRewards(provider, poolToken, reserveToken);
 
                             // Should return all rewards for a single day.
                             await setTime(programStartTime.add(duration.days(1)));
-                            await testPoolRewards(provider, poolToken);
+                            await testReserveRewards(provider, poolToken, networkToken);
 
                             // Should return all weekly rewards + second week's retroactive multiplier.
                             await setTime(programStartTime.add(duration.weeks(1)));
-                            await testPoolRewards(provider, poolToken);
+                            await testReserveRewards(provider, poolToken, reserveToken);
 
                             // Should return all program rewards + max retroactive multipliers.
                             await setTime(programEndTime);
-                            await testPoolRewards(provider, poolToken, duration.weeks(4));
+                            await testReserveRewards(provider, poolToken, networkToken, duration.weeks(4));
+                            await testReserveRewards(provider, poolToken, reserveToken, duration.weeks(4));
 
                             // Should not affect rewards after the ending time of the program.
                             await setTime(programEndTime.add(duration.days(1)));
-                            await testPoolRewards(provider, poolToken, duration.weeks(4));
+                            await testReserveRewards(provider, poolToken, networkToken, duration.weeks(4));
+                            await testReserveRewards(provider, poolToken, reserveToken, duration.weeks(4));
                         });
 
                         it('should not affect the rewards, when adding liquidity in the same block', async () => {

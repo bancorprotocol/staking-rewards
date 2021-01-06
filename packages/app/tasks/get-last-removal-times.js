@@ -23,14 +23,14 @@ const getLastRemovalTimes = async (env) => {
                 'blocks'
             );
 
-            const events = await contracts.LiquidityProtectionStoreOld.getPastEvents('allEvents', {
+            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStoreOld, 'allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
 
             for (const event of events) {
                 const { blockNumber, returnValues, transactionHash } = event;
-                const block = await web3.eth.getBlock(blockNumber);
+                const block = await web3Provider.getBlock(blockNumber);
                 const { timestamp } = block;
 
                 switch (event.event) {
@@ -94,7 +94,7 @@ const getLastRemovalTimes = async (env) => {
 
             const { timestamp, blockNumber } = data;
 
-            const lastRemovalTime = await contracts.CheckpointStore.methods.checkpoint(provider).call({});
+            const lastRemovalTime = await web3Provider.call(contracts.CheckpointStore.methods.checkpoint(provider));
             if (new BN(lastRemovalTime).gte(new BN(timestamp))) {
                 trace('Skipping already up to date last removal time for', arg('provider', provider));
 
@@ -104,7 +104,7 @@ const getLastRemovalTimes = async (env) => {
             }
 
             // Verify timestamps.
-            const block = await web3.eth.getBlock(blockNumber);
+            const block = await web3Provider.getBlock(blockNumber);
             const { timestamp: blockTimeStamp } = block;
             if (timestamp != blockTimeStamp) {
                 error(
@@ -140,7 +140,7 @@ const getLastRemovalTimes = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, reorgOffset, web3, contracts, test } = env;
+    const { settings, web3Provider, reorgOffset, contracts, test } = env;
 
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
@@ -162,7 +162,7 @@ const getLastRemovalTimes = async (env) => {
         fromBlock = data.lastBlockNumber + 1;
     }
 
-    const latestBlock = await web3.eth.getBlockNumber();
+    const latestBlock = await web3Provider.getBlockNumber();
     if (latestBlock === 0) {
         error('Node is out of sync. Please try again later');
     }

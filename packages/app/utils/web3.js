@@ -97,21 +97,15 @@ const setup = async () => {
 
             info('Granting the deployer owner permissions on StakingRewardsStore');
 
-            gas = await contracts.StakingRewardsStore.methods
-                .grantRole(ROLE_OWNER, defaultAccount)
-                .estimateGas({ from: defaultAccount });
-            await contracts.StakingRewardsStore.methods
-                .grantRole(ROLE_OWNER, defaultAccount)
-                .send({ from: defaultAccount, gas });
+            await web3Provider.send(
+                contracts.StakingRewardsStore.methods.grantRole(ROLE_OWNER, web3Provider.getDefaultAccount())
+            );
 
             info('Granting the deployer seeding permissions on StakingRewardsStore');
 
-            gas = await contracts.StakingRewardsStore.methods
-                .grantRole(ROLE_SEEDER, defaultAccount)
-                .estimateGas({ from: defaultAccount });
-            await contracts.StakingRewardsStore.methods
-                .grantRole(ROLE_SEEDER, defaultAccount)
-                .send({ from: defaultAccount, gas });
+            await web3Provider.send(
+                contracts.StakingRewardsStore.methods.grantRole(ROLE_SEEDER, web3Provider.getDefaultAccount())
+            );
 
             info('Granting TokenGovernance minting permissions to StakingRewards');
 
@@ -159,6 +153,7 @@ const setup = async () => {
 
         return {
             settings,
+            programs,
             web3Provider,
             contracts,
             Contract,

@@ -1,6 +1,5 @@
 const humanizeDuration = require('humanize-duration');
 const BN = require('bn.js');
-const { fromWei } = require('web3-utils');
 
 const { info, error, arg } = require('../utils/logger');
 
@@ -34,7 +33,9 @@ const setProgramsTask = async (env) => {
                     rewardRate
                 } = program;
 
-                const participating = await contracts.StakingRewardsStore.methods.isPoolParticipating(poolToken).call();
+                const participating = await web3Provider.call(
+                    contracts.StakingRewardsStore.methods.isPoolParticipating(poolToken)
+                );
                 if (participating) {
                     info('Skipping already participating program', arg('poolToken', poolToken));
 
@@ -66,12 +67,16 @@ const setProgramsTask = async (env) => {
                 continue;
             }
 
-            const gas = await contracts.StakingRewardsStore.methods
-                .addPastPoolPrograms(poolTokens, reserveTokens, rewardShares, startTimes, endTimes, rewardRates)
-                .estimateGas({ from: defaultAccount });
-            const tx = await contracts.StakingRewardsStore.methods
-                .addPastPoolPrograms(poolTokens, reserveTokens, rewardShares, startTimes, endTimes, rewardRates)
-                .send({ from: defaultAccount, gas, gasPrice });
+            const tx = await web3Provider.send(
+                contracts.StakingRewardsStore.methods.addPastPoolPrograms(
+                    poolTokens,
+                    reserveTokens,
+                    rewardShares,
+                    startTimes,
+                    endTimes,
+                    rewardRates
+                )
+            );
             totalGas += tx.gasUsed;
         }
 
@@ -95,7 +100,7 @@ const setProgramsTask = async (env) => {
 
             info('Verifying program', arg('poolToken', poolToken));
 
-            const data = await contracts.StakingRewardsStore.methods.poolProgram(poolToken).call();
+            const data = await web3Provider.call(contracts.StakingRewardsStore.methods.poolProgram(poolToken));
 
             const actualStartTime = data[0];
             const actualEndTime = data[1];
@@ -149,19 +154,7 @@ const setProgramsTask = async (env) => {
         }
     };
 
-    const { programs, contracts, defaultAccount, gasPrice } = env;
-
-    if (new BN(gasPrice).eq(new BN(0))) {
-        error("Gas price isn't set. Aborting");
-    }
-
-    info(
-        'Gas price is set to',
-        arg('gasPrice', gasPrice),
-        '(wei)',
-        arg('gasPrice', fromWei(gasPrice.toString(), 'gwei')),
-        '(gwei)'
-    );
+    const { programs, web3Provider, contracts } = env;
 
     await setPrograms(programs);
     await verityPrograms(programs);

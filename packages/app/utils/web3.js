@@ -1,14 +1,12 @@
 const path = require('path');
 const fs = require('fs');
-const ganache = require('ganache-core');
-const Web3 = require('web3');
+
 const Contract = require('web3-eth-contract');
-const { keccak256, toWei } = require('web3-utils');
-const memdown = require('memdown');
+const { keccak256 } = require('web3-utils');
 
 const { info, error, warning, arg } = require('./logger');
-
-const { test, init, reorgOffset, gasPrice } = require('./yargs');
+const Provider = require('./provider');
+const { test, init, reorgOffset } = require('./yargs');
 
 const settings = require('../settings.json');
 const programs = require('../programs.json');
@@ -17,56 +15,14 @@ const ROLE_OWNER = keccak256('ROLE_OWNER');
 const ROLE_MINTER = keccak256('ROLE_MINTER');
 const ROLE_SEEDER = keccak256('ROLE_SEEDER');
 
-let web3;
 let contracts = {};
-let defaultAccount;
+let web3Provider;
 
 const setup = async () => {
-    const setupEnv = async () => {
-        const { web3Provider } = settings;
+    const setupProvider = async () => {
+        web3Provider = new Provider();
 
-        if (!test) {
-            info('Running against mainnet');
-
-            web3 = new Web3(web3Provider);
-
-            const { privateKey } = require('../credentials.json');
-            const account = web3.eth.accounts.privateKeyToAccount(privateKey);
-            web3.eth.accounts.wallet.add(account);
-
-            defaultAccount = account.address;
-
-            web3.eth.defaultAccount = defaultAccount;
-
-            Contract.setProvider(web3Provider);
-            Contract.defaultAccount = defaultAccount;
-        } else {
-            info('Running against a mainnet fork (via Ganache)');
-
-            const { externalContracts } = settings;
-
-            const provider = ganache.provider({
-                fork: web3Provider,
-                ws: true,
-                network_id: 1,
-                db: memdown(),
-                default_balance_ether: 10000000000000000000,
-                unlocked_accounts: [externalContracts.TokenGovernance.governor]
-            });
-
-            info('Started forking the mainnet');
-
-            web3 = new Web3(provider);
-
-            defaultAccount = (await web3.eth.getAccounts())[0];
-
-            info('Finished forking the mainnet');
-
-            web3.eth.defaultAccount = defaultAccount;
-
-            Contract.setProvider(provider);
-            Contract.defaultAccount = defaultAccount;
-        }
+        await web3Provider.initialize();
     };
 
     const setupExternalContracts = async () => {
@@ -105,11 +61,7 @@ const setup = async () => {
             let { abi, bytecode } = JSON.parse(rawData);
 
             const StakingRewardsStore = new Contract(abi);
-            let gas = await StakingRewardsStore.deploy({ data: bytecode }).estimateGas();
-            let instance = await StakingRewardsStore.deploy({ data: bytecode }).send({
-                from: defaultAccount,
-                gas
-            });
+            let instance = await web3Provider.send(StakingRewardsStore.deploy({ data: bytecode }));
 
             const { address: stakingStoreAddress } = instance.options;
 
@@ -130,12 +82,7 @@ const setup = async () => {
                 externalContracts.ContractRegistry.address
             ];
 
-            gas = await StakingRewards.deploy({ data: bytecode, arguments }).estimateGas();
-            instance = await StakingRewards.deploy({ data: bytecode, arguments }).send({
-                from: defaultAccount,
-                gas
-            });
-
+            instance = await web3Provider.send(StakingRewards.deploy({ data: bytecode, arguments }));
             const { address: stakingAddress } = instance.options;
 
             info('Deployed new StakingRewards to', arg('address', stakingAddress));
@@ -146,12 +93,7 @@ const setup = async () => {
 
             info('Granting StakingRewardsStore ownership to StakingRewards');
 
-            gas = await contracts.StakingRewardsStore.methods
-                .grantRole(ROLE_OWNER, stakingAddress)
-                .estimateGas({ from: defaultAccount });
-            await contracts.StakingRewardsStore.methods
-                .grantRole(ROLE_OWNER, stakingAddress)
-                .send({ from: defaultAccount, gas });
+            await web3Provider.send(contracts.StakingRewardsStore.methods.grantRole(ROLE_OWNER, stakingAddress));
 
             info('Granting the deployer owner permissions on StakingRewardsStore');
 
@@ -176,12 +118,10 @@ const setup = async () => {
             const {
                 TokenGovernance: { governor }
             } = externalContracts;
-            gas = await contracts.TokenGovernance.methods
-                .grantRole(ROLE_MINTER, stakingAddress)
-                .estimateGas({ from: governor });
-            await contracts.TokenGovernance.methods
-                .grantRole(ROLE_MINTER, stakingAddress)
-                .send({ from: governor, gas });
+
+            await web3Provider.send(contracts.TokenGovernance.methods.grantRole(ROLE_MINTER, stakingAddress), {
+                from: governor
+            });
 
             info('Granting the deployer seeding permissions on CheckpointStore');
 
@@ -189,10 +129,12 @@ const setup = async () => {
                 CheckpointStore: { owner }
             } = externalContracts;
 
-            gas = await contracts.CheckpointStore.methods
-                .grantRole(ROLE_SEEDER, defaultAccount)
-                .estimateGas({ from: owner });
-            await contracts.CheckpointStore.methods.grantRole(ROLE_SEEDER, defaultAccount).send({ from: owner, gas });
+            await web3Provider.send(
+                contracts.CheckpointStore.methods.grantRole(ROLE_SEEDER, web3Provider.getDefaultAccount()),
+                {
+                    from: owner
+                }
+            );
         } else {
             let { abi, address } = systemContracts.StakingRewardsStore;
             if (abi && address) {
@@ -211,20 +153,17 @@ const setup = async () => {
     };
 
     try {
-        await setupEnv();
+        await setupProvider();
         await setupExternalContracts();
         await setupSystemContracts();
 
         return {
             settings,
-            programs,
-            reorgOffset,
-            gasPrice: toWei((gasPrice || 0).toString(), 'gwei'),
-            test,
-            web3,
-            Contract,
+            web3Provider,
             contracts,
-            defaultAccount
+            Contract,
+            reorgOffset,
+            test
         };
     } catch (e) {
         error(e);

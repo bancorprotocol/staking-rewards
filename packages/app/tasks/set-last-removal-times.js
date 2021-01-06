@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
-const { fromWei } = require('web3-utils');
 
 const { info, trace, error, arg } = require('../utils/logger');
 
@@ -26,12 +25,9 @@ const setLastRemovalTimes = async (env) => {
                 trace('Setting last removal time for', arg('provider', provider), arg('timestamp', timestamp));
             }
 
-            const gas = await contracts.CheckpointStore.methods
-                .addPastCheckpoints(providersBatch, timestampsBatch)
-                .estimateGas({ from: defaultAccount });
-            const tx = await contracts.CheckpointStore.methods
-                .addPastCheckpoints(providersBatch, timestampsBatch)
-                .send({ from: defaultAccount, gas, gasPrice });
+            const tx = await web3Provider.send(
+                contracts.CheckpointStore.methods.addPastCheckpoints(providersBatch, timestampsBatch)
+            );
             totalGas += tx.gasUsed;
         }
 
@@ -46,7 +42,7 @@ const setLastRemovalTimes = async (env) => {
 
             const { timestamp } = data;
 
-            const lastRemovalTime = await contracts.CheckpointStore.methods.checkpoint(provider).call({});
+            const lastRemovalTime = await web3Provider.call(contracts.CheckpointStore.methods.checkpoint(provider));
             if (!new BN(lastRemovalTime).eq(new BN(timestamp))) {
                 error(
                     "Last removal times don't match",
@@ -58,19 +54,7 @@ const setLastRemovalTimes = async (env) => {
         }
     };
 
-    const { contracts, defaultAccount, gasPrice } = env;
-
-    if (new BN(gasPrice).eq(new BN(0))) {
-        error("Gas price isn't set. Aborting");
-    }
-
-    info(
-        'Gas price is set to',
-        arg('gasPrice', gasPrice),
-        '(wei)',
-        arg('gasPrice', fromWei(gasPrice.toString(), 'gwei')),
-        '(gwei)'
-    );
+    const { contracts, web3Provider } = env;
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'last-removal-times.json');

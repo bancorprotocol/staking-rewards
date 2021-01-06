@@ -20,9 +20,11 @@ const REMOVE_LIQUIDITY_ABI = [
 
 const getPositionsTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
-        const position = await contracts.LiquidityProtectionStoreOld.methods
-            .protectedLiquidity(id)
-            .call({}, blockNumber);
+        const position = await web3Provider.call(
+            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidity(id),
+            {},
+            blockNumber
+        );
 
         return {
             id,
@@ -64,14 +66,14 @@ const getPositionsTask = async (env) => {
                 'blocks'
             );
 
-            const events = await contracts.LiquidityProtectionStoreOld.getPastEvents('allEvents', {
+            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStoreOld, 'allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
 
             for (const event of events) {
                 const { blockNumber, returnValues, transactionHash } = event;
-                const block = await web3.eth.getBlock(blockNumber);
+                const block = await web3Provider.getBlock(blockNumber);
                 const { timestamp } = block;
 
                 switch (event.event) {
@@ -97,12 +99,16 @@ const getPositionsTask = async (env) => {
                         // Try to find the new positions which didn't exist in the previous block and match them to
                         // this position.
                         let matches = [];
-                        const currentBlockIds = await contracts.LiquidityProtectionStoreOld.methods
-                            .protectedLiquidityIds(provider)
-                            .call({}, blockNumber);
-                        const prevBLockIds = await contracts.LiquidityProtectionStoreOld.methods
-                            .protectedLiquidityIds(provider)
-                            .call({}, blockNumber - 1);
+                        const currentBlockIds = await web3Provider.call(
+                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            {},
+                            blockNumber
+                        );
+                        const prevBLockIds = await web3Provider.call(
+                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            {},
+                            blockNumber - 1
+                        );
                         const ids = currentBlockIds.filter((id) => !prevBLockIds.includes(id));
 
                         // If the we can't find to position in the current block, we can assume that it was created
@@ -209,9 +215,11 @@ const getPositionsTask = async (env) => {
                         // Please note that we are ignore the case when a single position was added and removed in the
                         // same block.
                         const matches = [];
-                        const ids = await contracts.LiquidityProtectionStoreOld.methods
-                            .protectedLiquidityIds(provider)
-                            .call({}, blockNumber - 1);
+                        const ids = await web3Provider.call(
+                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            {},
+                            blockNumber - 1
+                        );
                         for (const id of ids) {
                             const position = positions[id];
 
@@ -292,12 +300,16 @@ const getPositionsTask = async (env) => {
                         // Please note that we are ignore the case when a single position was added and removed in the
                         // same block.
                         let matches = [];
-                        const currentBlockIds = await contracts.LiquidityProtectionStoreOld.methods
-                            .protectedLiquidityIds(provider)
-                            .call({}, blockNumber);
-                        const prevBLockIds = await contracts.LiquidityProtectionStoreOld.methods
-                            .protectedLiquidityIds(provider)
-                            .call({}, blockNumber - 1);
+                        const currentBlockIds = await web3Provider.call(
+                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            {},
+                            blockNumber
+                        );
+                        const prevBLockIds = await web3Provider.call(
+                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            {},
+                            blockNumber - 1
+                        );
                         const ids = prevBLockIds.filter((id) => !currentBlockIds.includes(id));
 
                         // If the we can't find to position in the previous block, we can assume that it was created
@@ -328,7 +340,7 @@ const getPositionsTask = async (env) => {
                         if (matches.length > 1) {
                             warning('Found too many matching position IDs. Attempting to decode the ID from tx data');
 
-                            const tx = await web3.eth.getTransaction(transactionHash);
+                            const tx = await web3Provider.getTransaction(transactionHash);
                             const { input } = tx;
 
                             if (!input.startsWith(REMOVE_LIQUIDITY_SELECTOR)) {
@@ -336,7 +348,7 @@ const getPositionsTask = async (env) => {
                             }
 
                             const rawParams = input.slice(REMOVE_LIQUIDITY_SELECTOR.length);
-                            const params = web3.eth.abi.decodeParameters(REMOVE_LIQUIDITY_ABI, `0x${rawParams}`);
+                            const params = web3Provider.decodeParameters(REMOVE_LIQUIDITY_ABI, `0x${rawParams}`);
 
                             const { id } = params;
                             const position = positions[id];
@@ -430,7 +442,7 @@ const getPositionsTask = async (env) => {
                 }
 
                 // Verify snapshot timestamps.
-                const block = await web3.eth.getBlock(blockNumber);
+                const block = await web3Provider.getBlock(blockNumber);
                 const { timestamp: blockTimeStamp } = block;
                 if (timestamp != blockTimeStamp) {
                     error(
@@ -477,7 +489,7 @@ const getPositionsTask = async (env) => {
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, reorgOffset, web3, contracts, test } = env;
+    const { settings, web3Provider, reorgOffset, contracts, test } = env;
 
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
@@ -499,7 +511,7 @@ const getPositionsTask = async (env) => {
         fromBlock = data.lastBlockNumber + 1;
     }
 
-    const latestBlock = await web3.eth.getBlockNumber();
+    const latestBlock = await web3Provider.getBlockNumber();
     if (latestBlock === 0) {
         error('Node is out of sync. Please try again later');
     }

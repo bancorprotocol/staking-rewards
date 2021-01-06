@@ -1,6 +1,5 @@
 {
     "genesisBlock": 11039642,
-    "web3Provider": "ws://localhost:8545",
     "systemContracts": {
         "StakingRewardsStore": {},
         "StakingRewards": {}

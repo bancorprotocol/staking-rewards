@@ -156,7 +156,6 @@ const setup = async () => {
             programs,
             web3Provider,
             contracts,
-            Contract,
             reorgOffset,
             test
         };

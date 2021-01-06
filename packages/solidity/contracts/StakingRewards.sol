@@ -351,7 +351,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         (Rewards memory rewardsData, ProviderRewards memory providerRewards) =
             updateRewards(provider, poolToken, reserveToken, lpStore);
 
-        // get full rewards and the respective rewards mutliplier.
+        // get full rewards and the respective rewards multiplier.
         (uint256 fullReward, uint32 multiplier) =
             fullRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
 
@@ -605,7 +605,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             (Rewards memory rewardsData, ProviderRewards memory providerRewards) =
                 updateRewards(provider, poolToken, reserveToken, lpStore);
 
-            // get full rewards and the respective rewards mutliplier.
+            // get full rewards and the respective rewards multiplier.
             (uint256 fullReward, uint32 multiplier) =
                 fullRewards(provider, poolToken, reserveToken, rewardsData, providerRewards, program, lpStore);
 
@@ -757,7 +757,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param program the pool program info
      * @param lpStore liquidity protection data store
      *
-     * @return full rewards and the respective rewards mutliplier
+     * @return full rewards and the respective rewards multiplier
      */
     function fullRewards(
         address provider,

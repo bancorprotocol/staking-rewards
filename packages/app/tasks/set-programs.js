@@ -36,6 +36,7 @@ const setProgramsTask = async (env) => {
                 const participating = await web3Provider.call(
                     contracts.StakingRewardsStore.methods.isPoolParticipating(poolToken)
                 );
+
                 if (participating) {
                     info('Skipping already participating program', arg('poolToken', poolToken));
 

@@ -828,7 +828,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             rewardsData.totalClaimedRewards
         );
 
-        // update provider's rewards with the newly claimable base rewards and the new rewared rate per-token.
+        // update provider's rewards with the newly claimable base rewards and the new reward rate per-token.
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
 
         // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken.
@@ -967,7 +967,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param amount the amount of the reward
      * @param multiplier1 the first multiplier
-     * @param multiplier2 the second multipliero
+     * @param multiplier2 the second multiplier
      *
      * @return new reward amount
      */

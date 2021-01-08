@@ -167,7 +167,9 @@ const getRewardsTask = async (env) => {
         return rewards;
     };
 
-    const verifyRewards = async (liquidity) => {};
+    const verifyRewards = async (liquidity) => {
+        // TODO: add verification
+    };
 
     const getRewards = async (liquidity, fromBlock, toBlock) => {
         info('Getting all rewards from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));

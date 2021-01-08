@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 
 const Contract = require('web3-eth-contract');
-const { keccak256 } = require('web3-utils');
+const { keccak256, asciiToHex } = require('web3-utils');
 
 const { info, error, warning, arg } = require('./logger');
 const Provider = require('./provider');
@@ -15,6 +15,7 @@ const ROLE_OWNER = keccak256('ROLE_OWNER');
 const ROLE_MINTER = keccak256('ROLE_MINTER');
 const ROLE_SEEDER = keccak256('ROLE_SEEDER');
 const ROLE_PUBLISHER = keccak256('ROLE_PUBLISHER');
+const LIQUIDITY_PROTECTION = asciiToHex('LiquidityProtection');
 
 let contracts = {};
 let web3Provider;
@@ -48,6 +49,11 @@ const setup = async () => {
         rawData = fs.readFileSync(path.join(externalContractsDir, 'CheckpointStore.json'));
         ({ abi } = JSON.parse(rawData));
         contracts.CheckpointStore = new Contract(abi, address);
+
+        ({ address } = externalContracts.ContractRegistry);
+        rawData = fs.readFileSync(path.join(externalContractsDir, 'ContractRegistry.json'));
+        ({ abi } = JSON.parse(rawData));
+        contracts.ContractRegistry = new Contract(abi, address);
     };
 
     const setupSystemContracts = async () => {
@@ -122,6 +128,20 @@ const setup = async () => {
 
             contracts.TestLiquidityProtection = new Contract(abi, testLiquidityProtectionAddress);
 
+            info('Registering TestLiquidityProtection in ContractRegistry');
+
+            const {
+                CheckpointStore: { owner: contractRegistryOwner }
+            } = externalContracts;
+
+            await web3Provider.send(
+                contracts.ContractRegistry.methods.registerAddress(
+                    LIQUIDITY_PROTECTION,
+                    testLiquidityProtectionAddress
+                ),
+                { from: contractRegistryOwner }
+            );
+
             info('Granting required permissions');
 
             info('Granting StakingRewardsStore ownership role ownership StakingRewards');
@@ -158,13 +178,13 @@ const setup = async () => {
             info('Granting to the deployer the seeder role on CheckpointStore');
 
             const {
-                CheckpointStore: { owner }
+                CheckpointStore: { owner: checkpointStoreOwner }
             } = externalContracts;
 
             await web3Provider.send(
                 contracts.CheckpointStore.methods.grantRole(ROLE_SEEDER, web3Provider.getDefaultAccount()),
                 {
-                    from: owner
+                    from: checkpointStoreOwner
                 }
             );
 

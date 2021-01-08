@@ -825,7 +825,8 @@
             "governor": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
         },
         "ContractRegistry": {
-            "address": "0x52Ae12ABe5D8BD778BD5397F99cA900624CfADD4"
+            "address": "0x52Ae12ABe5D8BD778BD5397F99cA900624CfADD4",
+            "owner": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
         },
         "CheckpointStore": {
             "address": "0xF8a2FB650e25a26CE839D64bE8a0aBbCb0b87B32",

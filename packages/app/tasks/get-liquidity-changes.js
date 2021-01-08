@@ -1,8 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
+const Contract = require('web3-eth-contract');
+const { set, get } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
+
+const ETH_RESERVE_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const MKR_RESERVE_ADDRESS = '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2';
 
 const BATCH_SIZE = 5000;
 
@@ -27,7 +32,31 @@ const getLiquidityChangesTask = async (env) => {
         };
     };
 
-    const getProtectionLiquidityChanges = async (liquidity, fromBlock, toBlock) => {
+    const getTokenInfo = async (token) => {
+        const eq = (address1, address2) => {
+            return address1.toLowerCase() === address2.toLowerCase();
+        };
+
+        let name;
+        let symbol;
+        if (eq(token, ETH_RESERVE_ADDRESS)) {
+            name = 'Ethereum Reserve';
+            symbol = 'ETH';
+        } else if (eq(token, MKR_RESERVE_ADDRESS)) {
+            name = 'MakerDAO';
+            symbol = 'MKR';
+        } else {
+            const ERC20Token = new Contract(ERC20_ABI, token);
+            name = await web3Provider.call(ERC20Token.methods.name());
+            symbol = await web3Provider.call(ERC20Token.methods.symbol());
+        }
+
+        return { name, symbol };
+    };
+
+    const getProtectionLiquidityChanges = async (data, fromBlock, toBlock) => {
+        const { liquidity, pools } = data;
+
         let eventCount = 0;
         for (let i = fromBlock; i < toBlock; i += BATCH_SIZE) {
             const endBlock = Math.min(i + BATCH_SIZE - 1, toBlock);
@@ -79,6 +108,14 @@ const getLiquidityChangesTask = async (env) => {
                             reserveToken,
                             reserveAmount: reserveAmount.toString()
                         });
+
+                        if (!get(pools, [poolToken])) {
+                            set(pools, [poolToken], await getTokenInfo(poolToken));
+                        }
+
+                        if (!get(pools, [poolToken, reserveToken])) {
+                            set(pools, [poolToken, reserveToken], await getTokenInfo(reserveToken));
+                        }
 
                         eventCount++;
 
@@ -220,7 +257,9 @@ const getLiquidityChangesTask = async (env) => {
         info('Finished processing all new protection change events', arg('count', eventCount));
     };
 
-    const verifyProtectionLiquidityChanges = async (liquidity) => {
+    const verifyProtectionLiquidityChanges = async (data) => {
+        const { liquidity } = data;
+
         info('Verifying all new protection change events', arg('blockNumber', toBlock));
 
         // Verify that the events are sorted in an ascending order.
@@ -239,13 +278,17 @@ const getLiquidityChangesTask = async (env) => {
             data.liquidity = [];
         }
 
-        await getProtectionLiquidityChanges(data.liquidity, fromBlock, toBlock);
-        await verifyProtectionLiquidityChanges(data.liquidity);
+        if (!data.pools) {
+            data.pools = {};
+        }
+
+        await getProtectionLiquidityChanges(data, fromBlock, toBlock);
+        await verifyProtectionLiquidityChanges(data);
 
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, web3Provider, reorgOffset, contracts, Contract, test } = env;
+    const { settings, web3Provider, reorgOffset, contracts, test } = env;
 
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
@@ -257,6 +300,7 @@ const getLiquidityChangesTask = async (env) => {
     );
 
     const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
+    const { abi: ERC20_ABI } = JSON.parse(rawData);
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'liquidity.json');

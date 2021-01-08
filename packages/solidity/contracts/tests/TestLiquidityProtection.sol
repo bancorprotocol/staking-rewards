@@ -4,21 +4,21 @@ pragma solidity 0.6.12;
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "../ILiquidityProtection.sol";
+import "../StakingRewards.sol";
 import "./TestLiquidityProtectionDataStore.sol";
-import "./TestStakingRewards.sol";
 
 contract TestLiquidityProtection is ILiquidityProtection {
     using SafeERC20 for IERC20;
 
     TestLiquidityProtectionDataStore private immutable _store;
-    TestStakingRewards private immutable _stakingRewards;
+    StakingRewards private immutable _stakingRewards;
 
     address private _provider;
     IERC20 private _poolToken;
     IERC20 private _reserveToken;
     uint256 private _reserveAmount;
 
-    constructor(TestLiquidityProtectionDataStore store, TestStakingRewards stakingRewards) public {
+    constructor(TestLiquidityProtectionDataStore store, StakingRewards stakingRewards) public {
         _store = store;
         _stakingRewards = stakingRewards;
     }

@@ -66,7 +66,7 @@ contract TestLiquidityProtection is ILiquidityProtection {
     ) external payable returns (uint256) {
         _stakingRewards.onLiquidityRemoved(0, provider, poolToken, reserveToken, 0, reserveAmount);
 
-        _store.removeLiquidity(provider, poolToken, reserveToken, reserveAmount, false);
+        _store.removeLiquidity(provider, poolToken, reserveToken, reserveAmount);
 
         return 0;
     }

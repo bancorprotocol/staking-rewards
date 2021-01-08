@@ -59,7 +59,7 @@ const setup = async () => {
     const setupSystemContracts = async () => {
         const { externalContracts, systemContracts } = settings;
 
-        if (test && init) {
+        if (init) {
             info('Deploying TestStakingRewards');
 
             const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');

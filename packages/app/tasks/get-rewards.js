@@ -167,88 +167,7 @@ const getRewardsTask = async (env) => {
         return rewards;
     };
 
-    // TODO: set everything and then rerun?
-    const verifyRewards = async (liquidity, toBlock) => {
-        // info('Verifying all reserve amounts at', arg('blockNumber', toBlock));
-        // for (const [poolToken, poolTokenData] of Object.entries(liquidity)) {
-        //     for (const [reserveToken, data] of Object.entries(poolTokenData.reserveTokens)) {
-        //         trace('Verifying', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
-        //         const { reserveAmount } = data;
-        //         const actualAmount = await web3Provider.call(
-        //             contracts.LiquidityProtectionStoreOld.methods.totalProtectedReserveAmount(poolToken, reserveToken),
-        //             {},
-        //             toBlock
-        //         );
-        //         if (!new BN(reserveAmount).eq(new BN(actualAmount))) {
-        //             error(
-        //                 'Wrong liquidity',
-        //                 arg('poolToken', poolToken),
-        //                 arg('reserveToken', reserveToken),
-        //                 '[',
-        //                 arg('expected', reserveAmount),
-        //                 arg('actual', actualAmount),
-        //                 ']'
-        //             );
-        //         }
-        //         const { snapshots } = data;
-        //         for (const snapshot of snapshots) {
-        //             const { blockNumber, timestamp, reserveAmount } = snapshot;
-        //             // Verify snapshot values.
-        //             const actualSnapshotAmount = await web3Provider.call(
-        //                 contracts.LiquidityProtectionStoreOld.methods.totalProtectedReserveAmount(
-        //                     poolToken,
-        //                     reserveToken
-        //                 ),
-        //                 {},
-        //                 blockNumber
-        //             );
-        //             if (!new BN(actualSnapshotAmount).eq(new BN(reserveAmount))) {
-        //                 error(
-        //                     'Wrong snapshot liquidity',
-        //                     arg('poolToken', poolToken),
-        //                     arg('reserveToken', reserveToken),
-        //                     arg('blockNumber', blockNumber),
-        //                     arg('timestamp', reserveToken),
-        //                     '[',
-        //                     arg('expected', reserveAmount),
-        //                     arg('actual', actualSnapshotAmount),
-        //                     ']'
-        //                 );
-        //             }
-        //             // Verify snapshot timestamps.
-        //             const block = await web3Provider.getBlock(blockNumber);
-        //             const { timestamp: blockTimeStamp } = block;
-        //             if (timestamp != blockTimeStamp) {
-        //                 error(
-        //                     'Wrong snapshot timestamp',
-        //                     arg('poolToken', poolToken),
-        //                     arg('reserveToken', reserveToken),
-        //                     arg('blockNumber', blockNumber),
-        //                     arg('timestamp', reserveToken),
-        //                     '[',
-        //                     arg('expected', timestamp),
-        //                     arg('actual', blockTimeStamp),
-        //                     ']'
-        //                 );
-        //             }
-        //         }
-        //         // Verify that the snapshots array is sorted in an ascending order.
-        //         for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
-        //             const snapshot1 = snapshots[i];
-        //             const snapshot2 = snapshots[i + 1];
-        //             if (snapshot1.timestamp > snapshot2.timestamp) {
-        //                 error(
-        //                     'Wrong snapshots order',
-        //                     arg('poolToken', poolToken),
-        //                     arg('reserveToken', reserveToken),
-        //                     arg('snapshot1', snapshot1),
-        //                     arg('snapshot2', snapshot2)
-        //                 );
-        //             }
-        //         }
-        //     }
-        // }
-    };
+    const verifyRewards = async (liquidity) => {};
 
     const getRewards = async (liquidity, fromBlock, toBlock) => {
         info('Getting all rewards from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
@@ -256,7 +175,7 @@ const getRewardsTask = async (env) => {
         const data = await applyPositionChanges(liquidity.liquidity, fromBlock, toBlock);
         const rewards = await getRewardsData(data, toBlock);
 
-        // await verifyRewards(rewards);
+        await verifyRewards(rewards);
 
         return rewards;
     };

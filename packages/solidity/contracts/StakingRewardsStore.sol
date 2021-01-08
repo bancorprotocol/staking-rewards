@@ -147,7 +147,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds a program
      *
      * @param poolToken the pool token representing the rewards pool
-     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens the reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
      * @param rewardRate the program's rewards rate per-second
@@ -170,7 +170,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds past programs
      *
      * @param poolTokens pool tokens representing the rewards pool
-     * @param reserveTokens reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param startTime starting times of the program
      * @param endTimes ending times of the program
@@ -210,7 +210,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds a past program
      *
      * @param poolToken the pool token representing the rewards pool
-     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens the reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
@@ -235,7 +235,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds a program
      *
      * @param poolToken the pool token representing the rewards pool
-     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens the reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
      * @param rewardRate the program's rewards rate per-second

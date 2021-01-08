@@ -37,13 +37,9 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Get all data'
     })
-    .option('get-liquidity', {
+    .option('get-liquidity-changes', {
         type: 'boolean',
         description: 'Get all liquidity changes'
-    })
-    .option('get-positions', {
-        type: 'boolean',
-        description: 'Get all positions'
     })
     .option('get-last-removal-times', {
         type: 'boolean',

@@ -98,11 +98,12 @@ const setup = async () => {
         if (init) {
             info('Deploying contracts');
 
+            await deploySystemContract('TestCheckpointStore');
             await deploySystemContract('StakingRewardsStore');
             await deploySystemContract('TestStakingRewards', [
                 contracts.StakingRewardsStore.options.address,
                 contracts.TokenGovernance.options.address,
-                contracts.CheckpointStore.options.address,
+                contracts.TestCheckpointStore.options.address,
                 externalContracts.ContractRegistry.address
             ]);
 

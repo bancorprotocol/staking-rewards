@@ -72,6 +72,9 @@ const getRewardsTask = async (env) => {
                         )
                     );
 
+                    await web3Provider.send(contracts.TestCheckpointStore.methods.setTime(timestamp));
+                    await web3Provider.send(contracts.TestCheckpointStore.methods.addCheckpoint(provider));
+
                     eventCount++;
 
                     break;

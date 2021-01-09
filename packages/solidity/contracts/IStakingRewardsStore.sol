@@ -11,7 +11,7 @@ struct PoolProgram {
     uint32[2] rewardShares;
 }
 
-struct Rewards {
+struct PoolRewards {
     uint256 lastUpdateTime;
     uint256 rewardPerToken;
     uint256 totalClaimedRewards;

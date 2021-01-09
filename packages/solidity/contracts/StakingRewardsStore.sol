@@ -38,7 +38,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     EnumerableSet.AddressSet private _pools;
 
     // the mapping between pools, reserve tokens, and their rewards.
-    mapping(IERC20 => mapping(IERC20 => Rewards)) internal _rewards;
+    mapping(IERC20 => mapping(IERC20 => PoolRewards)) internal _poolRewards;
 
     // the mapping between pools, reserve tokens, and provider specific rewards.
     mapping(address => mapping(IERC20 => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
@@ -385,7 +385,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256
         )
     {
-        Rewards memory data = _rewards[poolToken][reserveToken];
+        PoolRewards memory data = _poolRewards[poolToken][reserveToken];
 
         return (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards);
     }
@@ -406,7 +406,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256 rewardPerToken,
         uint256 totalClaimedRewards
     ) external override onlyOwner {
-        Rewards storage data = _rewards[poolToken][reserveToken];
+        PoolRewards storage data = _poolRewards[poolToken][reserveToken];
         data.lastUpdateTime = lastUpdateTime;
         data.rewardPerToken = rewardPerToken;
         data.totalClaimedRewards = totalClaimedRewards;

@@ -375,7 +375,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return rewards data
      */
-    function rewards(IERC20 poolToken, IERC20 reserveToken)
+    function poolRewards(IERC20 poolToken, IERC20 reserveToken)
         external
         view
         override

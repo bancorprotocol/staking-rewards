@@ -930,7 +930,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      */
     function poolRewards(IERC20 poolToken, IERC20 reserveToken) internal view returns (Rewards memory) {
         Rewards memory data;
-        (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards) = _store.rewards(poolToken, reserveToken);
+        (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards) = _store.poolRewards(
+            poolToken,
+            reserveToken
+        );
 
         return data;
     }

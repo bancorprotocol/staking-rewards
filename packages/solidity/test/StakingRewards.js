@@ -102,10 +102,7 @@ describe('StakingRewards', () => {
     };
 
     const getPoolRewards = async (poolToken, reserveToken) => {
-        const data = await store.pendingRewards.call(
-            poolToken.address || poolToken,
-            reserveToken.address || reserveToken
-        );
+        const data = await store.poolRewards.call(poolToken.address || poolToken, reserveToken.address || reserveToken);
 
         return {
             lastUpdateTime: data[0],

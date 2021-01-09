@@ -66,7 +66,7 @@ interface IStakingRewardsStore {
             uint32[2][] memory
         );
 
-    function rewards(IERC20 poolToken, IERC20 reserveToken)
+    function poolRewards(IERC20 poolToken, IERC20 reserveToken)
         external
         view
         returns (

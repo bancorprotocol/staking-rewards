@@ -131,11 +131,13 @@ const getRewardsTask = async (env) => {
 
         info('Processing all provider rewards');
 
+        const providersCount = Object.keys(providers).length;
+
         for (const [provider, poolTokens] of Object.entries(providers)) {
             for (const [poolToken, reserveTokens] of Object.entries(poolTokens)) {
                 for (const reserveToken of Object.keys(reserveTokens)) {
                     trace(
-                        'Processing provider rewards',
+                        `Processing provider rewards [${total + 1}/${providersCount}]`,
                         arg('provider', provider),
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken)

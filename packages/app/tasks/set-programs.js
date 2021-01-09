@@ -7,7 +7,7 @@ const BATCH_SIZE = 200;
 
 const setProgramsTask = async (env) => {
     const setPrograms = async (programs) => {
-        info('Adding programs');
+        info('Adding programs in batches of', arg('batchSize', BATCH_SIZE));
 
         let totalGas = 0;
 
@@ -84,8 +84,8 @@ const setProgramsTask = async (env) => {
         info('Finished adding new pools times', arg('totalGas', totalGas));
     };
 
-    const verityPrograms = async (programs) => {
-        info('Verifying pools');
+    const verifyPrograms = async (programs) => {
+        info('Verifying programs');
 
         for (const program of programs) {
             const {
@@ -153,12 +153,14 @@ const setProgramsTask = async (env) => {
                 );
             }
         }
+
+        info('Finished verifying programs');
     };
 
     const { programs, web3Provider, contracts } = env;
 
     await setPrograms(programs);
-    await verityPrograms(programs);
+    await verifyPrograms(programs);
 };
 
 module.exports = setProgramsTask;

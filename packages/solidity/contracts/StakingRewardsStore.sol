@@ -64,16 +64,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     event PoolProgramRemoved(IERC20 indexed poolToken);
 
     /**
-     * @dev triggered when a past program is being added
-     *
-     * @param poolToken the pool token representing the rewards pool
-     * @param startTime the starting time of the program
-     * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate per-second
-     */
-    event PastPoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
-
-    /**
      * @dev triggered when provider's last claim time is being updated
      *
      * @param provider the owner of the liquidity
@@ -227,8 +217,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(startTime < time(), "ERR_INVALID_TIME");
 
         addPoolProgram(poolToken, reserveTokens, rewardShares, startTime, endTime, rewardRate);
-
-        emit PastPoolProgramAdded(poolToken, startTime, endTime, rewardRate);
     }
 
     /**
@@ -410,6 +398,42 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         data.lastUpdateTime = lastUpdateTime;
         data.rewardPerToken = rewardPerToken;
         data.totalClaimedRewards = totalClaimedRewards;
+    }
+
+    /**
+     * @dev seeds pool rewards data for multiple pools
+     *
+     * @param poolTokens pool tokens representing the rewards pool
+     * @param reserveTokens reserve tokens representing the liquidity in the pool
+     * @param lastUpdateTimes last update times (for both the network and reserve tokens)
+     * @param rewardsPerToken reward rates per-token (for both the network and reserve tokens)
+     * @param totalClaimedRewards total claimed rewards up until now (for both the network and reserve tokens)
+     */
+    function setPoolsRewardData(
+        IERC20[] calldata poolTokens,
+        IERC20[] calldata reserveTokens,
+        uint256[] calldata lastUpdateTimes,
+        uint256[] calldata rewardsPerToken,
+        uint256[] calldata totalClaimedRewards
+    ) external onlySeeder {
+        uint256 length = poolTokens.length;
+        require(
+            length == reserveTokens.length && length == lastUpdateTimes.length && length == rewardsPerToken.length,
+            "ERR_INVALID_LENGTH"
+        );
+
+        for (uint256 i = 0; i < length; ++i) {
+            IERC20 poolToken = poolTokens[i];
+            _validAddress(address(poolToken));
+
+            IERC20 reserveToken = reserveTokens[i];
+            _validAddress(address(reserveToken));
+
+            PoolRewards storage data = _poolRewards[poolToken][reserveToken];
+            data.lastUpdateTime = lastUpdateTimes[i];
+            data.rewardPerToken = rewardsPerToken[i];
+            data.totalClaimedRewards = totalClaimedRewards[i];
+        }
     }
 
     /**

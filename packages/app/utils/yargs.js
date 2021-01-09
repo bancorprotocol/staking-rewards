@@ -61,6 +61,10 @@ const { argv } = yargs(hideBin(process.argv))
     .option('set-programs', {
         type: 'boolean',
         description: 'Set reward programs'
+    })
+    .option('set-rewards', {
+        type: 'boolean',
+        description: 'Set all rewards'
     });
 
 module.exports = argv;

@@ -105,7 +105,7 @@ const getRewardsTask = async (env) => {
                 trace('Processing pool rewards', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
 
                 const data = await web3Provider.call(
-                    contracts.StakingRewardsStore.methods.rewards(poolToken, reserveToken)
+                    contracts.StakingRewardsStore.methods.poolRewards(poolToken, reserveToken)
                 );
 
                 if (new BN(data[0]).eq(new BN(0))) {

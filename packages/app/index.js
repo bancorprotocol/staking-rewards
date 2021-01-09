@@ -13,6 +13,7 @@ const getRewardsTask = require('./tasks/get-rewards');
 
 const setLastRemovalTimesTask = require('./tasks/set-last-removal-times');
 const setProgramsTask = require('./tasks/set-programs');
+const setRewardsTask = require('./tasks/set-rewards');
 
 const main = async () => {
     try {
@@ -38,7 +39,8 @@ const main = async () => {
             getRewards,
             setAll,
             setLastRemovalTimes,
-            setPrograms
+            setPrograms,
+            setRewards
         } = argv;
 
         let programsSet = false;
@@ -64,6 +66,10 @@ const main = async () => {
 
         if (!programsSet && (setAll || setPrograms)) {
             await setProgramsTask(env);
+        }
+
+        if (setAll || setRewards) {
+            await setRewardsTask(env);
         }
 
         process.exit(0);

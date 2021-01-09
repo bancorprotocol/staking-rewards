@@ -26,7 +26,7 @@ const PPM_RESOLUTION = new BN(1000000);
 const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
 const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
 
-describe('StakingRewardsStore', () => {
+describe.only('StakingRewardsStore', () => {
     let converterRegistry;
     let store;
     let reserveToken;
@@ -979,7 +979,7 @@ describe('StakingRewardsStore', () => {
                         'ERR_INVALID_LENGTH';
                 });
 
-                it('should allow seeding of pools', async () => {
+                it('should allow seeding pools rewards', async () => {
                     expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
                     expect(
                         await store.isReserveParticipating.call(poolToken.address, networkToken.address)
@@ -1038,6 +1038,266 @@ describe('StakingRewardsStore', () => {
                     expect(poolDataR2.lastUpdateTime).to.be.bignumber.equal(lastUpdateTimeR2);
                     expect(poolDataR2.rewardPerToken).to.be.bignumber.equal(rewardsPerTokenR2);
                     expect(poolDataR2.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewardsR2);
+                });
+            });
+
+            describe('provider rewards', async () => {
+                const provider = accounts[3];
+                const provider2 = accounts[4];
+
+                it('should revert when a non-seeder attempts to seed provider rewards', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: owner }
+                        ),
+                        'ERR_ACCESS_DENIED'
+                    );
+                });
+
+                it('should revert when seeding zero address pools', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            ZERO_ADDRESS,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
+
+                it('should revert when seeding zero address reserves', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            ZERO_ADDRESS,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
+
+                it('should revert when seeding with an invalid multiplier', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION.sub(new BN(1))],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_MULTIPLIER'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION.mul(new BN(3))],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_MULTIPLIER'
+                    );
+                });
+
+                it('should revert when seeding pools with invalid length data', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider, provider2],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000), new BN(12)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000), new BN(5000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000), new BN(50000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now, now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000), new BN(1)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION, PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+                });
+
+                it('should allow seeding provider rewards', async () => {
+                    let providerRewards = await getProviderRewards(provider, poolToken, networkToken);
+                    expect(providerRewards.rewardPerToken).to.be.bignumber.equal(new BN(0));
+
+                    let providerRewards2 = await getProviderRewards(provider, poolToken, networkToken);
+                    expect(providerRewards2.rewardPerToken).to.be.bignumber.equal(new BN(0));
+
+                    const rewardPerToken = new BN(1);
+                    const pendingBaseRewards = new BN(0);
+                    const totalClaimedRewards = new BN(1000);
+                    const effectiveStakingTime = now;
+                    const baseRewardsDebt = new BN(1245);
+                    const baseRewardsDebtMultiplier = PPM_RESOLUTION;
+
+                    const rewardPerToken2 = new BN(1000000);
+                    const pendingBaseRewards2 = new BN(555);
+                    const totalClaimedRewards2 = new BN(13);
+                    const effectiveStakingTime2 = now.add(new BN(6000));
+                    const baseRewardsDebt2 = new BN(3333343);
+                    const baseRewardsDebtMultiplier2 = PPM_RESOLUTION.mul(new BN(2));
+
+                    await store.setProviderRewardData(
+                        poolToken.address,
+                        networkToken.address,
+                        [provider, provider2],
+                        [rewardPerToken, rewardPerToken2],
+                        [pendingBaseRewards, pendingBaseRewards2],
+                        [totalClaimedRewards, totalClaimedRewards2],
+                        [effectiveStakingTime, effectiveStakingTime2],
+                        [baseRewardsDebt, baseRewardsDebt2],
+                        [baseRewardsDebtMultiplier, baseRewardsDebtMultiplier2],
+                        { from: seeder }
+                    );
+
+                    providerRewards = await getProviderRewards(provider, poolToken, networkToken);
+                    expect(providerRewards.rewardPerToken).to.be.bignumber.equal(rewardPerToken);
+                    expect(providerRewards.pendingBaseRewards).to.be.bignumber.equal(pendingBaseRewards);
+                    expect(providerRewards.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewards);
+                    expect(providerRewards.effectiveStakingTime).to.be.bignumber.equal(effectiveStakingTime);
+                    expect(providerRewards.baseRewardsDebt).to.be.bignumber.equal(baseRewardsDebt);
+                    expect(providerRewards.baseRewardsDebtMultiplier).to.be.bignumber.equal(baseRewardsDebtMultiplier);
+
+                    providerRewards2 = await getProviderRewards(provider2, poolToken, networkToken);
+                    expect(providerRewards2.rewardPerToken).to.be.bignumber.equal(rewardPerToken2);
+                    expect(providerRewards2.pendingBaseRewards).to.be.bignumber.equal(pendingBaseRewards2);
+                    expect(providerRewards2.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewards2);
+                    expect(providerRewards2.effectiveStakingTime).to.be.bignumber.equal(effectiveStakingTime2);
+                    expect(providerRewards2.baseRewardsDebt).to.be.bignumber.equal(baseRewardsDebt2);
+                    expect(providerRewards2.baseRewardsDebtMultiplier).to.be.bignumber.equal(
+                        baseRewardsDebtMultiplier2
+                    );
                 });
             });
         });

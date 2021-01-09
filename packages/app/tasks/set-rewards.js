@@ -118,11 +118,210 @@ const setRewardsTask = async (env) => {
         info('Finished verifying pool rewards');
     };
 
+    const setProviderRewards = async (providerRewards) => {
+        info('Setting provider rewards in batches of', arg('batchSize', BATCH_SIZE), '(per-pool)');
+
+        let filtered = 0;
+        let totalGas = 0;
+
+        for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
+            for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
+                const entries = Object.entries(providers);
+
+                const newEntries = [];
+                for (const [provider, data] of entries) {
+                    const {
+                        rewardPerToken,
+                        pendingBaseRewards,
+                        totalClaimedRewards,
+                        effectiveStakingTime,
+                        baseRewardsDebt,
+                        baseRewardsDebtMultiplier
+                    } = data;
+
+                    const providerData = await web3Provider.call(
+                        contracts.StakingRewardsStore.methods.providerData(poolToken, reserveToken, provider)
+                    );
+
+                    const poolRewardPerToken = new BN(providerData[0]);
+                    const poolPendingBaseRewards = new BN(providerData[1]);
+                    const poolTotalClaimedRewards = new BN(providerData[2]);
+                    const poolEffectiveStakingTime = new BN(providerData[3]);
+                    const poolBaseRewardsDebt = new BN(providerData[4]);
+                    const poolBaseRewardsDebtMultiplier = new BN(providerData[5]);
+
+                    if (
+                        poolRewardPerToken.eq(new BN(rewardPerToken)) &&
+                        poolPendingBaseRewards.eq(new BN(pendingBaseRewards)) &&
+                        poolTotalClaimedRewards.eq(new BN(totalClaimedRewards)) &&
+                        poolEffectiveStakingTime.eq(new BN(effectiveStakingTime)) &&
+                        poolBaseRewardsDebt.eq(new BN(baseRewardsDebt)) &&
+                        poolBaseRewardsDebtMultiplier.eq(new BN(baseRewardsDebtMultiplier))
+                    ) {
+                        info(
+                            'Skipping already up to date provider rewards',
+                            arg('poolToken', poolToken),
+                            arg('reserveToken', reserveToken),
+                            arg('provider', provider)
+                        );
+
+                        filtered++;
+
+                        continue;
+                    }
+
+                    newEntries.push({
+                        provider,
+                        rewardPerToken: poolRewardPerToken,
+                        pendingBaseRewards: poolPendingBaseRewards,
+                        totalClaimedRewards: poolTotalClaimedRewards,
+                        effectiveStakingTime: poolEffectiveStakingTime,
+                        baseRewardsDebt: poolBaseRewardsDebt,
+                        baseRewardsDebtMultiplier: poolBaseRewardsDebtMultiplier
+                    });
+                }
+
+                for (let i = 0; i < newEntries.length; i += BATCH_SIZE) {
+                    const batch = newEntries.slice(i, i + BATCH_SIZE);
+
+                    const providersBatch = batch.map((e) => e[0]);
+                    const rewardPerTokenBatch = batch.map((e) => e[1].rewardPerToken);
+                    const pendingBaseRewardsBatch = batch.map((e) => e[1].pendingBaseRewards);
+                    const totalClaimedRewardsBatch = batch.map((e) => e[1].totalClaimedRewards);
+                    const effectiveStakingTimeBatch = batch.map((e) => e[1].effectiveStakingTime);
+                    const baseRewardsDebtBatch = batch.map((e) => e[1].baseRewardsDebt);
+                    const baseRewardsDebtMultiplierBatch = batch.map((e) => e[1].baseRewardsDebtMultiplier);
+
+                    for (let j = 0; j < providersBatch.length; ++j) {
+                        const provider = providersBatch[j];
+                        const rewardPerToken = rewardPerTokenBatch[j];
+                        const pendingBaseRewards = pendingBaseRewardsBatch[j];
+                        const totalClaimedRewards = totalClaimedRewardsBatch[j];
+                        const effectiveStakingTime = effectiveStakingTimeBatch[j];
+                        const baseRewardsDebt = baseRewardsDebtBatch[j];
+                        const baseRewardsDebtMultiplier = baseRewardsDebtMultiplierBatch[j];
+
+                        trace(
+                            'Setting provider rewards for',
+                            arg('provider', provider),
+                            arg('rewardPerToken', rewardPerToken),
+                            arg('pendingBaseRewards', pendingBaseRewards),
+                            arg('totalClaimedRewards', totalClaimedRewards),
+                            arg('effectiveStakingTime', effectiveStakingTime),
+                            arg('baseRewardsDebt', baseRewardsDebt),
+                            arg('baseRewardsDebtMultiplier', baseRewardsDebtMultiplier)
+                        );
+                    }
+
+                    const tx = await web3Provider.send(
+                        contracts.StakingRewardsStore.methods.setProviderRewardData(
+                            poolToken,
+                            reserveToken,
+                            providersBatch,
+                            rewardPerTokenBatch,
+                            pendingBaseRewardsBatch,
+                            totalClaimedRewardsBatch,
+                            effectiveStakingTimeBatch,
+                            baseRewardsDebtBatch,
+                            baseRewardsDebtMultiplierBatch
+                        )
+                    );
+                    totalGas += tx.gasUsed;
+                }
+            }
+        }
+
+        info('Finished setting all provider rewards', arg('filtered', filtered), arg('totalGas', totalGas));
+    };
+
+    const verifyProviderRewards = async (providerRewards) => {
+        info('Verifying provider rewards');
+
+        for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
+            for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
+                for (const [provider, data] of Object.entries(providers)) {
+                    const {
+                        rewardPerToken,
+                        pendingBaseRewards,
+                        totalClaimedRewards,
+                        effectiveStakingTime,
+                        baseRewardsDebt,
+                        baseRewardsDebtMultiplier
+                    } = data;
+
+                    const providerData = await web3Provider.call(
+                        contracts.StakingRewardsStore.methods.providerData(poolToken, reserveToken, provider)
+                    );
+
+                    const actualRewardPerToken = new BN(providerData[0]);
+                    const actualPendingBaseRewards = new BN(providerData[1]);
+                    const actualTotalClaimedRewards = new BN(providerData[2]);
+                    const actualEffectiveStakingTime = new BN(providerData[3]);
+                    const actualBaseRewardsDebt = new BN(providerData[4]);
+                    const actualBaseRewardsDebtMultiplier = new BN(providerData[5]);
+
+                    if (!actualRewardPerToken.eq(new BN(rewardPerToken))) {
+                        error(
+                            "Provider reward rates per-token don't match",
+                            arg('expected', rewardPerToken),
+                            arg('actual', actualRewardPerToken)
+                        );
+                    }
+
+                    if (!actualPendingBaseRewards.eq(new BN(pendingBaseRewards))) {
+                        error(
+                            "Provider pending rewards don't match",
+                            arg('expected', pendingBaseRewards),
+                            arg('actual', actualPendingBaseRewards)
+                        );
+                    }
+
+                    if (!actualTotalClaimedRewards.eq(new BN(totalClaimedRewards))) {
+                        error(
+                            "Provider total claimed rewards don't match",
+                            arg('expected', totalClaimedRewards),
+                            arg('actual', actualTotalClaimedRewards)
+                        );
+                    }
+
+                    if (!actualEffectiveStakingTime.eq(new BN(effectiveStakingTime))) {
+                        error(
+                            "Provider effective staking times don't match",
+                            arg('expected', effectiveStakingTime),
+                            arg('actual', actualEffectiveStakingTime)
+                        );
+                    }
+
+                    if (!actualBaseRewardsDebt.eq(new BN(baseRewardsDebt))) {
+                        error(
+                            "Provider base reward debts don't match",
+                            arg('expected', baseRewardsDebt),
+                            arg('actual', actualBaseRewardsDebt)
+                        );
+                    }
+
+                    if (!actualBaseRewardsDebtMultiplier.eq(new BN(baseRewardsDebtMultiplier))) {
+                        error(
+                            "Provider base reward debt multipliers don't match",
+                            arg('expected', baseRewardsDebtMultiplier),
+                            arg('actual', actualBaseRewardsDebtMultiplier)
+                        );
+                    }
+                }
+            }
+        }
+
+        info('Finished verifying provider rewards');
+    };
+
     const setRewards = async (data) => {
         const { poolRewards, providerRewards } = data;
 
         await setPoolRewards(poolRewards);
         await verifyPoolRewards(poolRewards);
+
+        await setProviderRewards(providerRewards);
+        await verifyProviderRewards(providerRewards);
     };
 
     const { web3Provider, contracts } = env;

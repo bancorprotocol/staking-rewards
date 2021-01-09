@@ -475,7 +475,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev updates specific provider's reward data
+     * @dev updates provider rewards data
      *
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
@@ -506,6 +506,59 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         data.effectiveStakingTime = effectiveStakingTime;
         data.baseRewardsDebt = baseRewardsDebt;
         data.baseRewardsDebtMultiplier = baseRewardsDebtMultiplier;
+    }
+
+    /**
+     * @dev seeds specific provider's reward data for multiple providers
+     *
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token in the rewards pool
+     * @param providers owners of the liquidity
+     * @param rewardsPerToken new reward rates per-token
+     * @param pendingBaseRewards updated pending base rewards
+     * @param totalClaimedRewards total claimed rewards up until now
+     * @param effectiveStakingTimes new effective staking times
+     * @param baseRewardsDebts updated base rewards debts
+     * @param baseRewardsDebtMultipliers updated base rewards debt multipliers
+     */
+    function setProviderRewardData(
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        address[] memory providers,
+        uint256[] memory rewardsPerToken,
+        uint256[] memory pendingBaseRewards,
+        uint256[] memory totalClaimedRewards,
+        uint256[] memory effectiveStakingTimes,
+        uint256[] memory baseRewardsDebts,
+        uint32[] memory baseRewardsDebtMultipliers
+    ) external onlySeeder validAddress(address(poolToken)) validAddress(address(reserveToken)) {
+        uint256 length = providers.length;
+        require(
+            length == rewardsPerToken.length &&
+                length == pendingBaseRewards.length &&
+                length == totalClaimedRewards.length &&
+                length == effectiveStakingTimes.length &&
+                length == baseRewardsDebts.length &&
+                length == baseRewardsDebtMultipliers.length,
+            "ERR_INVALID_LENGTH"
+        );
+
+        for (uint256 i = 0; i < length; ++i) {
+            ProviderRewards storage data = _providerRewards[poolToken][reserveToken][providers[i]];
+
+            uint32 baseRewardsDebtMultiplier = baseRewardsDebtMultipliers[i];
+            require(
+                baseRewardsDebtMultiplier >= PPM_RESOLUTION && baseRewardsDebtMultiplier <= 2 * PPM_RESOLUTION,
+                "ERR_INVALID_MULTIPLIER"
+            );
+
+            data.rewardPerToken = rewardsPerToken[i];
+            data.pendingBaseRewards = pendingBaseRewards[i];
+            data.totalClaimedRewards = totalClaimedRewards[i];
+            data.effectiveStakingTime = effectiveStakingTimes[i];
+            data.baseRewardsDebt = baseRewardsDebts[i];
+            data.baseRewardsDebtMultiplier = baseRewardsDebtMultiplier;
+        }
     }
 
     /**

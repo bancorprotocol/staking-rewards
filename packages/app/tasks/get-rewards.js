@@ -6,11 +6,15 @@ const { set } = require('lodash');
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
 const getRewardsTask = async (env) => {
+    const isPoolParticipating = (poolToken) => {
+        return programs.findIndex((p) => p.poolToken.toLowerCase() === poolToken.toLowerCase()) !== -1;
+    };
+
     const applyPositionChanges = async (liquidity, fromBlock, toBlock) => {
         let eventCount = 0;
 
-        const pools = {};
-        const providers = {};
+        const poolRewards = {};
+        const providerRewards = {};
 
         info('Applying all position change events from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
@@ -19,6 +23,16 @@ const getRewardsTask = async (env) => {
 
             if (blockNumber < fromBlock) {
                 error('Invalid', arg('blockNumber', blockNumber), '. Aborting');
+            }
+
+            if (blockNumber > toBlock) {
+                break;
+            }
+
+            if (!isPoolParticipating(poolToken)) {
+                trace('Skipping non-participating', arg('poolToken', poolToken));
+
+                continue;
             }
 
             switch (event) {
@@ -33,16 +47,16 @@ const getRewardsTask = async (env) => {
                         arg('timestamp', timestamp)
                     );
 
-                    set(pools, [poolToken, reserveToken], {});
-                    set(providers, [provider, poolToken, reserveToken], {});
+                    set(poolRewards, [poolToken, reserveToken], {});
+                    set(providerRewards, [provider, poolToken, reserveToken], {});
 
-                    await web3Provider.send(contracts.TestStakingRewards.methods.setTime(timestamp));
                     await web3Provider.send(
-                        contracts.TestLiquidityProtection.methods.addLiquidity(
+                        contracts.TestLiquidityProtection.methods.addLiquidityAt(
                             provider,
                             poolToken,
                             reserveToken,
-                            reserveAmount
+                            reserveAmount,
+                            timestamp
                         )
                     );
 
@@ -62,18 +76,15 @@ const getRewardsTask = async (env) => {
                         arg('timestamp', timestamp)
                     );
 
-                    await web3Provider.send(contracts.TestStakingRewards.methods.setTime(timestamp));
                     await web3Provider.send(
-                        contracts.TestLiquidityProtection.methods.removeLiquidity(
+                        contracts.TestLiquidityProtection.methods.removeLiquidityAt(
                             provider,
                             poolToken,
                             reserveToken,
-                            reserveAmount
+                            reserveAmount,
+                            timestamp
                         )
                     );
-
-                    await web3Provider.send(contracts.TestCheckpointStore.methods.setTime(timestamp));
-                    await web3Provider.send(contracts.TestCheckpointStore.methods.addCheckpoint(provider));
 
                     eventCount++;
 
@@ -84,7 +95,7 @@ const getRewardsTask = async (env) => {
 
         info('Finished applying all new protection change events', arg('count', eventCount));
 
-        return { pools, providers };
+        return { poolRewards, providerRewards };
     };
 
     const getRewardsData = async (data) => {
@@ -96,11 +107,11 @@ const getRewardsTask = async (env) => {
         let total = 0;
         let filtered = 0;
 
-        const { pools, providers } = data;
+        const { poolRewards, providerRewards } = data;
 
         info('Processing all rewards');
 
-        for (const [poolToken, reserveTokens] of Object.entries(pools)) {
+        for (const [poolToken, reserveTokens] of Object.entries(poolRewards)) {
             for (const reserveToken of Object.keys(reserveTokens)) {
                 trace('Processing pool rewards', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
 
@@ -131,13 +142,11 @@ const getRewardsTask = async (env) => {
 
         info('Processing all provider rewards');
 
-        const providersCount = Object.keys(providers).length;
-
-        for (const [provider, poolTokens] of Object.entries(providers)) {
-            for (const [poolToken, reserveTokens] of Object.entries(poolTokens)) {
-                for (const reserveToken of Object.keys(reserveTokens)) {
+        for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
+            for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
+                for (const provider of Object.keys(providers)) {
                     trace(
-                        `Processing provider rewards [${total + 1}/${providersCount}]`,
+                        'Processing provider rewards',
                         arg('provider', provider),
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken)
@@ -172,7 +181,7 @@ const getRewardsTask = async (env) => {
         return rewards;
     };
 
-    const verifyRewards = async (liquidity) => {
+    const verifyRewards = async (data) => {
         // TODO: add verification
     };
 
@@ -187,7 +196,7 @@ const getRewardsTask = async (env) => {
         return rewards;
     };
 
-    const { settings, web3Provider, contracts, test, init } = env;
+    const { settings, programs, web3Provider, contracts, test, init } = env;
 
     if (!test || !init) {
         error('Getting all rewards is only possible in test and init modes. Aborting');

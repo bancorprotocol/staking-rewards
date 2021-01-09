@@ -110,7 +110,8 @@ const setup = async () => {
             await deploySystemContract('TestLiquidityProtectionDataStore');
             await deploySystemContract('TestLiquidityProtection', [
                 contracts.TestLiquidityProtectionDataStore.options.address,
-                contracts.TestStakingRewards.options.address
+                contracts.TestStakingRewards.options.address,
+                contracts.TestCheckpointStore.options.address
             ]);
 
             info('Registering contracts');

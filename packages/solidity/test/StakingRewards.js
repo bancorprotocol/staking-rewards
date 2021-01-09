@@ -238,7 +238,11 @@ describe('StakingRewards', () => {
         );
 
         liquidityProtectionStore = await LiquidityProtectionDataStore.new(store.address);
-        liquidityProtection = await LiquidityProtection.new(liquidityProtectionStore.address, staking.address);
+        liquidityProtection = await LiquidityProtection.new(
+            liquidityProtectionStore.address,
+            staking.address,
+            checkpointStore.address
+        );
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
 
         await store.grantRole(ROLE_OWNER, staking.address);

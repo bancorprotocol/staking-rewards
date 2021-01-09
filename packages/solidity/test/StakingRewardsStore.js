@@ -26,7 +26,7 @@ const PPM_RESOLUTION = new BN(1000000);
 const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
 const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
 
-describe.only('StakingRewardsStore', () => {
+describe('StakingRewardsStore', () => {
     let converterRegistry;
     let store;
     let reserveToken;
@@ -97,7 +97,7 @@ describe.only('StakingRewardsStore', () => {
     };
 
     const getProviderRewards = async (provider, poolToken, reserveToken) => {
-        const data = await store.providerRewards.call(provider, poolToken.address, reserveToken.address);
+        const data = await store.providerRewards.call(poolToken.address, reserveToken.address, provider);
 
         return {
             rewardPerToken: data[0],
@@ -1123,9 +1123,9 @@ describe.only('StakingRewardsStore', () => {
         it('should revert when a non-owner attempts to update provider rewards data', async () => {
             await expectRevert(
                 store.updateProviderRewardsData(
-                    provider,
                     poolToken.address,
                     reserveToken.address,
+                    provider,
                     new BN(1000),
                     new BN(0),
                     new BN(0),
@@ -1154,9 +1154,9 @@ describe.only('StakingRewardsStore', () => {
             const baseRewardsDebt = new BN(9999999);
             const baseRewardsDebtMultiplier = new BN(100000);
             await store.updateProviderRewardsData(
-                provider,
                 poolToken.address,
                 reserveToken.address,
+                provider,
                 rewardPerToken,
                 pendingBaseRewards,
                 totalClaimedRewards,

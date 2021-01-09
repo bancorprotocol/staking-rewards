@@ -131,9 +131,9 @@ describe('StakingRewards', () => {
 
     const getProviderRewards = async (provider, poolToken, reserveToken) => {
         const data = await store.providerRewards.call(
-            provider,
             poolToken.address || poolToken,
-            reserveToken.address || reserveToken
+            reserveToken.address || reserveToken,
+            provider
         );
 
         return {

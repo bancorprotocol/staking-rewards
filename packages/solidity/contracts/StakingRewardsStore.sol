@@ -41,7 +41,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     mapping(IERC20 => mapping(IERC20 => PoolRewards)) internal _poolRewards;
 
     // the mapping between pools, reserve tokens, and provider specific rewards.
-    mapping(address => mapping(IERC20 => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
+    mapping(IERC20 => mapping(IERC20 => mapping(address => ProviderRewards))) internal _providerRewards;
 
     // the mapping between providers and their respective last claim times.
     mapping(address => uint256) private _providerLastClaimTimes;
@@ -439,16 +439,16 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev returns rewards data of a specific provider
      *
-     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
+     * @param provider the owner of the liquidity
      *
      * @return rewards data
      */
     function providerRewards(
-        address provider,
         IERC20 poolToken,
-        IERC20 reserveToken
+        IERC20 reserveToken,
+        address provider
     )
         external
         view
@@ -462,7 +462,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint32
         )
     {
-        ProviderRewards memory data = _providerRewards[provider][poolToken][reserveToken];
+        ProviderRewards memory data = _providerRewards[poolToken][reserveToken][provider];
 
         return (
             data.rewardPerToken,
@@ -477,9 +477,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev updates specific provider's reward data
      *
-     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
+     * @param provider the owner of the liquidity
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
      * @param totalClaimedRewards the total claimed rewards up until now
@@ -488,9 +488,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param baseRewardsDebtMultiplier the updated base rewards debt multiplier
      */
     function updateProviderRewardsData(
-        address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
+        address provider,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
         uint256 totalClaimedRewards,
@@ -498,7 +498,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256 baseRewardsDebt,
         uint32 baseRewardsDebtMultiplier
     ) external override onlyOwner {
-        ProviderRewards storage data = _providerRewards[provider][poolToken][reserveToken];
+        ProviderRewards storage data = _providerRewards[poolToken][reserveToken][provider];
 
         data.rewardPerToken = rewardPerToken;
         data.pendingBaseRewards = pendingBaseRewards;

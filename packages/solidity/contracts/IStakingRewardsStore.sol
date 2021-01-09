@@ -84,9 +84,9 @@ interface IStakingRewardsStore {
     ) external;
 
     function providerRewards(
-        address provider,
         IERC20 poolToken,
-        IERC20 reserveToken
+        IERC20 reserveToken,
+        address provider
     )
         external
         view
@@ -100,9 +100,9 @@ interface IStakingRewardsStore {
         );
 
     function updateProviderRewardsData(
-        address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
+        address provider,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
         uint256 totalClaimedRewards,

@@ -144,7 +144,7 @@ const getRewardsTask = async (env) => {
                     );
 
                     const data = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
+                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
                     );
 
                     if (new BN(data[0]).eq(new BN(0))) {
@@ -153,7 +153,7 @@ const getRewardsTask = async (env) => {
                         continue;
                     }
 
-                    set(rewards.providerRewards, [provider, poolToken, reserveToken], {
+                    set(rewards.providerRewards, [poolToken, reserveToken, provider], {
                         rewardPerToken: data[0],
                         pendingBaseRewards: data[1],
                         totalClaimedRewards: data[2],

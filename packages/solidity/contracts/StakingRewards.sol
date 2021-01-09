@@ -385,7 +385,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         }
 
         // update pool rewards data total claimed rewards.
-        _store.updateRewardsData(
+        _store.updatePoolRewardsData(
             poolToken,
             reserveToken,
             rewardsData.lastUpdateTime,
@@ -820,7 +820,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         rewardsData.rewardPerToken = rewardPerToken(poolToken, reserveToken, rewardsData, program, lpStore);
         rewardsData.lastUpdateTime = Math.min(time(), program.endTime);
 
-        _store.updateRewardsData(
+        _store.updatePoolRewardsData(
             poolToken,
             reserveToken,
             rewardsData.lastUpdateTime,

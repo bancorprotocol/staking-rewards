@@ -399,7 +399,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param rewardPerToken the new reward rate per-token
      * @param totalClaimedRewards the total claimed rewards up until now
      */
-    function updateRewardsData(
+    function updatePoolRewardsData(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 lastUpdateTime,

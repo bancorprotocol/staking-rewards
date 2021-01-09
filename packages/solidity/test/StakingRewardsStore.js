@@ -897,7 +897,7 @@ describe('StakingRewardsStore', () => {
 
         it('should revert when a non-owner attempts to update pool rewards', async () => {
             await expectRevert(
-                store.updateRewardsData(
+                store.updatePoolRewardsData(
                     poolToken.address,
                     reserveToken.address,
                     new BN(0),
@@ -921,7 +921,7 @@ describe('StakingRewardsStore', () => {
             const rewardPerToken = new BN(10000);
             const totalClaimedRewards = new BN(5555555);
 
-            await store.updateRewardsData(
+            await store.updatePoolRewardsData(
                 poolToken.address,
                 reserveToken.address,
                 lastUpdateTime,

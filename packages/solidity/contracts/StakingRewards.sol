@@ -555,12 +555,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // rewards and attribute them to the provider.
         _networkTokenGovernance.mint(address(this), amount);
 
-        uint256 newId = liquidityProtection.addLiquidityFor(msg.sender, newPoolToken, _networkToken, amount);
+        uint256 newId = liquidityProtection.addLiquidityFor(provider, newPoolToken, _networkToken, amount);
 
         // please note, that in order to incentivize staking, we won't be updating the time of the last claim, thus
         // preserving the rewards bonus multiplier.
 
-        emit RewardsStaked(msg.sender, newPoolToken, amount, newId);
+        emit RewardsStaked(provider, newPoolToken, amount, newId);
 
         return (amount, newId);
     }

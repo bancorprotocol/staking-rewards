@@ -188,19 +188,49 @@ const getRewardsTask = async (env) => {
         return rewards;
     };
 
-    const verifyRewards = async (data) => {
-        // TODO: add verification
+    const getPendingRewards = async (providerRewards) => {
+        const pendingRewards = {};
+
+        info('Getting all provider pending rewards');
+
+        for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
+            for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
+                for (const provider of Object.keys(providers)) {
+                    trace(
+                        'Getting provider rewards',
+                        arg('provider', provider),
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken)
+                    );
+
+                    set(
+                        pendingRewards,
+                        [poolToken, reserveToken, provider],
+                        await web3Provider.call(
+                            contracts.TestStakingRewards.methods.pendingReserveRewards(
+                                provider,
+                                poolToken,
+                                reserveToken
+                            )
+                        )
+                    );
+                }
+            }
+        }
+
+        info('Finished getting all provider rewards');
+
+        return pendingRewards;
     };
 
     const getRewards = async (liquidity, fromBlock, toBlock) => {
         info('Getting all rewards from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
         const data = await applyPositionChanges(liquidity.liquidity, fromBlock, toBlock);
-        const rewards = await getRewardsData(data, toBlock);
+        const { poolRewards, providerRewards } = await getRewardsData(data, toBlock);
+        const pendingRewards = await getPendingRewards(providerRewards);
 
-        await verifyRewards(rewards);
-
-        return rewards;
+        return { poolRewards, providerRewards, pendingRewards };
     };
 
     const { settings, programs, web3Provider, contracts, test, init } = env;

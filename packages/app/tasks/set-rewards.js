@@ -4,7 +4,7 @@ const BN = require('bn.js');
 
 const { trace, info, error, arg } = require('../utils/logger');
 
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 50;
 
 const setRewardsTask = async (env) => {
     const setPoolRewards = async (poolRewards) => {
@@ -123,7 +123,8 @@ const setRewardsTask = async (env) => {
         info('Setting provider rewards in batches of', arg('batchSize', BATCH_SIZE), '(per-pool)');
 
         let filtered = 0;
-        let totalGas = 0;
+
+        const transactions = [];
 
         for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
@@ -223,25 +224,30 @@ const setRewardsTask = async (env) => {
                         );
                     }
 
-                    const tx = await web3Provider.send(
-                        contracts.StakingRewardsStore.methods.setProviderRewardData(
-                            poolToken,
-                            reserveToken,
-                            providersBatch,
-                            rewardPerTokenBatch,
-                            pendingBaseRewardsBatch,
-                            totalClaimedRewardsBatch,
-                            effectiveStakingTimeBatch,
-                            baseRewardsDebtBatch,
-                            baseRewardsDebtMultiplierBatch
+                    transactions.push(
+                        web3Provider.send(
+                            contracts.StakingRewardsStore.methods.setProviderRewardData(
+                                poolToken,
+                                reserveToken,
+                                providersBatch,
+                                rewardPerTokenBatch,
+                                pendingBaseRewardsBatch,
+                                totalClaimedRewardsBatch,
+                                effectiveStakingTimeBatch,
+                                baseRewardsDebtBatch,
+                                baseRewardsDebtMultiplierBatch
+                            )
                         )
                     );
-                    totalGas += tx.gasUsed;
                 }
             }
         }
 
-        info('Finished setting all provider rewards', arg('filtered', filtered), arg('totalGas', totalGas));
+        return Promise.all(transactions).then((receipts) => {
+            const totalGas = receipts.reduce((res, receipt) => (res += receipt.gasUsed), 0);
+
+            info('Finished setting all provider rewards', arg('filtered', filtered), arg('totalGas', totalGas));
+        });
     };
 
     const verifyProviderRewards = async (providerRewards) => {

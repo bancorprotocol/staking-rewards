@@ -831,6 +831,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // update provider's rewards with the newly claimable base rewards and the new reward rate per-token.
         ProviderRewards memory providerRewards = providerRewards(poolToken, reserveToken, provider);
 
+        // if this is the first liquidity provision - set the effective staking time to the current time.
+        if (
+            providerRewards.effectiveStakingTime == 0 &&
+            lpStore.providerReserveAmount(provider, poolToken, reserveToken) == 0
+        ) {
+            providerRewards.effectiveStakingTime = time();
+        }
+
         // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken.
         providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(
             baseRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStore)

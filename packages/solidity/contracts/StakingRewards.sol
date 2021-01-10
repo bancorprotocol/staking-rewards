@@ -393,7 +393,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             poolRewardsData.totalClaimedRewards.add(fullReward)
         );
 
-        // update provider rewards data with the remaining pending rewards and set the last update time to the
+        // update provider rewards data with the remaining pending rewards and set the effective staking time to the
         // timestamp of the current block.
         _store.updateProviderRewardsData(
             poolToken,

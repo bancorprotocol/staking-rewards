@@ -99,7 +99,7 @@ const setProgramsTask = async (env) => {
                 rewardRate
             } = program;
 
-            info('Verifying program', arg('poolToken', poolToken));
+            trace('Verifying program', arg('poolToken', poolToken));
 
             const data = await web3Provider.call(contracts.StakingRewardsStore.methods.poolProgram(poolToken));
 

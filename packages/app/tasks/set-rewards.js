@@ -20,7 +20,6 @@ const setRewardsTask = async (env) => {
 
         for (const [poolToken, reserveTokens] of Object.entries(poolRewards)) {
             for (const [reserveToken, data] of Object.entries(reserveTokens)) {
-                // TODO: remove totalClaimedRewards
                 const { lastUpdateTime, rewardPerToken, totalClaimedRewards } = data;
 
                 const poolData = await web3Provider.call(
@@ -32,7 +31,7 @@ const setRewardsTask = async (env) => {
                     new BN(poolData[1]).eq(new BN(rewardPerToken)) &&
                     new BN(poolData[2]).eq(new BN(totalClaimedReward))
                 ) {
-                    info(
+                    trace(
                         'Skipping already up to date pool rewards',
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken)
@@ -80,7 +79,7 @@ const setRewardsTask = async (env) => {
             for (const [reserveToken, data] of Object.entries(reserveTokens)) {
                 const { lastUpdateTime, rewardPerToken, totalClaimedReward } = data;
 
-                info('Verifying pool rewards', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
+                trace('Verifying pool rewards', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
 
                 const poolData = await web3Provider.call(
                     contracts.StakingRewardsStore.methods.poolRewards(poolToken, reserveToken)
@@ -160,7 +159,7 @@ const setRewardsTask = async (env) => {
                         poolBaseRewardsDebt.eq(new BN(baseRewardsDebt)) &&
                         poolBaseRewardsDebtMultiplier.eq(new BN(baseRewardsDebtMultiplier))
                     ) {
-                        info(
+                        trace(
                             'Skipping already up to date provider rewards',
                             arg('poolToken', poolToken),
                             arg('reserveToken', reserveToken),
@@ -172,7 +171,7 @@ const setRewardsTask = async (env) => {
                         continue;
                     }
 
-                    info(
+                    trace(
                         'Setting provider rewards for',
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken),
@@ -256,6 +255,13 @@ const setRewardsTask = async (env) => {
         for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 for (const [provider, data] of Object.entries(providers)) {
+                    trace(
+                        'Verifying provider rewards',
+                        arg('provider', provider),
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken)
+                    );
+
                     const {
                         rewardPerToken,
                         pendingBaseRewards,

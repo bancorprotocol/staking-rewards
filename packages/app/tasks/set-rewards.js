@@ -4,7 +4,7 @@ const BN = require('bn.js');
 
 const { trace, info, error, arg } = require('../utils/logger');
 
-const BATCH_SIZE = 200;
+const BATCH_SIZE = 100;
 
 const setRewardsTask = async (env) => {
     const setPoolRewards = async (poolRewards) => {
@@ -20,6 +20,7 @@ const setRewardsTask = async (env) => {
 
         for (const [poolToken, reserveTokens] of Object.entries(poolRewards)) {
             for (const [reserveToken, data] of Object.entries(reserveTokens)) {
+                // TODO: remove totalClaimedRewards
                 const { lastUpdateTime, rewardPerToken, totalClaimedRewards } = data;
 
                 const poolData = await web3Provider.call(
@@ -128,7 +129,7 @@ const setRewardsTask = async (env) => {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 const entries = Object.entries(providers);
 
-                const newEntries = [];
+                const newProviderRewards = [];
                 for (const [provider, data] of entries) {
                     const {
                         rewardPerToken,
@@ -140,7 +141,7 @@ const setRewardsTask = async (env) => {
                     } = data;
 
                     const providerData = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerData(poolToken, reserveToken, provider)
+                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
                     );
 
                     const poolRewardPerToken = new BN(providerData[0]);
@@ -170,27 +171,34 @@ const setRewardsTask = async (env) => {
                         continue;
                     }
 
-                    newEntries.push({
+                    info(
+                        'Setting provider rewards for',
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken),
+                        arg('provider', provider)
+                    );
+
+                    newProviderRewards.push({
                         provider,
-                        rewardPerToken: poolRewardPerToken,
-                        pendingBaseRewards: poolPendingBaseRewards,
-                        totalClaimedRewards: poolTotalClaimedRewards,
-                        effectiveStakingTime: poolEffectiveStakingTime,
-                        baseRewardsDebt: poolBaseRewardsDebt,
-                        baseRewardsDebtMultiplier: poolBaseRewardsDebtMultiplier
+                        rewardPerToken,
+                        pendingBaseRewards,
+                        totalClaimedRewards,
+                        effectiveStakingTime,
+                        baseRewardsDebt,
+                        baseRewardsDebtMultiplier
                     });
                 }
 
-                for (let i = 0; i < newEntries.length; i += BATCH_SIZE) {
-                    const batch = newEntries.slice(i, i + BATCH_SIZE);
+                for (let i = 0; i < newProviderRewards.length; i += BATCH_SIZE) {
+                    const batch = newProviderRewards.slice(i, i + BATCH_SIZE);
 
-                    const providersBatch = batch.map((e) => e[0]);
-                    const rewardPerTokenBatch = batch.map((e) => e[1].rewardPerToken);
-                    const pendingBaseRewardsBatch = batch.map((e) => e[1].pendingBaseRewards);
-                    const totalClaimedRewardsBatch = batch.map((e) => e[1].totalClaimedRewards);
-                    const effectiveStakingTimeBatch = batch.map((e) => e[1].effectiveStakingTime);
-                    const baseRewardsDebtBatch = batch.map((e) => e[1].baseRewardsDebt);
-                    const baseRewardsDebtMultiplierBatch = batch.map((e) => e[1].baseRewardsDebtMultiplier);
+                    const providersBatch = batch.map((e) => e.provider);
+                    const rewardPerTokenBatch = batch.map((e) => e.rewardPerToken);
+                    const pendingBaseRewardsBatch = batch.map((e) => e.pendingBaseRewards);
+                    const totalClaimedRewardsBatch = batch.map((e) => e.totalClaimedRewards);
+                    const effectiveStakingTimeBatch = batch.map((e) => e.effectiveStakingTime);
+                    const baseRewardsDebtBatch = batch.map((e) => e.baseRewardsDebt);
+                    const baseRewardsDebtMultiplierBatch = batch.map((e) => e.baseRewardsDebtMultiplier);
 
                     for (let j = 0; j < providersBatch.length; ++j) {
                         const provider = providersBatch[j];
@@ -204,6 +212,8 @@ const setRewardsTask = async (env) => {
                         trace(
                             'Setting provider rewards for',
                             arg('provider', provider),
+                            arg('poolToken', poolToken),
+                            arg('reserveToken', reserveToken),
                             arg('rewardPerToken', rewardPerToken),
                             arg('pendingBaseRewards', pendingBaseRewards),
                             arg('totalClaimedRewards', totalClaimedRewards),
@@ -250,7 +260,7 @@ const setRewardsTask = async (env) => {
                     } = data;
 
                     const providerData = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerData(poolToken, reserveToken, provider)
+                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
                     );
 
                     const actualRewardPerToken = new BN(providerData[0]);

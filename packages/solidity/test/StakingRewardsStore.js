@@ -26,7 +26,7 @@ const PPM_RESOLUTION = new BN(1000000);
 const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
 const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
 
-describe.only('StakingRewardsStore', () => {
+describe('StakingRewardsStore', () => {
     let converterRegistry;
     let store;
     let reserveToken;

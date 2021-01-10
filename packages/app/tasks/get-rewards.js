@@ -48,7 +48,7 @@ const getRewardsTask = async (env) => {
                     );
 
                     set(poolRewards, [poolToken, reserveToken], {});
-                    set(providerRewards, [provider, poolToken, reserveToken], {});
+                    set(providerRewards, [poolToken, reserveToken, provider], {});
 
                     await web3Provider.send(
                         contracts.TestLiquidityProtection.methods.addLiquidityAt(
@@ -145,22 +145,29 @@ const getRewardsTask = async (env) => {
         for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 for (const provider of Object.keys(providers)) {
+                    const data = await web3Provider.call(
+                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
+                    );
+
+                    if (new BN(data[0]).eq(new BN(0))) {
+                        trace(
+                            'Skipping provider rewards',
+                            arg('provider', provider),
+                            arg('poolToken', poolToken),
+                            arg('reserveToken', reserveToken)
+                        );
+
+                        filtered++;
+
+                        continue;
+                    }
+
                     trace(
                         'Processing provider rewards',
                         arg('provider', provider),
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken)
                     );
-
-                    const data = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
-                    );
-
-                    if (new BN(data[0]).eq(new BN(0))) {
-                        filtered++;
-
-                        continue;
-                    }
 
                     set(rewards.providerRewards, [poolToken, reserveToken, provider], {
                         rewardPerToken: data[0],

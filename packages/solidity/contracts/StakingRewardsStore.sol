@@ -546,9 +546,11 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         for (uint256 i = 0; i < length; ++i) {
             ProviderRewards storage data = _providerRewards[poolToken][reserveToken][providers[i]];
 
+            uint256 baseRewardsDebt = baseRewardsDebts[i];
             uint32 baseRewardsDebtMultiplier = baseRewardsDebtMultipliers[i];
             require(
-                baseRewardsDebtMultiplier >= PPM_RESOLUTION && baseRewardsDebtMultiplier <= 2 * PPM_RESOLUTION,
+                baseRewardsDebt == 0 ||
+                    (baseRewardsDebtMultiplier >= PPM_RESOLUTION && baseRewardsDebtMultiplier <= 2 * PPM_RESOLUTION),
                 "ERR_INVALID_MULTIPLIER"
             );
 

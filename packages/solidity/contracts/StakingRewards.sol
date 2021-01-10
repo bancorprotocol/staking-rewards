@@ -525,7 +525,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewards for a specific list of participating pools
+     * @dev claims and stakes specific provider's pending rewards for a specific list of participating pools
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query

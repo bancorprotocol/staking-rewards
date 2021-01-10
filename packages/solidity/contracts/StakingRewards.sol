@@ -551,7 +551,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ILiquidityProtection liquidityProtection = liquidityProtection();
         _networkToken.safeApprove(address(liquidityProtection), amount);
 
-        // mint the reward tokens directly to the provider.
+        // mint the reward tokens directly to the staking contract, so that the LiquidityProtection could pull the
+        // rewards and attribute them to the provider.
         _networkTokenGovernance.mint(address(this), amount);
 
         uint256 newId = liquidityProtection.addLiquidityFor(msg.sender, newPoolToken, _networkToken, amount);

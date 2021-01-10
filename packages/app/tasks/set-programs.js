@@ -1,7 +1,7 @@
 const humanizeDuration = require('humanize-duration');
 const BN = require('bn.js');
 
-const { info, error, arg } = require('../utils/logger');
+const { info, trace, error, arg } = require('../utils/logger');
 
 const BATCH_SIZE = 200;
 

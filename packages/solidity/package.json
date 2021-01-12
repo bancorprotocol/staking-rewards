@@ -23,7 +23,7 @@
         "format": "prettier --check --write solidity/**/*.sol solidity/**/*.js scripts/**/*.js *.js --config .prettierrc"
     },
     "devDependencies": {
-        "@bancor/contracts": "bancorprotocol/contracts#0.6.29",
+        "@bancor/contracts": "file:../../../contracts",
         "@bancor/token-governance": "bancorprotocol/token-governance",
         "@openzeppelin/contracts": "3.3.0",
         "@openzeppelin/test-environment": "^0.1.8",
@@ -43,6 +43,7 @@
         "eslint-plugin-promise": "^4.2.1",
         "eslint-plugin-standard": "^4.1.0",
         "humanize-duration": "^3.25.0",
+        "lodash": "^4.17.20",
         "memdown": "^5.1.0",
         "mocha": "^8.2.1",
         "solc": "0.6.12",

@@ -2,21 +2,24 @@ const { accounts, defaultSender, contract, web3 } = require('@openzeppelin/test-
 const { expectRevert, expectEvent, constants, BN, time } = require('@openzeppelin/test-helpers');
 const humanizeDuration = require('humanize-duration');
 const Decimal = require('decimal.js');
+const { set } = require('lodash');
 const { expect } = require('../chai-local');
 
 const { ZERO_ADDRESS } = constants;
 const { duration } = time;
 
-const TestERC20Token = contract.fromArtifact('TestERC20Token');
+const DSToken = contract.fromArtifact('DSToken');
 const CheckpointStore = contract.fromArtifact('TestCheckpointStore');
 const TokenGovernance = contract.fromArtifact('TestTokenGovernance');
 const LiquidityProtection = contract.fromArtifact('TestLiquidityProtection');
-const LiquidityProtectionDataStore = contract.fromArtifact('TestLiquidityProtectionDataStore');
+const LiquidityProtectionSettings = contract.fromArtifact('LiquidityProtectionSettings');
+const LiquidityProtectionStore = contract.fromArtifact('LiquidityProtectionStore');
+const LiquidityProtectionStats = contract.fromArtifact('LiquidityProtectionStats');
 const ConverterRegistry = contract.fromArtifact('TestConverterRegistry');
 const ConverterRegistryData = contract.fromArtifact('ConverterRegistryData');
 const ContractRegistry = contract.fromArtifact('ContractRegistry');
 const ConverterFactory = contract.fromArtifact('ConverterFactory');
-const ConverterBase = contract.fromArtifact('ConverterBase');
+const StandardPoolConverter = contract.fromArtifact('StandardPoolConverter');
 const StandardPoolConverterFactory = contract.fromArtifact('StandardPoolConverterFactory');
 
 const StakingRewardsStore = contract.fromArtifact('TestStakingRewardsStore');
@@ -32,6 +35,7 @@ const ROLE_REWARDS_DISTRIBUTOR = web3.utils.keccak256('ROLE_REWARDS_DISTRIBUTOR'
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
+const ROLE_MINTED_TOKENS_ADMIN = web3.utils.keccak256('ROLE_MINTED_TOKENS_ADMIN');
 const ROLE_PUBLISHER = web3.utils.keccak256('ROLE_PUBLISHER');
 
 const PPM_RESOLUTION = new BN(1000000);
@@ -43,6 +47,10 @@ const REWARD_RATE_FACTOR = new BN(10).pow(new BN(18));
 const REWARDS_DURATION = duration.weeks(12);
 const BIG_POOL_BASE_REWARD_RATE = new BN(100000).mul(new BN(10).pow(new BN(18))).div(duration.weeks(1));
 const SMALL_POOL_BASE_REWARD_RATE = new BN(10000).mul(new BN(10).pow(new BN(18))).div(duration.weeks(1));
+
+const RESERVE1_AMOUNT = new BN(10000000).mul(new BN(10).pow(new BN(18)));
+const RESERVE2_AMOUNT = new BN(25000000).mul(new BN(10).pow(new BN(18)));
+const TOTAL_SUPPLY = new BN(10).pow(new BN(36));
 
 describe('StakingRewards', () => {
     let now;
@@ -56,8 +64,9 @@ describe('StakingRewards', () => {
     let poolToken;
     let poolToken2;
     let poolToken3;
-    let checkpointStore;
     let networkTokenGovernance;
+    let liquidityProtectionSettings;
+    let liquidityProtectionStats;
     let liquidityProtectionStore;
     let liquidityProtection;
     let store;
@@ -69,12 +78,14 @@ describe('StakingRewards', () => {
         prevNow = now;
         now = time;
 
-        for (const t of [checkpointStore, store, staking]) {
+        for (const t of [liquidityProtection, store, staking]) {
             if (t) {
                 await t.setTime(now);
             }
         }
     };
+
+    const toPPM = (percent) => new BN(percent).mul(PPM_RESOLUTION).div(new BN(100));
 
     const getRewardsMultiplier = (stakingDuration) => {
         // For 0 <= x <= 1 weeks: 100% PPM
@@ -120,11 +131,11 @@ describe('StakingRewards', () => {
         console.log('rewardPerToken', data.rewardPerToken.toString());
         console.log('totalClaimedRewards', data.totalClaimedRewards.toString());
 
-        const totalProtectedReserveAmount = await liquidityProtectionStore.totalProtectedReserveAmount.call(
+        const totalReserveAmount = await liquidityProtectionStats.totalReserveAmount.call(
             poolToken.address || poolToken,
             reserveToken.address || reserveToken
         );
-        console.log('totalProtectedReserveAmount', totalProtectedReserveAmount.toString());
+        console.log('totalReserveAmount', totalReserveAmount.toString());
 
         console.log();
     };
@@ -158,12 +169,12 @@ describe('StakingRewards', () => {
         console.log('baseRewardsDebt', data.baseRewardsDebt.toString());
         console.log('baseRewardsDebtMultiplier', data.baseRewardsDebtMultiplier.toString());
 
-        const providerReserveAmount = await liquidityProtectionStore.providerReserveAmount.call(
-            provider,
+        const totalProviderAmount = await liquidityProtectionStats.totalProviderAmount.call(
             poolToken.address || poolToken,
-            reserveToken.address || reserveToken
+            reserveToken.address || reserveToken,
+            provider
         );
-        console.log('providerReserveAmount', providerReserveAmount.toString());
+        console.log('totalProviderAmount', totalProviderAmount.toString());
 
         console.log();
     };
@@ -190,12 +201,24 @@ describe('StakingRewards', () => {
 
         const anchorCount = await converterRegistry.getAnchorCount.call();
         const poolTokenAddress = await converterRegistry.getAnchor.call(anchorCount - 1);
-
-        const converterAddress = await converterRegistry.createdConverter.call();
-        const converter = await ConverterBase.at(converterAddress);
+        const poolToken = await DSToken.at(poolTokenAddress);
+        const converterAddress = await poolToken.owner.call();
+        const converter = await StandardPoolConverter.at(converterAddress);
         await converter.acceptOwnership();
 
-        return TestERC20Token.at(poolTokenAddress);
+        await reserveToken.approve(converter.address, RESERVE1_AMOUNT);
+        await networkToken.approve(converter.address, RESERVE2_AMOUNT);
+
+        await converter.addLiquidity(
+            [reserveToken.address, networkToken.address],
+            [RESERVE1_AMOUNT, RESERVE2_AMOUNT],
+            1
+        );
+
+        await liquidityProtectionSettings.addPoolToWhitelist(poolToken.address);
+        await liquidityProtectionSettings.setNetworkTokenMintingLimit(poolToken.address, TOTAL_SUPPLY);
+
+        return poolToken;
     };
 
     before(async () => {
@@ -213,21 +236,29 @@ describe('StakingRewards', () => {
     });
 
     beforeEach(async () => {
-        networkToken = await TestERC20Token.new('TKN1', 'TKN1');
-        reserveToken = await TestERC20Token.new('RSV1', 'RSV1');
-        reserveToken2 = await TestERC20Token.new('RSV2', 'RSV2');
-        reserveToken3 = await TestERC20Token.new('RSV3', 'RSV3');
+        networkToken = await DSToken.new('TKN1', 'TKN1', 18);
+        reserveToken = await DSToken.new('RSV1', 'RSV1', 18);
+        reserveToken2 = await DSToken.new('RSV2', 'RSV2', 18);
+        reserveToken3 = await DSToken.new('RSV3', 'RSV3', 18);
 
-        poolToken = await createPoolToken(reserveToken);
-        poolToken2 = await createPoolToken(reserveToken2);
-        poolToken3 = await createPoolToken(reserveToken3);
+        await networkToken.issue(defaultSender, TOTAL_SUPPLY);
+        await reserveToken.issue(defaultSender, TOTAL_SUPPLY);
+        await reserveToken2.issue(defaultSender, TOTAL_SUPPLY);
+        await reserveToken3.issue(defaultSender, TOTAL_SUPPLY);
 
         networkTokenGovernance = await TokenGovernance.new(networkToken.address);
         await networkTokenGovernance.grantRole(ROLE_GOVERNOR, supervisor);
+        await networkTokenGovernance.grantRole(ROLE_MINTER, supervisor);
         await networkToken.transferOwnership(networkTokenGovernance.address);
         await networkTokenGovernance.acceptTokenOwnership();
 
-        checkpointStore = await CheckpointStore.new();
+        const govToken = await DSToken.new('vBNT', 'vBNT', 18);
+        const govTokenGovernance = await TokenGovernance.new(govToken.address);
+        await govTokenGovernance.grantRole(ROLE_GOVERNOR, supervisor);
+        await govToken.transferOwnership(govTokenGovernance.address);
+        await govTokenGovernance.acceptTokenOwnership();
+
+        const checkpointStore = await CheckpointStore.new();
 
         store = await StakingRewardsStore.new();
         staking = await StakingRewards.new(
@@ -237,18 +268,41 @@ describe('StakingRewards', () => {
             contractRegistry.address
         );
 
-        liquidityProtectionStore = await LiquidityProtectionDataStore.new(store.address);
-        liquidityProtection = await LiquidityProtection.new(
-            liquidityProtectionStore.address,
-            staking.address,
-            checkpointStore.address
-        );
-        await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
-
         await store.grantRole(ROLE_OWNER, staking.address);
         await store.grantRole(ROLE_OWNER, defaultSender);
-        await staking.grantRole(ROLE_PUBLISHER, liquidityProtection.address);
         await networkTokenGovernance.grantRole(ROLE_MINTER, staking.address);
+
+        liquidityProtectionSettings = await LiquidityProtectionSettings.new(
+            networkToken.address,
+            contractRegistry.address
+        );
+
+        await liquidityProtectionSettings.setMinNetworkTokenLiquidityForMinting(new BN(0));
+
+        liquidityProtectionStore = await LiquidityProtectionStore.new();
+        liquidityProtectionStats = await LiquidityProtectionStats.new();
+        liquidityProtection = await LiquidityProtection.new(
+            staking.address,
+            liquidityProtectionSettings.address,
+            liquidityProtectionStore.address,
+            liquidityProtectionStats.address,
+            networkTokenGovernance.address,
+            govTokenGovernance.address,
+            checkpointStore.address
+        );
+
+        await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
+
+        await liquidityProtectionSettings.grantRole(ROLE_OWNER, liquidityProtection.address);
+        await liquidityProtectionSettings.grantRole(ROLE_MINTED_TOKENS_ADMIN, liquidityProtection.address);
+        await liquidityProtectionStats.grantRole(ROLE_OWNER, liquidityProtection.address);
+        await checkpointStore.grantRole(ROLE_OWNER, liquidityProtection.address);
+        await liquidityProtectionStore.transferOwnership(liquidityProtection.address);
+        await liquidityProtection.acceptStoreOwnership();
+        await networkTokenGovernance.grantRole(ROLE_MINTER, liquidityProtection.address);
+        await govTokenGovernance.grantRole(ROLE_MINTER, liquidityProtection.address);
+
+        await staking.grantRole(ROLE_PUBLISHER, liquidityProtection.address);
 
         await setTime(new BN(100000000));
     });
@@ -381,12 +435,17 @@ describe('StakingRewards', () => {
     describe('rewards', async () => {
         const providers = [accounts[1], accounts[2]];
 
+        let positions;
         let reserveAmounts;
         let totalReserveAmounts;
         let programs;
         let providerPools;
 
         beforeEach(async () => {
+            poolToken = await createPoolToken(reserveToken);
+            poolToken2 = await createPoolToken(reserveToken2);
+            poolToken3 = await createPoolToken(reserveToken3);
+
             const poolTokens = [poolToken, poolToken2, poolToken3];
             const reserveTokens = {
                 [poolToken.address]: reserveToken.address,
@@ -394,6 +453,7 @@ describe('StakingRewards', () => {
                 [poolToken3.address]: reserveToken3.address
             };
 
+            positions = {};
             reserveAmounts = {};
             totalReserveAmounts = {};
             programs = {};
@@ -402,48 +462,20 @@ describe('StakingRewards', () => {
             for (const { address: poolToken } of poolTokens) {
                 const reserveToken = reserveTokens[poolToken];
 
-                reserveAmounts[poolToken] = {
-                    [reserveToken]: {},
-                    [networkToken.address]: {}
-                };
+                set(totalReserveAmounts, [poolToken, reserveToken], new BN(0));
+                set(totalReserveAmounts, [poolToken, networkToken.address], new BN(0));
 
-                totalReserveAmounts[poolToken] = {
-                    [reserveToken]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                };
-
-                programs[poolToken] = {
-                    [reserveToken]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                };
+                set(programs, [poolToken, reserveToken], new BN(0));
+                set(programs, [poolToken, networkToken.address], new BN(0));
 
                 for (const provider of accounts) {
+                    set(positions, [poolToken, reserveToken, provider], []);
+                    set(positions, [poolToken, networkToken.address, provider], []);
+
                     providerPools[provider] = {};
 
-                    reserveAmounts[poolToken][reserveToken][provider] = new BN(0);
-                    reserveAmounts[poolToken][networkToken.address][provider] = new BN(0);
-                }
-
-                reserveAmounts[poolToken] = {
-                    [reserveToken]: {},
-                    [networkToken.address]: {}
-                };
-
-                totalReserveAmounts[poolToken] = {
-                    [reserveToken]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                };
-
-                programs[poolToken] = {
-                    [reserveToken]: new BN(0),
-                    [networkToken.address]: new BN(0)
-                };
-
-                for (const provider of accounts) {
-                    providerPools[provider] = {};
-
-                    reserveAmounts[poolToken][reserveToken][provider] = new BN(0);
-                    reserveAmounts[poolToken][networkToken.address][provider] = new BN(0);
+                    set(reserveAmounts, [poolToken, reserveToken, provider], new BN(0));
+                    set(reserveAmounts, [poolToken, networkToken.address, provider], new BN(0));
                 }
             }
         });
@@ -470,9 +502,22 @@ describe('StakingRewards', () => {
         const addLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
             addTestLiquidity(provider, poolToken, reserveToken, reserveAmount);
 
-            await liquidityProtection.addLiquidity(provider, poolToken.address, reserveToken.address, reserveAmount, {
-                from: provider
-            });
+            if (reserveToken.address !== networkToken.address) {
+                await reserveToken.issue(provider, reserveAmount);
+            } else {
+                await networkTokenGovernance.mint(provider, reserveAmount);
+            }
+            await reserveToken.approve(liquidityProtection.address, reserveAmount, { from: provider });
+
+            await liquidityProtection.addProviderLiquidity(
+                provider,
+                poolToken.address,
+                reserveToken.address,
+                reserveAmount
+            );
+
+            const id = await liquidityProtection.lastId.call();
+            positions[poolToken.address][reserveToken.address][provider].push(id);
         };
 
         const removeTestLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
@@ -510,16 +555,34 @@ describe('StakingRewards', () => {
             }
         };
 
-        const removeLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
-            await liquidityProtection.removeLiquidity(
+        const getPosition = async (provider, id) => {
+            const position = await liquidityProtectionStore.protectedLiquidity.call(id);
+            expect(provider).to.eql(position[0]);
+
+            return {
                 provider,
-                poolToken.address,
-                reserveToken.address,
-                reserveAmount,
-                {
-                    from: provider
-                }
-            );
+                poolToken: position[1],
+                reserveToken: position[2],
+                poolAmount: position[3],
+                reserveAmount: position[4],
+                reserveRateN: position[5],
+                reserveRateD: position[6],
+                timestamp: position[7]
+            };
+        };
+
+        const removeLiquidity = async (provider, poolToken, reserveToken, portion) => {
+            const id = positions[poolToken.address][reserveToken.address][provider][0];
+            const position = await getPosition(provider, id);
+
+            let reserveAmount;
+            if (portion.eq(PPM_RESOLUTION)) {
+                reserveAmount = position.reserveAmount;
+            } else {
+                reserveAmount = position.reserveAmount.mul(portion).div(PPM_RESOLUTION);
+            }
+
+            await liquidityProtection.removeProviderLiquidity(provider, id, portion);
 
             removeTestLiquidity(provider, poolToken, reserveToken, reserveAmount);
         };
@@ -724,9 +787,7 @@ describe('StakingRewards', () => {
             const data = await staking.stakeRewards.call(amount, newPoolToken.address, { from: provider });
             expect(data[0]).to.be.bignumber.equal(amount);
 
-            const prevProviderBalance = await networkToken.balanceOf.call(provider);
             const prevTotalProviderClaimed = await staking.totalClaimedRewards.call(provider);
-            const pervLiquidityProtectionBalance = await networkToken.balanceOf.call(liquidityProtection.address);
 
             const tx = await staking.stakeRewards(amount, newPoolToken.address, { from: provider });
             expectEvent(tx, 'RewardsStaked', {
@@ -741,18 +802,14 @@ describe('StakingRewards', () => {
                 addTestLiquidity(provider, newPoolToken, networkToken, amount);
             }
 
-            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevProviderBalance);
             expect(await staking.totalClaimedRewards.call(provider)).to.be.bignumber.equal(
                 prevTotalProviderClaimed.add(data[0])
             );
-            expect(await networkToken.balanceOf.call(liquidityProtection.address)).to.be.bignumber.equal(
-                pervLiquidityProtectionBalance.add(amount)
-            );
 
-            expect(await liquidityProtection.provider.call()).to.eql(provider);
-            expect(await liquidityProtection.poolToken.call()).to.eql(newPoolToken.address);
-            expect(await liquidityProtection.reserveToken.call()).to.eql(networkToken.address);
-            expect(await liquidityProtection.reserveAmount.call()).to.be.bignumber.equal(amount);
+            const position = await getPosition(provider, data[1]);
+            expect(position.poolToken).to.eql(newPoolToken.address);
+            expect(position.reserveToken).to.eql(networkToken.address);
+            expect(position.reserveAmount).to.be.bignumber.equal(amount);
 
             const newReward = await staking.pendingRewards.call(provider);
 
@@ -890,58 +947,16 @@ describe('StakingRewards', () => {
 
                             const reward = await staking.pendingRewards.call(provider);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(1).mul(new BN(10).pow(new BN(18)))
-                            );
-
-                            await removeLiquidity(
-                                provider3,
-                                poolToken,
-                                reserveToken,
-                                new BN(1).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(1));
+                            await removeLiquidity(provider3, poolToken, reserveToken, toPPM(1));
 
                             expectAlmostEqual(await staking.pendingRewards.call(provider), reward);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(11111).mul(new BN(10).pow(new BN(18)))
-                            );
-
-                            await removeLiquidity(
-                                provider3,
-                                poolToken,
-                                reserveToken,
-                                new BN(11111).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider3, poolToken, reserveToken, toPPM(30));
 
                             expectAlmostEqual(await staking.pendingRewards.call(provider), reward);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(11111).mul(new BN(10).pow(new BN(18)))
-                            );
-
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(1000).mul(new BN(10).pow(new BN(18)))
-                            );
-
-                            await removeLiquidity(
-                                provider3,
-                                poolToken,
-                                reserveToken,
-                                new BN(50000).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider3, poolToken, reserveToken, toPPM(50));
 
                             expectAlmostEqual(await staking.pendingRewards.call(provider), reward);
                         });
@@ -1012,70 +1027,30 @@ describe('StakingRewards', () => {
 
                             let prevReward = await staking.pendingRewards.call(provider);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(1).mul(new BN(10).pow(new BN(18)))
-                            );
-
-                            await removeLiquidity(
-                                provider3,
-                                poolToken,
-                                reserveToken,
-                                new BN(1).mul(new BN(10).pow(new BN(18)))
-                            );
-
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
                             await testPartialRewards(provider, prevReward);
 
                             prevReward = await staking.pendingRewards.call(provider);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(50000).mul(new BN(10).pow(new BN(18)))
-                            );
-
-                            await removeLiquidity(
-                                provider3,
-                                poolToken,
-                                reserveToken,
-                                new BN(50000).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(50));
+                            await removeLiquidity(provider3, poolToken, reserveToken, toPPM(50));
 
                             await setTime(now.add(duration.days(1)));
                             await testPartialRewards(provider, prevReward);
 
                             prevReward = await staking.pendingRewards.call(provider);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(10000).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(10));
 
                             await setTime(now.add(duration.days(1)));
                             await testPartialRewards(provider, prevReward);
 
                             prevReward = await staking.pendingRewards.call(provider);
 
-                            await removeLiquidity(
-                                provider,
-                                poolToken,
-                                reserveToken,
-                                new BN(30000).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(30));
 
-                            await removeLiquidity(
-                                provider3,
-                                poolToken,
-                                reserveToken,
-                                new BN(25000).mul(new BN(10).pow(new BN(18)))
-                            );
+                            await removeLiquidity(provider3, poolToken, reserveToken, toPPM(25));
 
                             await setTime(now.add(duration.weeks(3)));
                             await testPartialRewards(provider, prevReward, duration.weeks(3));
@@ -1091,9 +1066,8 @@ describe('StakingRewards', () => {
                             const debt = unclaimed.mul(PPM_RESOLUTION).div(debMultiplier);
 
                             // Remove all the liquidity.
-                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
                             const prevBalance = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, reserveToken, fullAmount);
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(100));
                             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
 
                             // Should not affect the claimable amount.
@@ -1144,10 +1118,8 @@ describe('StakingRewards', () => {
                             const debt = unclaimed.mul(PPM_RESOLUTION).div(debMultiplier);
 
                             // Remove all the liquidity.
-                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
-                            const partialAmount = fullAmount.div(new BN(2));
                             const prevBalance = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, reserveToken, partialAmount);
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(50));
                             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
 
                             // Should not affect the claimable amount.
@@ -1202,7 +1174,7 @@ describe('StakingRewards', () => {
                             const debt2 = unclaimed2.mul(PPM_RESOLUTION).div(debMultiplier2);
 
                             const prevBalance2 = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, reserveToken, partialAmount);
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(50));
                             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance2);
 
                             // Should not affect the claimable amount.
@@ -1269,9 +1241,8 @@ describe('StakingRewards', () => {
                             const debt = unclaimed.mul(PPM_RESOLUTION).div(debMultiplier);
 
                             // Remove all the liquidity.
-                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
                             const prevBalance = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, reserveToken, fullAmount);
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(100));
                             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
 
                             // Should not affect the claimable amount.
@@ -1300,148 +1271,140 @@ describe('StakingRewards', () => {
                     });
 
                     describe('staking', async () => {
-                        for (const participating of [false, true]) {
-                            context(`${participating ? '' : 'non-'}participating pool`, async () => {
-                                let newPoolToken;
+                        let reserveToken4;
+                        let poolToken4;
 
-                                beforeEach(async () => {
-                                    newPoolToken = participating ? poolToken : reserveToken;
-                                });
+                        beforeEach(async () => {
+                            reserveToken4 = await DSToken.new('RSV4', 'RSV4', 18);
+                            await reserveToken4.issue(defaultSender, TOTAL_SUPPLY);
 
-                                it('should partially stake rewards', async () => {
-                                    // Should partially claim rewards for the duration of 5 hours.
-                                    await setTime(now.add(duration.hours(5)));
-                                    let reward = await staking.pendingRewards.call(provider);
-                                    expect(reward).to.be.bignumber.equal(
-                                        getExpectedRewards(provider, now.sub(prevNow))
-                                    );
+                            poolToken4 = await createPoolToken(reserveToken4);
 
-                                    let amount = reward.div(new BN(3));
-                                    while (reward.gt(new BN(0))) {
-                                        amount = BN.min(amount, reward);
+                            const reserveAmount = new BN(100000000).mul(new BN(10).pow(new BN(18)));
+                            await reserveToken4.issue(provider, reserveAmount);
+                            await reserveToken4.approve(liquidityProtection.address, reserveAmount, { from: provider });
 
-                                        reward = await testStaking(provider, amount, newPoolToken);
-                                    }
+                            await liquidityProtection.addProviderLiquidity(
+                                provider,
+                                poolToken4.address,
+                                reserveToken4.address,
+                                reserveAmount
+                            );
+                        });
 
-                                    expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(
-                                        new BN(0)
-                                    );
+                        it('should partially stake rewards', async () => {
+                            // Should partially claim rewards for the duration of 5 hours.
+                            await setTime(now.add(duration.hours(5)));
 
-                                    // Should return all rewards for a single day, excluding previously granted rewards.
-                                    await setTime(programStartTime.add(duration.days(1)));
+                            let reward = await staking.pendingRewards.call(provider);
+                            expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
 
-                                    reward = await staking.pendingRewards.call(provider);
-                                    expect(reward).to.be.bignumber.equal(
-                                        getExpectedRewards(provider, now.sub(prevNow))
-                                    );
+                            let amount = reward.div(new BN(2));
+                            while (reward.gt(new BN(0))) {
+                                amount = BN.min(amount, reward);
 
-                                    amount = reward.div(new BN(3));
-                                    while (reward.gt(new BN(0))) {
-                                        amount = BN.min(amount, reward);
+                                reward = await testStaking(provider, amount, poolToken4);
+                            }
 
-                                        reward = await testStaking(provider, amount, newPoolToken);
-                                    }
+                            expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(new BN(0));
 
-                                    expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(
-                                        new BN(0)
-                                    );
+                            // Should return all rewards for a single day, excluding previously granted rewards.
+                            await setTime(programStartTime.add(duration.days(1)));
 
-                                    // Should return all weekly rewards, excluding previously granted rewards, but without the
-                                    // multiplier bonus.
-                                    await setTime(now.add(duration.weeks(1)));
-                                    await testClaim(provider);
+                            reward = await staking.pendingRewards.call(provider);
+                            expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
 
-                                    // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
-                                    // two weeks rewards multiplier.
-                                    await setTime(now.add(duration.weeks(2)));
+                            amount = reward.div(new BN(2));
+                            while (reward.gt(new BN(0))) {
+                                amount = BN.min(amount, reward);
 
-                                    reward = await staking.pendingRewards.call(provider);
-                                    expect(reward).to.be.bignumber.equal(
-                                        getExpectedRewards(provider, now.sub(prevNow), duration.weeks(2))
-                                    );
+                                reward = await testStaking(provider, amount, poolToken4);
+                            }
 
-                                    amount = reward.div(new BN(3));
-                                    while (reward.gt(new BN(0))) {
-                                        amount = BN.min(amount, reward);
+                            expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(new BN(0));
 
-                                        reward = await testStaking(provider, amount, newPoolToken);
-                                    }
+                            // Should return all weekly rewards, excluding previously granted rewards, but without the
+                            // multiplier bonus.
+                            await setTime(now.add(duration.weeks(1)));
+                            await testClaim(provider);
 
-                                    // Should return all program rewards, excluding previously granted rewards + max retroactive
-                                    // multipliers.
-                                    await setTime(programEndTime);
+                            // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
+                            // two weeks rewards multiplier.
+                            await setTime(now.add(duration.weeks(2)));
 
-                                    reward = await staking.pendingRewards.call(provider);
-                                    expect(reward).to.be.bignumber.equal(
-                                        getExpectedRewards(provider, now.sub(prevNow), duration.weeks(4))
-                                    );
+                            reward = await staking.pendingRewards.call(provider);
+                            expect(reward).to.be.bignumber.equal(
+                                getExpectedRewards(provider, now.sub(prevNow), duration.weeks(2))
+                            );
 
-                                    amount = reward.div(new BN(3));
-                                    while (reward.gt(new BN(0))) {
-                                        amount = BN.min(amount, reward);
+                            amount = reward.div(new BN(2));
+                            while (reward.gt(new BN(0))) {
+                                amount = BN.min(amount, reward);
 
-                                        reward = await testStaking(provider, amount, newPoolToken);
-                                    }
-                                });
-                            });
-                        }
+                                reward = await testStaking(provider, amount, poolToken4);
+                            }
+
+                            // Should return all program rewards, excluding previously granted rewards + max retroactive
+                            // multipliers.
+                            await setTime(programEndTime);
+
+                            reward = await staking.pendingRewards.call(provider);
+                            expect(reward).to.be.bignumber.equal(
+                                getExpectedRewards(provider, now.sub(prevNow), duration.weeks(4))
+                            );
+
+                            amount = reward.div(new BN(2));
+                            while (reward.gt(new BN(0))) {
+                                amount = BN.min(amount, reward);
+
+                                reward = await testStaking(provider, amount, poolToken4);
+                            }
+                        });
 
                         it('should not allow staking more than the claimable rewards', async () => {
-                            const newPoolToken = accounts[5];
-
                             await setTime(programStartTime.add(duration.weeks(1)));
 
                             const reward = await staking.pendingRewards.call(provider);
                             expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
 
                             const amount = reward.mul(new BN(10000));
-                            const data = await staking.stakeRewards.call(amount, newPoolToken, {
+                            const data = await staking.stakeRewards.call(amount, poolToken4.address, {
                                 from: provider
                             });
                             expect(data[0]).to.be.bignumber.equal(reward);
 
-                            const prevProviderBalance = await networkToken.balanceOf.call(provider);
-                            const pervLiquidityProtectionBalance = await networkToken.balanceOf.call(
-                                liquidityProtection.address
-                            );
-                            const tx = await staking.stakeRewards(amount, newPoolToken, {
+                            const tx = await staking.stakeRewards(amount, poolToken4.address, {
                                 from: provider
                             });
                             expectEvent(tx, 'RewardsStaked', {
                                 provider,
-                                poolToken: newPoolToken,
+                                poolToken: poolToken4.address,
                                 amount: reward,
                                 newId: data[1]
                             });
 
-                            expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(
-                                prevProviderBalance
-                            );
-                            expect(
-                                await networkToken.balanceOf.call(liquidityProtection.address)
-                            ).to.be.bignumber.equal(pervLiquidityProtectionBalance.add(reward));
-
-                            expect(await liquidityProtection.reserveAmount.call()).to.be.bignumber.equal(reward);
+                            const position = await getPosition(provider, data[1]);
+                            expect(position.poolToken).to.eql(poolToken4.address);
+                            expect(position.reserveToken).to.eql(networkToken.address);
+                            expect(position.reserveAmount).to.be.bignumber.equal(reward);
 
                             expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(new BN(0));
                         });
 
                         it('should allow staking, removal, and then claiming of the rewards', async () => {
-                            const newPoolToken = accounts[5];
-
                             await setTime(programStartTime.add(duration.weeks(1)));
 
                             const reward = await staking.pendingRewards.call(provider);
                             expect(reward).to.be.bignumber.equal(getExpectedRewards(provider, now.sub(prevNow)));
 
                             const amount = reward.div(new BN(2));
-                            const data = await staking.stakeRewards.call(amount, newPoolToken, {
+                            const data = await staking.stakeRewards.call(amount, poolToken4.address, {
                                 from: provider
                             });
                             expect(data[0]).to.be.bignumber.equal(amount);
 
                             // Stake some of the rewards.
-                            await staking.stakeRewards(amount, newPoolToken, {
+                            await staking.stakeRewards(amount, poolToken4.address, {
                                 from: provider
                             });
 
@@ -1453,9 +1416,8 @@ describe('StakingRewards', () => {
                             }
 
                             // Remove all the liquidity.
-                            const fullAmount = reserveAmounts[poolToken.address][reserveToken.address][provider];
                             const prevBalance = await networkToken.balanceOf.call(provider);
-                            await removeLiquidity(provider, poolToken, reserveToken, fullAmount);
+                            await removeLiquidity(provider, poolToken, reserveToken, toPPM(100));
 
                             expect(await networkToken.balanceOf.call(provider)).to.be.bignumber.equal(prevBalance);
 
@@ -1534,11 +1496,12 @@ describe('StakingRewards', () => {
                 await setTime(programStartTime);
 
                 await addPoolProgram(poolToken, reserveToken, programEndTime, BIG_POOL_BASE_REWARD_RATE);
+
                 await addLiquidity(
                     providers[0],
                     poolToken,
                     reserveToken,
-                    new BN(100000).mul(new BN(10).pow(new BN(18)))
+                    new BN(10000000).mul(new BN(10).pow(new BN(18)))
                 );
             });
 
@@ -1567,7 +1530,7 @@ describe('StakingRewards', () => {
                         providers[0],
                         poolToken,
                         networkToken,
-                        new BN(999999999).mul(new BN(10).pow(new BN(18)))
+                        new BN(10000000).mul(new BN(10).pow(new BN(18)))
                     );
                 });
 
@@ -1581,14 +1544,14 @@ describe('StakingRewards', () => {
                             providers[1],
                             poolToken,
                             reserveToken,
-                            new BN(222222).mul(new BN(10).pow(new BN(18)))
+                            new BN(2222222).mul(new BN(10).pow(new BN(18)))
                         );
 
                         await addLiquidity(
                             providers[1],
                             poolToken,
                             networkToken,
-                            new BN(1100093).mul(new BN(10).pow(new BN(18)))
+                            new BN(11000092).mul(new BN(10).pow(new BN(18)))
                         );
                     });
 
@@ -1618,13 +1581,13 @@ describe('StakingRewards', () => {
                     providers[0],
                     poolToken2,
                     reserveToken2,
-                    new BN(11111111111).mul(new BN(10).pow(new BN(18)))
+                    new BN(11111111110).mul(new BN(10).pow(new BN(18)))
                 );
                 await addLiquidity(
                     providers[0],
                     poolToken3,
                     reserveToken3,
-                    new BN(33333333333).mul(new BN(10).pow(new BN(18)))
+                    new BN(33333333330).mul(new BN(10).pow(new BN(18)))
                 );
             });
 
@@ -1665,13 +1628,13 @@ describe('StakingRewards', () => {
                         providers[0],
                         poolToken,
                         networkToken,
-                        new BN(999999999).mul(new BN(10).pow(new BN(18)))
+                        new BN(1000000).mul(new BN(10).pow(new BN(18)))
                     );
                     await addLiquidity(
                         providers[0],
                         poolToken2,
                         networkToken,
-                        new BN(888888888).mul(new BN(10).pow(new BN(18)))
+                        new BN(8888888).mul(new BN(10).pow(new BN(18)))
                     );
                     await addLiquidity(
                         providers[0],
@@ -1710,7 +1673,7 @@ describe('StakingRewards', () => {
                             providers[1],
                             poolToken,
                             networkToken,
-                            new BN(777770000001).mul(new BN(10).pow(new BN(18)))
+                            new BN(7777700).mul(new BN(10).pow(new BN(18)))
                         );
                         await addLiquidity(
                             providers[1],

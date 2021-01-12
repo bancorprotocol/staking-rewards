@@ -1,122 +1,117 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@bancor/contracts/solidity/contracts/liquidity-protection/LiquidityProtection.sol";
+import "@bancor/contracts/solidity/contracts/liquidity-protection/LiquidityProtectionSettings.sol";
+import "@bancor/contracts/solidity/contracts/liquidity-protection/LiquidityProtectionStore.sol";
+import "@bancor/contracts/solidity/contracts/liquidity-protection/LiquidityProtectionStats.sol";
+import "@bancor/contracts/solidity/contracts/utility/ContractRegistry.sol";
+import "@bancor/contracts/solidity/contracts/converter/ConverterBase.sol";
+import "@bancor/contracts/solidity/contracts/converter/ConverterRegistryData.sol";
+import "@bancor/contracts/solidity/contracts/converter/ConverterFactory.sol";
+import "@bancor/contracts/solidity/contracts/converter/types/standard-pool/StandardPoolConverterFactory.sol";
+import "@bancor/contracts/solidity/contracts/helpers/TestCheckpointStore.sol";
+import "@bancor/contracts/solidity/contracts/helpers/TestConverterRegistry.sol";
 
-import "../ILiquidityProtection.sol";
 import "./TestStakingRewards.sol";
-import "./TestLiquidityProtectionDataStore.sol";
-import "./TestCheckpointStore.sol";
 
-contract TestLiquidityProtection is ILiquidityProtection {
+contract TestLiquidityProtection is LiquidityProtection, TestTime {
     using SafeERC20 for IERC20;
 
-    TestLiquidityProtectionDataStore private immutable _store;
+    uint256 private _lastId;
     TestStakingRewards private immutable _stakingRewards;
-    TestCheckpointStore private immutable _checkpointStore;
-
-    address private _provider;
-    IERC20 private _poolToken;
-    IERC20 private _reserveToken;
-    uint256 private _reserveAmount;
+    TestCheckpointStore private immutable _lastRemoveCheckpointStore;
 
     constructor(
-        TestLiquidityProtectionDataStore store,
         TestStakingRewards stakingRewards,
-        TestCheckpointStore checkpointStore
-    ) public {
-        _store = store;
+        LiquidityProtectionSettings settings,
+        LiquidityProtectionStore store,
+        LiquidityProtectionStats stats,
+        ITokenGovernance networkTokenGovernance,
+        ITokenGovernance govTokenGovernance,
+        TestCheckpointStore lastRemoveCheckpointStore
+    )
+        public
+        LiquidityProtection(
+            settings,
+            store,
+            stats,
+            networkTokenGovernance,
+            govTokenGovernance,
+            lastRemoveCheckpointStore
+        )
+    {
         _stakingRewards = stakingRewards;
-        _checkpointStore = checkpointStore;
+        _lastRemoveCheckpointStore = lastRemoveCheckpointStore;
     }
 
-    function store() external view override returns (ILiquidityProtectionDataStore) {
-        return _store;
+    function time() internal view override(Time, TestTime) returns (uint256) {
+        return TestTime.time();
     }
 
-    function addLiquidityFor(
+    function addProviderLiquidity(
         address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
+        IConverterAnchor poolAnchor,
+        IERC20Token reserveToken,
         uint256 reserveAmount
-    ) external payable override returns (uint256) {
-        _provider = provider;
-        _poolToken = poolToken;
-        _reserveToken = reserveToken;
-        _reserveAmount = reserveAmount;
+    ) public returns (uint256) {
+        _stakingRewards.setTime(time());
 
-        reserveToken.safeTransferFrom(msg.sender, address(this), reserveAmount);
+        _stakingRewards.onLiquidityAdded(0, provider, poolAnchor, reserveToken, 0, reserveAmount);
 
-        _stakingRewards.onLiquidityAdded(0, provider, poolToken, reserveToken, 0, reserveAmount);
+        reserveToken.transferFrom(provider, address(this), reserveAmount);
+        IERC20(address(reserveToken)).safeApprove(address(this), reserveAmount);
 
-        return 0;
-    }
-
-    function addLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 reserveAmount
-    ) public payable returns (uint256) {
-        _stakingRewards.onLiquidityAdded(0, provider, poolToken, reserveToken, 0, reserveAmount);
-
-        _store.addLiquidity(provider, poolToken, reserveToken, reserveAmount);
-
-        return 0;
+        _lastId = this.addLiquidityFor(provider, poolAnchor, reserveToken, reserveAmount);
+        return _lastId;
     }
 
     function addLiquidityAt(
         address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
+        IConverterAnchor poolAnchor,
+        IERC20Token reserveToken,
         uint256 reserveAmount,
-        uint256 time
+        uint256 timestamp
     ) public payable returns (uint256) {
-        _stakingRewards.setTime(time);
+        setTime(timestamp);
 
-        return addLiquidity(provider, poolToken, reserveToken, reserveAmount);
+        return addProviderLiquidity(provider, poolAnchor, reserveToken, reserveAmount);
     }
 
-    function removeLiquidity(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 reserveAmount
-    ) public payable returns (uint256) {
-        _stakingRewards.onLiquidityRemoved(0, provider, poolToken, reserveToken, 0, reserveAmount);
+    function removeProviderLiquidity(
+        address payable provider,
+        uint256 id,
+        uint32 portion
+    ) public payable {
+        _stakingRewards.setTime(time());
+        _lastRemoveCheckpointStore.setTime(time());
 
-        _store.removeLiquidity(provider, poolToken, reserveToken, reserveAmount);
-        _checkpointStore.addCheckpoint(provider);
+        ProtectedLiquidity memory liquidity = protectedLiquidity(id, provider);
 
-        return 0;
+        uint256 reserveAmount;
+        if (portion == PPM_RESOLUTION) {
+            reserveAmount = liquidity.reserveAmount;
+        } else {
+            reserveAmount = liquidity.reserveAmount.mul(portion) / PPM_RESOLUTION;
+        }
+
+        _stakingRewards.onLiquidityRemoved(0, provider, liquidity.poolToken, liquidity.reserveToken, 0, reserveAmount);
+
+        removeLiquidity(provider, id, portion);
     }
 
     function removeLiquidityAt(
-        address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken,
-        uint256 reserveAmount,
-        uint256 time
-    ) public payable returns (uint256) {
-        _stakingRewards.setTime(time);
-        _checkpointStore.setTime(time);
+        address payable provider,
+        uint256 id,
+        uint32 portion,
+        uint256 timestamp
+    ) public payable {
+        setTime(timestamp);
 
-        return removeLiquidity(provider, poolToken, reserveToken, reserveAmount);
+        removeProviderLiquidity(provider, id, portion);
     }
 
-    function provider() external view returns (address) {
-        return _provider;
-    }
-
-    function poolToken() external view returns (IERC20) {
-        return _poolToken;
-    }
-
-    function reserveToken() external view returns (IERC20) {
-        return _reserveToken;
-    }
-
-    function reserveAmount() external view returns (uint256) {
-        return _reserveAmount;
+    function lastId() public view returns (uint256) {
+        return _lastId;
     }
 }

@@ -65,6 +65,7 @@ describe('StakingRewards', () => {
     let poolToken2;
     let poolToken3;
     let networkTokenGovernance;
+    let checkpointStore;
     let liquidityProtectionSettings;
     let liquidityProtectionStats;
     let liquidityProtectionStore;
@@ -258,7 +259,7 @@ describe('StakingRewards', () => {
         await govToken.transferOwnership(govTokenGovernance.address);
         await govTokenGovernance.acceptTokenOwnership();
 
-        const checkpointStore = await CheckpointStore.new();
+        checkpointStore = await CheckpointStore.new();
 
         store = await StakingRewardsStore.new();
         staking = await StakingRewards.new(
@@ -292,6 +293,8 @@ describe('StakingRewards', () => {
         );
 
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
+
+        await liquidityProtection.setEventsSubscriber(staking.address);
 
         await liquidityProtectionSettings.grantRole(ROLE_OWNER, liquidityProtection.address);
         await liquidityProtectionSettings.grantRole(ROLE_MINTED_TOKENS_ADMIN, liquidityProtection.address);
@@ -388,6 +391,8 @@ describe('StakingRewards', () => {
         beforeEach(async () => {
             await setTime(now.add(duration.weeks(1)));
 
+            poolToken = await createPoolToken(reserveToken);
+
             await staking.grantRole(ROLE_PUBLISHER, liquidityProtectionProxy);
 
             await store.addPoolProgram(
@@ -401,14 +406,14 @@ describe('StakingRewards', () => {
 
         it('should revert when a non-LP contract attempts to notify', async () => {
             await expectRevert(
-                staking.onLiquidityAdded(id, provider, poolToken.address, reserveToken.address, 0, 0, {
+                staking.onAddingLiquidity(provider, poolToken.address, reserveToken.address, 0, 0, {
                     from: nonLiquidityProtection
                 }),
                 'ERR_ACCESS_DENIED'
             );
 
             await expectRevert(
-                staking.onLiquidityRemoved(id, provider, poolToken.address, reserveToken.address, 0, 0, {
+                staking.onRemovingLiquidity(id, provider, poolToken.address, reserveToken.address, 0, 0, {
                     from: nonLiquidityProtection
                 }),
                 'ERR_ACCESS_DENIED'
@@ -417,14 +422,14 @@ describe('StakingRewards', () => {
 
         it('should revert when notifying for a zero provider ', async () => {
             await expectRevert(
-                staking.onLiquidityAdded(id, ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, {
+                staking.onAddingLiquidity(ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, {
                     from: liquidityProtectionProxy
                 }),
                 'ERR_INVALID_EXTERNAL_ADDRESS'
             );
 
             await expectRevert(
-                staking.onLiquidityRemoved(id, ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, {
+                staking.onRemovingLiquidity(id, ZERO_ADDRESS, poolToken.address, reserveToken.address, 0, 0, {
                     from: liquidityProtectionProxy
                 }),
                 'ERR_INVALID_EXTERNAL_ADDRESS'

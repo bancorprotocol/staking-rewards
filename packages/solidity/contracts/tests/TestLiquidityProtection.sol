@@ -57,8 +57,6 @@ contract TestLiquidityProtection is LiquidityProtection, TestTime {
     ) public returns (uint256) {
         _stakingRewards.setTime(time());
 
-        _stakingRewards.onLiquidityAdded(0, provider, poolAnchor, reserveToken, 0, reserveAmount);
-
         reserveToken.transferFrom(provider, address(this), reserveAmount);
         IERC20(address(reserveToken)).safeApprove(address(this), reserveAmount);
 
@@ -94,8 +92,6 @@ contract TestLiquidityProtection is LiquidityProtection, TestTime {
         } else {
             reserveAmount = liquidity.reserveAmount.mul(portion) / PPM_RESOLUTION;
         }
-
-        _stakingRewards.onLiquidityRemoved(0, provider, liquidity.poolToken, liquidity.reserveToken, 0, reserveAmount);
 
         removeLiquidity(provider, id, portion);
     }

@@ -12,9 +12,9 @@ import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
 import "@bancor/contracts/solidity/contracts/utility/Time.sol";
 import "@bancor/contracts/solidity/contracts/utility/interfaces/ICheckpointStore.sol";
 import "@bancor/contracts/solidity/contracts/liquidity-protection/interfaces/ILiquidityProtection.sol";
+import "@bancor/contracts/solidity/contracts/liquidity-protection/interfaces/ILiquidityProtectionEventsSubscriber.sol";
 
 import "./IStakingRewardsStore.sol";
-import "./ILiquidityProtectionEventsSubscriber.sol";
 
 /**
  * @dev This contract manages the distribution of the staking rewards
@@ -137,8 +137,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolAnchor the pool token representing the rewards pool
      * @param reserveToken the reserve token of the added liquidity
      */
-    function onLiquidityAdded(
-        uint256, /* id */
+    function onAddingLiquidity(
         address provider,
         IConverterAnchor poolAnchor,
         IERC20Token reserveToken,
@@ -160,7 +159,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolAnchor the pool token representing the rewards pool
      * @param reserveToken the reserve token of the removed liquidity
      */
-    function onLiquidityRemoved(
+    function onRemovingLiquidity(
         uint256, /* id */
         address provider,
         IConverterAnchor poolAnchor,

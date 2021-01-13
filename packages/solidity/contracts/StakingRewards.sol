@@ -524,7 +524,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewards for a specific list of participating pools
+     * @dev claims and stakes specific provider's pending rewards for a specific list of participating pools
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
@@ -550,16 +550,17 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ILiquidityProtection liquidityProtection = liquidityProtection();
         _networkToken.safeApprove(address(liquidityProtection), amount);
 
-        // mint the reward tokens directly to the provider.
+        // mint the reward tokens directly to the staking contract, so that the LiquidityProtection could pull the
+        // rewards and attribute them to the provider.
         _networkTokenGovernance.mint(address(this), amount);
 
         uint256 newId =
-            liquidityProtection.addLiquidityFor(msg.sender, newPoolToken, IERC20Token(address(_networkToken)), amount);
+            liquidityProtection.addLiquidityFor(provider, newPoolToken, IERC20Token(address(_networkToken)), amount);
 
         // please note, that in order to incentivize staking, we won't be updating the time of the last claim, thus
         // preserving the rewards bonus multiplier.
 
-        emit RewardsStaked(msg.sender, newPoolToken, amount, newId);
+        emit RewardsStaked(provider, newPoolToken, amount, newId);
 
         return (amount, newId);
     }

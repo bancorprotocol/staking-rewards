@@ -1,8 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
+const Contract = require('web3-eth-contract');
+const { set, get } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
+
+const ETH_RESERVE_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const MKR_RESERVE_ADDRESS = '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2';
 
 const BATCH_SIZE = 500;
 
@@ -18,7 +23,7 @@ const REMOVE_LIQUIDITY_ABI = [
     }
 ];
 
-const getPositionsTask = async (env, verify = true) => {
+const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
             contracts.LiquidityProtectionStoreOld.methods.protectedLiquidity(id),
@@ -33,25 +38,37 @@ const getPositionsTask = async (env, verify = true) => {
             reserveToken: position[2],
             poolAmount: position[3],
             reserveAmount: position[4],
+            reserveRateN: position[5],
+            reserveRateD: position[6],
             timestamp: position[7]
         };
     };
 
-    const addSnapshot = (snapshots, timestamp, blockNumber, amount) => {
-        const snapshot = {
-            timestamp,
-            blockNumber,
-            amount
+    const getTokenInfo = async (token) => {
+        const eq = (address1, address2) => {
+            return address1.toLowerCase() === address2.toLowerCase();
         };
-        const existing = snapshots.findIndex((i) => i.timestamp == timestamp && i.blockNumber == blockNumber);
-        if (existing !== -1) {
-            snapshots[existing] = snapshot;
+
+        let name;
+        let symbol;
+        if (eq(token, ETH_RESERVE_ADDRESS)) {
+            name = 'Ethereum Reserve';
+            symbol = 'ETH';
+        } else if (eq(token, MKR_RESERVE_ADDRESS)) {
+            name = 'MakerDAO';
+            symbol = 'MKR';
         } else {
-            snapshots.push(snapshot);
+            const ERC20Token = new Contract(ERC20_ABI, token);
+            name = await web3Provider.call(ERC20Token.methods.name());
+            symbol = await web3Provider.call(ERC20Token.methods.symbol());
         }
+
+        return { name, symbol };
     };
 
-    const getPositionChanges = async (positions, fromBlock, toBlock) => {
+    const getProtectionLiquidityChanges = async (data, fromBlock, toBlock) => {
+        const { positions, liquidity, pools } = data;
+
         let eventCount = 0;
         for (let i = fromBlock; i < toBlock; i += BATCH_SIZE) {
             const endBlock = Math.min(i + BATCH_SIZE - 1, toBlock);
@@ -90,11 +107,28 @@ const getPositionsTask = async (env, verify = true) => {
                             arg('provider', provider),
                             arg('poolToken', poolToken),
                             arg('reserveToken', reserveToken),
-                            arg('poolAmount', poolAmount),
                             arg('reserveAmount', reserveAmount),
                             arg('timestamp', timestamp),
                             arg('tx', transactionHash)
                         );
+
+                        liquidity.push({
+                            event: 'Add',
+                            blockNumber,
+                            timestamp,
+                            provider,
+                            poolToken,
+                            reserveToken,
+                            reserveAmount: reserveAmount.toString()
+                        });
+
+                        if (!get(pools, [poolToken])) {
+                            set(pools, [poolToken], await getTokenInfo(poolToken));
+                        }
+
+                        if (!get(pools, [poolToken, reserveToken])) {
+                            set(pools, [poolToken, reserveToken], await getTokenInfo(reserveToken));
+                        }
 
                         // Try to find the new positions which didn't exist in the previous block and match them to
                         // this position.
@@ -143,7 +177,7 @@ const getPositionsTask = async (env, verify = true) => {
 
                         if (matches.length === 0) {
                             error(
-                                'Failed to fully match position ID. Expected to find a single match, but found',
+                                'Failed to fully match position. Expected to find a single match, but found',
                                 arg('matches', matches.length)
                             );
                         } else if (matches.length > 1) {
@@ -162,16 +196,9 @@ const getPositionsTask = async (env, verify = true) => {
                             provider,
                             poolToken,
                             reserveToken,
-                            poolAmount: new BN(poolAmount).toString(),
-                            reserveAmount: new BN(reserveAmount).toString(),
-                            timestamp,
-                            snapshots: [
-                                {
-                                    timestamp,
-                                    blockNumber,
-                                    amount: new BN(reserveAmount).toString()
-                                }
-                            ]
+                            poolAmount,
+                            reserveAmount,
+                            timestamp
                         };
 
                         trace(
@@ -211,20 +238,19 @@ const getPositionsTask = async (env, verify = true) => {
                             arg('tx', transactionHash)
                         );
 
-                        // Try to find the position ID in a previous block.
-                        // Please note that we are ignore the case when a single position was added and removed in the
+                        // Try to find the pool and reserves tokens by matching the position in a previous block.
+                        // Please note that we are assuming that a single position wasn't added and removed in the
                         // same block.
                         const matches = [];
-                        const ids = await web3Provider.call(
+                        const prevBlock = blockNumber - 1;
+                        let ids = await web3Provider.call(
                             contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
                             {},
-                            blockNumber - 1
+                            prevBlock
                         );
                         for (const id of ids) {
-                            const position = positions[id];
-
+                            const position = await getPosition(id, prevBlock);
                             if (
-                                provider === position.provider &&
                                 new BN(position.reserveAmount).eq(new BN(prevReserveAmount)) &&
                                 new BN(position.poolAmount).eq(new BN(prevPoolAmount))
                             ) {
@@ -232,9 +258,35 @@ const getPositionsTask = async (env, verify = true) => {
                             }
                         }
 
-                        if (matches.length !== 1) {
+                        if (matches.length === 0) {
+                            warning(
+                                'Failed to fully match position. Trying to look for an updated position in the same block (assuming no more than a two updates in the same block)'
+                            );
+
+                            ids = await web3Provider.call(
+                                contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                                {},
+                                blockNumber
+                            );
+                            for (const id of ids) {
+                                const position = await getPosition(id, blockNumber);
+                                if (
+                                    new BN(position.reserveAmount).eq(new BN(newReserveAmount)) &&
+                                    new BN(position.poolAmount).eq(new BN(newPoolAmount))
+                                ) {
+                                    matches.push(id);
+                                }
+                            }
+
+                            if (matches.length !== 1) {
+                                error(
+                                    'Failed to fully match position. Expected to find a single match, but found',
+                                    arg('matches', matches.length)
+                                );
+                            }
+                        } else if (matches.length !== 1) {
                             error(
-                                'Failed to fully match position ID. Expected to find a single match, but found',
+                                'Failed to fully match pool and reserve tokens. Expected to find a single match, but found',
                                 arg('matches', matches.length)
                             );
                         }
@@ -242,19 +294,18 @@ const getPositionsTask = async (env, verify = true) => {
                         const id = matches[0];
                         const position = positions[id];
 
-                        if (new BN(position.reserveAmount).lte(new BN(newReserveAmount))) {
-                            error(
-                                'Update liquidity can only decrease the reserve token amount for',
-                                arg('id', id),
-                                arg('poolToken', position.poolToken),
-                                arg('reserveToken', position.reserveToken),
-                                '[',
-                                arg('expected', position.reserveAmount),
-                                'to be less than',
-                                arg('actual', newReserveAmount),
-                                ']'
-                            );
-                        }
+                        const { poolToken, reserveToken } = position;
+
+                        liquidity.push({
+                            event: 'Remove',
+                            id,
+                            blockNumber,
+                            timestamp,
+                            provider,
+                            poolToken,
+                            reserveToken,
+                            reserveAmount: new BN(prevReserveAmount).sub(new BN(newReserveAmount)).toString()
+                        });
 
                         trace(
                             'Position updated',
@@ -269,8 +320,6 @@ const getPositionsTask = async (env, verify = true) => {
 
                         position.poolAmount = new BN(newPoolAmount).toString();
                         position.reserveAmount = new BN(newReserveAmount).toString();
-
-                        addSnapshot(position.snapshots, timestamp, blockNumber, position.reserveAmount);
 
                         eventCount++;
 
@@ -401,7 +450,16 @@ const getPositionsTask = async (env, verify = true) => {
                         position.poolAmount = 0;
                         position.reserveAmount = 0;
 
-                        addSnapshot(position.snapshots, timestamp, blockNumber, position.reserveAmount);
+                        liquidity.push({
+                            event: 'Remove',
+                            id,
+                            blockNumber,
+                            timestamp,
+                            provider,
+                            poolToken,
+                            reserveToken,
+                            reserveAmount: reserveAmount.toString()
+                        });
 
                         eventCount++;
 
@@ -411,83 +469,79 @@ const getPositionsTask = async (env, verify = true) => {
             }
         }
 
-        info('Finished processing all new position change events', arg('count', eventCount));
+        info('Finished processing all new protection change events', arg('count', eventCount));
     };
 
-    const verifyPositions = async (positions, toBlock) => {
-        info('Verifying all positions at', arg('blockNumber', toBlock));
+    const verifyProtectionLiquidityChanges = async (data) => {
+        const { liquidity } = data;
 
-        for (const [id, data] of Object.entries(positions)) {
-            trace('Verifying position historical reserve amounts', arg('id', id));
+        info('Verifying all new protection change events', arg('blockNumber', toBlock));
 
-            const { poolToken, reserveToken, snapshots } = data;
-            for (const snapshot of snapshots) {
-                const { blockNumber, timestamp, amount } = snapshot;
+        // Verify that the events are sorted in an ascending order.
+        for (let i = 0; i + 1 < liquidity.length - 1; ++i) {
+            const change1 = liquidity[i];
+            const change2 = liquidity[i + 1];
 
-                // Verify snapshot values.
-                const pos = await getPosition(id, blockNumber);
-                if (!new BN(amount).eq(new BN(pos.reserveAmount))) {
-                    error(
-                        'Wrong snapshot reserve amount',
-                        arg('id', id),
-                        arg('poolToken', poolToken),
-                        arg('reserveToken', reserveToken),
-                        arg('blockNumber', blockNumber),
-                        arg('timestamp', reserveToken),
-                        '[',
-                        arg('expected', amount),
-                        arg('actual', pos.reserveAmount),
-                        ']'
-                    );
-                }
+            if (change1.blockNumber > change2.blockNumber || change1.timestamp > change2.timestamp) {
+                error('Wrong events order', arg('change1', change1), arg('change2', change2));
+            }
+        }
 
-                // Verify snapshot timestamps.
-                const block = await web3Provider.getBlock(blockNumber);
-                const { timestamp: blockTimeStamp } = block;
-                if (timestamp != blockTimeStamp) {
-                    error(
-                        'Wrong snapshot timestamp',
-                        arg('id', id),
-                        arg('poolToken', poolToken),
-                        arg('reserveToken', reserveToken),
-                        arg('blockNumber', blockNumber),
-                        arg('timestamp', reserveToken),
-                        '[',
-                        arg('expected', timestamp),
-                        arg('actual', blockTimeStamp),
-                        ']'
-                    );
-                }
+        // Verify positions.
+        for (const change of liquidity) {
+            const { event, id, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
+            if (event !== 'Remove') {
+                continue;
             }
 
-            // Verify that the snapshots array is sorted in an ascending order.
-            for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
-                const snapshot1 = snapshots[i];
-                const snapshot2 = snapshots[i + 1];
-                if (snapshot1.timestamp > snapshot2.timestamp) {
-                    error(
-                        'Wrong snapshots order',
-                        arg('id', id),
-                        arg('poolToken', poolToken),
-                        arg('reserveToken', reserveToken),
-                        arg('snapshot1', snapshot1),
-                        arg('snapshot2', snapshot2)
-                    );
-                }
+            const position = await getPosition(id, blockNumber - 1);
+            const newPosition = await getPosition(id, blockNumber);
+
+            if (position.provider != provider) {
+                error("Position providers don't match", arg('expected', provider), arg('actual', position.provider));
+            }
+
+            if (position.poolToken != poolToken) {
+                error(
+                    "Position pool tokens don't match",
+                    arg('expected', poolToken),
+                    arg('actual', position.poolToken)
+                );
+            }
+
+            if (position.reserveToken != reserveToken) {
+                error(
+                    "Position reserve tokens don't match",
+                    arg('expected', reserveToken),
+                    arg('actual', position.reserveToken)
+                );
+            }
+            const actualReserveAmount = new BN(position.reserveAmount).sub(new BN(newPosition.reserveAmount));
+            if (actualReserveAmount.eq(reserveAmount)) {
+                error(
+                    "Position reserve amounts don't match",
+                    arg('expected', reserveAmount),
+                    arg('actual', actualReserveAmount)
+                );
             }
         }
     };
 
-    const getPositions = async (data, fromBlock, toBlock) => {
+    const getProtectedLiquidity = async (data, fromBlock, toBlock) => {
         if (!data.positions) {
             data.positions = {};
         }
 
-        await getPositionChanges(data.positions, fromBlock, toBlock);
-
-        if (verify) {
-            await verifyPositions(data.positions, toBlock);
+        if (!data.liquidity) {
+            data.liquidity = [];
         }
+
+        if (!data.pools) {
+            data.pools = {};
+        }
+
+        await getProtectionLiquidityChanges(data, fromBlock, toBlock);
+        await verifyProtectionLiquidityChanges(data);
 
         data.lastBlockNumber = toBlock;
     };
@@ -498,8 +552,16 @@ const getPositionsTask = async (env, verify = true) => {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
     }
 
+    const externalContractsDir = path.resolve(
+        __dirname,
+        '../../../node_modules/@bancor/contracts/solidity/build/contracts'
+    );
+
+    const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
+    const { abi: ERC20_ABI } = JSON.parse(rawData);
+
     const dbDir = path.resolve(__dirname, '../data');
-    const dbPath = path.join(dbDir, 'positions.json');
+    const dbPath = path.join(dbDir, 'liquidity.json');
     let data = {};
     if (fs.existsSync(dbPath)) {
         const rawData = fs.readFileSync(dbPath);
@@ -528,11 +590,11 @@ const getPositionsTask = async (env, verify = true) => {
         );
     }
 
-    info('Getting protected positions', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
+    info('Getting protected liquidity from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
-    await getPositions(data, fromBlock, toBlock);
+    await getProtectedLiquidity(data, fromBlock, toBlock);
 
     fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 };
 
-module.exports = getPositionsTask;
+module.exports = getLiquidityTask;

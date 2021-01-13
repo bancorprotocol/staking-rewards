@@ -51,15 +51,15 @@ const main = async () => {
             await getRewardsTask(env);
         }
 
-        if (setAll || setLastRemovalTimes) {
+        if (setLastRemovalTimes) {
             await setLastRemovalTimesTask(env);
         }
 
-        if (!programsSet && (setAll || setPrograms)) {
+        if (!programsSet && setPrograms) {
             await setProgramsTask(env);
         }
 
-        if (setAll || setRewards) {
+        if (setRewards) {
             await setRewardsTask(env);
         }
 

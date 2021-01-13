@@ -143,7 +143,7 @@ class Provider {
         return contract.getPastEvents(event, options);
     }
 
-    async decodeParameters(typesArray, hexString) {
+    decodeParameters(typesArray, hexString) {
         return this.queryWeb3.eth.abi.decodeParameters(typesArray, hexString);
     }
 

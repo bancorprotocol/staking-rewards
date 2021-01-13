@@ -7,6 +7,7 @@ const { info, error } = require('./utils/logger');
 
 const argv = require('./utils/yargs');
 
+const getPositionsTask = require('./tasks/get-positions');
 const getLiquidityChangesTask = require('./tasks/get-liquidity-changes');
 const getLastRemovalTimesTask = require('./tasks/get-last-removal-times');
 const getRewardsTask = require('./tasks/get-rewards');
@@ -34,6 +35,7 @@ const main = async () => {
         // Handle all the tasks in the right order.
         const {
             getAll,
+            getPositions,
             getLiquidityChanges,
             getLastRemovalTimes,
             getRewards,
@@ -44,6 +46,10 @@ const main = async () => {
         } = argv;
 
         let programsSet = false;
+
+        if (getAll || getPositions) {
+            await getPositionsTask(env);
+        }
 
         if (getAll || getLiquidityChanges) {
             await getLiquidityChangesTask(env);

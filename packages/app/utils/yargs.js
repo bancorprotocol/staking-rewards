@@ -45,6 +45,10 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Get last removal times for all providers'
     })
+    .option('get-positions', {
+        type: 'boolean',
+        description: 'Get all positions'
+    })
     .option('get-rewards', {
         type: 'boolean',
         description: 'Get all rewards'

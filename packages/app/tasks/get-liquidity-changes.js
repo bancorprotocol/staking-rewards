@@ -9,9 +9,9 @@ const { trace, info, error, warning, arg } = require('../utils/logger');
 const ETH_RESERVE_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const MKR_RESERVE_ADDRESS = '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2';
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 500;
 
-const getLiquidityChangesTask = async (env) => {
+const getLiquidityChangesTask = async (env, verify = true) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
             contracts.LiquidityProtectionStoreOld.methods.protectedLiquidity(id),
@@ -283,7 +283,10 @@ const getLiquidityChangesTask = async (env) => {
         }
 
         await getProtectionLiquidityChanges(data, fromBlock, toBlock);
-        await verifyProtectionLiquidityChanges(data);
+
+        if (verify) {
+            await verifyProtectionLiquidityChanges(data);
+        }
 
         data.lastBlockNumber = toBlock;
     };

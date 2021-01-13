@@ -38,10 +38,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     EnumerableSet.AddressSet private _pools;
 
     // the mapping between pools, reserve tokens, and their rewards.
-    mapping(IERC20 => mapping(IERC20 => Rewards)) internal _rewards;
+    mapping(IERC20 => mapping(IERC20 => PoolRewards)) internal _poolRewards;
 
     // the mapping between pools, reserve tokens, and provider specific rewards.
-    mapping(address => mapping(IERC20 => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
+    mapping(IERC20 => mapping(IERC20 => mapping(address => ProviderRewards))) internal _providerRewards;
 
     // the mapping between providers and their respective last claim times.
     mapping(address => uint256) private _providerLastClaimTimes;
@@ -62,16 +62,6 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      */
     event PoolProgramRemoved(IERC20 indexed poolToken);
-
-    /**
-     * @dev triggered when a past program is being added
-     *
-     * @param poolToken the pool token representing the rewards pool
-     * @param startTime the starting time of the program
-     * @param endTime the ending time of the program
-     * @param rewardRate the program's rewards rate per-second
-     */
-    event PastPoolProgramAdded(IERC20 indexed poolToken, uint256 startTime, uint256 endTime, uint256 rewardRate);
 
     /**
      * @dev triggered when provider's last claim time is being updated
@@ -147,7 +137,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds a program
      *
      * @param poolToken the pool token representing the rewards pool
-     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens the reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
      * @param rewardRate the program's rewards rate per-second
@@ -170,7 +160,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds past programs
      *
      * @param poolTokens pool tokens representing the rewards pool
-     * @param reserveTokens reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param startTime starting times of the program
      * @param endTimes ending times of the program
@@ -210,7 +200,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @dev adds a past program
      *
      * @param poolToken the pool token representing the rewards pool
-     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens the reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param startTime the starting time of the program
      * @param endTime the ending time of the program
@@ -227,15 +217,13 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         require(startTime < time(), "ERR_INVALID_TIME");
 
         addPoolProgram(poolToken, reserveTokens, rewardShares, startTime, endTime, rewardRate);
-
-        emit PastPoolProgramAdded(poolToken, startTime, endTime, rewardRate);
     }
 
     /**
      * @dev adds a program
      *
      * @param poolToken the pool token representing the rewards pool
-     * @param reserveTokens the reserve tokens representing the liqudiity in the pool
+     * @param reserveTokens the reserve tokens representing the liquidity in the pool
      * @param rewardShares reserve reward shares
      * @param endTime the ending time of the program
      * @param rewardRate the program's rewards rate per-second
@@ -375,7 +363,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return rewards data
      */
-    function rewards(IERC20 poolToken, IERC20 reserveToken)
+    function poolRewards(IERC20 poolToken, IERC20 reserveToken)
         external
         view
         override
@@ -385,7 +373,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256
         )
     {
-        Rewards memory data = _rewards[poolToken][reserveToken];
+        PoolRewards memory data = _poolRewards[poolToken][reserveToken];
 
         return (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards);
     }
@@ -395,36 +383,72 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
-     * @param lastUpdateTime the last upate time
+     * @param lastUpdateTime the last update time
      * @param rewardPerToken the new reward rate per-token
      * @param totalClaimedRewards the total claimed rewards up until now
      */
-    function updateRewardsData(
+    function updatePoolRewardsData(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 lastUpdateTime,
         uint256 rewardPerToken,
         uint256 totalClaimedRewards
     ) external override onlyOwner {
-        Rewards storage data = _rewards[poolToken][reserveToken];
+        PoolRewards storage data = _poolRewards[poolToken][reserveToken];
         data.lastUpdateTime = lastUpdateTime;
         data.rewardPerToken = rewardPerToken;
         data.totalClaimedRewards = totalClaimedRewards;
     }
 
     /**
+     * @dev seeds pool rewards data for multiple pools
+     *
+     * @param poolTokens pool tokens representing the rewards pool
+     * @param reserveTokens reserve tokens representing the liquidity in the pool
+     * @param lastUpdateTimes last update times (for both the network and reserve tokens)
+     * @param rewardsPerToken reward rates per-token (for both the network and reserve tokens)
+     * @param totalClaimedRewards total claimed rewards up until now (for both the network and reserve tokens)
+     */
+    function setPoolsRewardData(
+        IERC20[] calldata poolTokens,
+        IERC20[] calldata reserveTokens,
+        uint256[] calldata lastUpdateTimes,
+        uint256[] calldata rewardsPerToken,
+        uint256[] calldata totalClaimedRewards
+    ) external onlySeeder {
+        uint256 length = poolTokens.length;
+        require(
+            length == reserveTokens.length && length == lastUpdateTimes.length && length == rewardsPerToken.length,
+            "ERR_INVALID_LENGTH"
+        );
+
+        for (uint256 i = 0; i < length; ++i) {
+            IERC20 poolToken = poolTokens[i];
+            _validAddress(address(poolToken));
+
+            IERC20 reserveToken = reserveTokens[i];
+            _validAddress(address(reserveToken));
+
+            PoolRewards storage data = _poolRewards[poolToken][reserveToken];
+            data.lastUpdateTime = lastUpdateTimes[i];
+            data.rewardPerToken = rewardsPerToken[i];
+            data.totalClaimedRewards = totalClaimedRewards[i];
+        }
+    }
+
+    /**
      * @dev returns rewards data of a specific provider
      *
-     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
+     * @param provider the owner of the liquidity
      *
      * @return rewards data
      */
     function providerRewards(
-        address provider,
         IERC20 poolToken,
-        IERC20 reserveToken
+        IERC20 reserveToken,
+        address provider
     )
         external
         view
@@ -438,7 +462,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint32
         )
     {
-        ProviderRewards memory data = _providerRewards[provider][poolToken][reserveToken];
+        ProviderRewards memory data = _providerRewards[poolToken][reserveToken][provider];
 
         return (
             data.rewardPerToken,
@@ -451,11 +475,11 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev updates specific provider's reward data
+     * @dev updates provider rewards data
      *
-     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
+     * @param provider the owner of the liquidity
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
      * @param totalClaimedRewards the total claimed rewards up until now
@@ -464,9 +488,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param baseRewardsDebtMultiplier the updated base rewards debt multiplier
      */
     function updateProviderRewardsData(
-        address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
+        address provider,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
         uint256 totalClaimedRewards,
@@ -474,7 +498,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256 baseRewardsDebt,
         uint32 baseRewardsDebtMultiplier
     ) external override onlyOwner {
-        ProviderRewards storage data = _providerRewards[provider][poolToken][reserveToken];
+        ProviderRewards storage data = _providerRewards[poolToken][reserveToken][provider];
 
         data.rewardPerToken = rewardPerToken;
         data.pendingBaseRewards = pendingBaseRewards;
@@ -482,6 +506,61 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         data.effectiveStakingTime = effectiveStakingTime;
         data.baseRewardsDebt = baseRewardsDebt;
         data.baseRewardsDebtMultiplier = baseRewardsDebtMultiplier;
+    }
+
+    /**
+     * @dev seeds specific provider's reward data for multiple providers
+     *
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token in the rewards pool
+     * @param providers owners of the liquidity
+     * @param rewardsPerToken new reward rates per-token
+     * @param pendingBaseRewards updated pending base rewards
+     * @param totalClaimedRewards total claimed rewards up until now
+     * @param effectiveStakingTimes new effective staking times
+     * @param baseRewardsDebts updated base rewards debts
+     * @param baseRewardsDebtMultipliers updated base rewards debt multipliers
+     */
+    function setProviderRewardData(
+        IERC20 poolToken,
+        IERC20 reserveToken,
+        address[] memory providers,
+        uint256[] memory rewardsPerToken,
+        uint256[] memory pendingBaseRewards,
+        uint256[] memory totalClaimedRewards,
+        uint256[] memory effectiveStakingTimes,
+        uint256[] memory baseRewardsDebts,
+        uint32[] memory baseRewardsDebtMultipliers
+    ) external onlySeeder validAddress(address(poolToken)) validAddress(address(reserveToken)) {
+        uint256 length = providers.length;
+        require(
+            length == rewardsPerToken.length &&
+                length == pendingBaseRewards.length &&
+                length == totalClaimedRewards.length &&
+                length == effectiveStakingTimes.length &&
+                length == baseRewardsDebts.length &&
+                length == baseRewardsDebtMultipliers.length,
+            "ERR_INVALID_LENGTH"
+        );
+
+        for (uint256 i = 0; i < length; ++i) {
+            ProviderRewards storage data = _providerRewards[poolToken][reserveToken][providers[i]];
+
+            uint256 baseRewardsDebt = baseRewardsDebts[i];
+            uint32 baseRewardsDebtMultiplier = baseRewardsDebtMultipliers[i];
+            require(
+                baseRewardsDebt == 0 ||
+                    (baseRewardsDebtMultiplier >= PPM_RESOLUTION && baseRewardsDebtMultiplier <= 2 * PPM_RESOLUTION),
+                "ERR_INVALID_MULTIPLIER"
+            );
+
+            data.rewardPerToken = rewardsPerToken[i];
+            data.pendingBaseRewards = pendingBaseRewards[i];
+            data.totalClaimedRewards = totalClaimedRewards[i];
+            data.effectiveStakingTime = effectiveStakingTimes[i];
+            data.baseRewardsDebt = baseRewardsDebts[i];
+            data.baseRewardsDebtMultiplier = baseRewardsDebtMultiplier;
+        }
     }
 
     /**

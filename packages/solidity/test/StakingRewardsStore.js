@@ -87,7 +87,7 @@ describe('StakingRewardsStore', () => {
     };
 
     const getPoolRewards = async (poolToken, reserveToken) => {
-        const data = await store.rewards.call(poolToken.address, reserveToken.address);
+        const data = await store.poolRewards.call(poolToken.address, reserveToken.address);
 
         return {
             lastUpdateTime: data[0],
@@ -97,7 +97,7 @@ describe('StakingRewardsStore', () => {
     };
 
     const getProviderRewards = async (provider, poolToken, reserveToken) => {
-        const data = await store.providerRewards.call(provider, poolToken.address, reserveToken.address);
+        const data = await store.providerRewards.call(poolToken.address, reserveToken.address, provider);
 
         return {
             rewardPerToken: data[0],
@@ -563,319 +563,742 @@ describe('StakingRewardsStore', () => {
                 await store.grantRole(ROLE_SEEDER, seeder, { from: owner });
             });
 
-            it('should revert when a non-seeder attempts to add pools', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(1))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: owner }
-                    ),
-                    'ERR_ACCESS_DENIED'
-                );
-            });
+            describe('pool programs', async () => {
+                it('should revert when a non-seeder attempts to add programs', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(1))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: owner }
+                        ),
+                        'ERR_ACCESS_DENIED'
+                    );
+                });
 
-            it('should revert when adding zero address pools', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [ZERO_ADDRESS],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(1))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_ADDRESS'
-                );
-            });
+                it('should revert when adding zero address pools', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [ZERO_ADDRESS],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(1))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
 
-            it('should revert when adding pools with invalid starting time', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now],
-                        [new BN(1000)],
-                        [now.add(new BN(2000))],
-                        {
-                            from: seeder
-                        }
-                    ),
-                    'ERR_INVALID_TIME'
-                );
-            });
+                it('should revert when adding programs with invalid starting time', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now],
+                            [new BN(1000)],
+                            [now.add(new BN(2000))],
+                            {
+                                from: seeder
+                            }
+                        ),
+                        'ERR_INVALID_TIME'
+                    );
+                });
 
-            it('should revert when adding pools with invalid ending time', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.sub(new BN(1))],
-                        [new BN(1000)],
-                        {
-                            from: seeder
-                        }
-                    ),
-                    'ERR_INVALID_DURATION'
-                );
-            });
+                it('should revert when adding programs with invalid ending time', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            {
+                                from: seeder
+                            }
+                        ),
+                        'ERR_INVALID_DURATION'
+                    );
+                });
 
-            it('should revert when adding pools with invalid reward shares', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE.sub(new BN(1)), BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        {
-                            from: seeder
-                        }
-                    ),
-                    'ERR_INVALID_REWARD_SHARES'
-                );
-            });
+                it('should revert when adding programs with invalid reward shares', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE.sub(new BN(1)), BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            {
+                                from: seeder
+                            }
+                        ),
+                        'ERR_INVALID_REWARD_SHARES'
+                    );
+                });
 
-            it('should revert when adding pools with invalid reserve tokens', async () => {
-                const invalidToken = accounts[5];
+                it('should revert when adding programs with invalid reserve tokens', async () => {
+                    const invalidToken = accounts[5];
 
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[invalidToken, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        {
-                            from: seeder
-                        }
-                    ),
-                    'ERR_INVALID_RESERVE_TOKENS'
-                );
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[invalidToken, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            {
+                                from: seeder
+                            }
+                        ),
+                        'ERR_INVALID_RESERVE_TOKENS'
+                    );
 
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, invalidToken]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        {
-                            from: seeder
-                        }
-                    ),
-                    'ERR_INVALID_RESERVE_TOKENS'
-                );
-            });
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, invalidToken]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            {
+                                from: seeder
+                            }
+                        ),
+                        'ERR_INVALID_RESERVE_TOKENS'
+                    );
+                });
 
-            it('should revert when adding pools without any rewards', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(0)],
-                        { from: seeder }
-                    ),
-                    'ERR_ZERO_VALUE'
-                );
-            });
+                it('should revert when adding programs without any rewards', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(0)],
+                            { from: seeder }
+                        ),
+                        'ERR_ZERO_VALUE'
+                    );
+                });
 
-            it('should revert when adding pools with invalid length data', async () => {
-                await expectRevert(
-                    store.addPastPoolPrograms(
+                it('should revert when adding programs with invalid length data', async () => {
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address, poolToken2.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [
+                                [networkToken.address, reserveToken.address],
+                                [networkToken.address, reserveToken.address]
+                            ],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [
+                                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                                [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]
+                            ],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100)), now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000)), now.add(new BN(2000))],
+                            [new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.addPastPoolPrograms(
+                            [poolToken.address],
+                            [[networkToken.address, reserveToken.address]],
+                            [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
+                            [now.sub(new BN(100))],
+                            [now.add(new BN(2000))],
+                            [new BN(1000), new BN(1000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+                });
+
+                it('should allow seeding of programs', async () => {
+                    expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, networkToken.address)
+                    ).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, reserveToken.address)
+                    ).to.be.false();
+
+                    expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken2.address, networkToken.address)
+                    ).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)
+                    ).to.be.false();
+
+                    const startTime = now.sub(new BN(1000));
+                    const endTime = startTime.add(new BN(2000));
+                    const rewardRate = new BN(1000);
+
+                    const startTime2 = now.sub(new BN(10));
+                    const endTime2 = startTime2.add(new BN(6000));
+                    const rewardRate2 = startTime2.add(new BN(9999));
+
+                    const res = await store.addPastPoolPrograms(
                         [poolToken.address, poolToken2.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_LENGTH'
-                );
-
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
                         [
                             [networkToken.address, reserveToken.address],
-                            [networkToken.address, reserveToken.address]
+                            [reserveToken2.address, networkToken.address]
                         ],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_LENGTH'
-                );
-
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
                         [
                             [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                            [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]
+                            [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE]
                         ],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_LENGTH'
-                );
+                        [startTime, startTime2],
+                        [endTime, endTime2],
+                        [rewardRate, rewardRate2],
+                        {
+                            from: seeder
+                        }
+                    );
 
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100)), now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_LENGTH'
-                );
+                    expect(await store.isPoolParticipating.call(poolToken.address)).to.be.true();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, networkToken.address)
+                    ).to.be.true();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, reserveToken.address)
+                    ).to.be.true();
 
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000)), now.add(new BN(2000))],
-                        [new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_LENGTH'
-                );
+                    expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.true();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken2.address, networkToken.address)
+                    ).to.be.true();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)
+                    ).to.be.true();
 
-                await expectRevert(
-                    store.addPastPoolPrograms(
-                        [poolToken.address],
-                        [[networkToken.address, reserveToken.address]],
-                        [[NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE]],
-                        [now.sub(new BN(100))],
-                        [now.add(new BN(2000))],
-                        [new BN(1000), new BN(1000)],
-                        { from: seeder }
-                    ),
-                    'ERR_INVALID_LENGTH'
-                );
+                    let program1 = await getPoolProgram(poolToken);
+                    expect(program1.startTime).to.be.bignumber.equal(startTime);
+                    expect(program1.endTime).to.be.bignumber.equal(endTime);
+                    expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+                    expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+                    expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+                    expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                    expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+
+                    const programs = await getPoolPrograms();
+                    expect(programs.length).to.eql(2);
+
+                    program1 = programs[0];
+                    expect(program1.poolToken).to.eql(poolToken.address);
+                    expect(program1.startTime).to.be.bignumber.equal(startTime);
+                    expect(program1.endTime).to.be.bignumber.equal(endTime);
+                    expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
+                    expect(program1.reserveTokens[0]).to.eql(networkToken.address);
+                    expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
+                    expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                    expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+
+                    let program2 = await getPoolProgram(poolToken2);
+                    expect(program2.startTime).to.be.bignumber.equal(startTime2);
+                    expect(program2.endTime).to.be.bignumber.equal(endTime2);
+                    expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+                    expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
+                    expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+                    expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                    expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+
+                    program2 = programs[1];
+                    expect(program2.poolToken).to.eql(poolToken2.address);
+                    expect(program2.startTime).to.be.bignumber.equal(startTime2);
+                    expect(program2.endTime).to.be.bignumber.equal(endTime2);
+                    expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
+                    expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
+                    expect(program2.reserveTokens[1]).to.eql(networkToken.address);
+                    expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                    expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                });
             });
 
-            it('should allow managing pools', async () => {
-                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
-                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.false();
-                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.false();
+            describe('pool rewards', async () => {
+                it('should revert when a non-seeder attempts to seed pool rewards', async () => {
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address],
+                            [networkToken.address],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            { from: owner }
+                        ),
+                        'ERR_ACCESS_DENIED'
+                    );
+                });
 
-                expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.false();
-                expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.false();
-                expect(
-                    await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)
-                ).to.be.false();
+                it('should revert when seeding zero address pools', async () => {
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [ZERO_ADDRESS],
+                            [networkToken.address],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
 
-                const startTime = now.sub(new BN(1000));
-                const endTime = startTime.add(new BN(2000));
-                const rewardRate = new BN(1000);
+                it('should revert when seeding zero address reserves', async () => {
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address],
+                            [ZERO_ADDRESS],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
 
-                const startTime2 = now.sub(new BN(10));
-                const endTime2 = startTime2.add(new BN(6000));
-                const rewardRate2 = startTime2.add(new BN(9999));
+                it('should revert when seeding pools with invalid length data', async () => {
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address, poolToken2.address],
+                            [networkToken.address],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
 
-                const res = await store.addPastPoolPrograms(
-                    [poolToken.address, poolToken2.address],
-                    [
+                    store.setPoolsRewardData(
+                        [poolToken.address],
                         [networkToken.address, reserveToken.address],
-                        [reserveToken2.address, networkToken.address]
-                    ],
-                    [
-                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
-                        [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE]
-                    ],
-                    [startTime, startTime2],
-                    [endTime, endTime2],
-                    [rewardRate, rewardRate2],
-                    {
-                        from: seeder
-                    }
-                );
-                expectEvent(res, 'PastPoolProgramAdded', {
-                    poolToken: poolToken.address,
-                    startTime,
-                    endTime,
-                    rewardRate
+                        [now.sub(new BN(1))],
+                        [new BN(1000)],
+                        [new BN(5000)],
+                        { from: seeder }
+                    ),
+                        'ERR_INVALID_LENGTH';
+
+                    store.setPoolsRewardData(
+                        [poolToken.address],
+                        [networkToken.address],
+                        [now.sub(new BN(1)), now],
+                        [new BN(1000)],
+                        [new BN(5000)],
+                        { from: seeder }
+                    ),
+                        'ERR_INVALID_LENGTH';
+
+                    store.setPoolsRewardData(
+                        [poolToken.address],
+                        [networkToken.address],
+                        [now.sub(new BN(1))],
+                        [new BN(1000), new BN(1)],
+                        [new BN(5000)],
+                        { from: seeder }
+                    ),
+                        'ERR_INVALID_LENGTH';
+
+                    store.setPoolsRewardData(
+                        [poolToken.address],
+                        [networkToken.address],
+                        [now.sub(new BN(1))],
+                        [new BN(1000)],
+                        [new BN(5000), new BN(100000)],
+                        { from: seeder }
+                    ),
+                        'ERR_INVALID_LENGTH';
                 });
-                expectEvent(res, 'PastPoolProgramAdded', {
-                    poolToken: poolToken2.address,
-                    startTime: startTime2,
-                    endTime: endTime2,
-                    rewardRate: rewardRate2
+
+                it('should allow seeding pools rewards', async () => {
+                    expect(await store.isPoolParticipating.call(poolToken.address)).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, networkToken.address)
+                    ).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken.address, reserveToken.address)
+                    ).to.be.false();
+
+                    expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken2.address, networkToken.address)
+                    ).to.be.false();
+                    expect(
+                        await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)
+                    ).to.be.false();
+
+                    const lastUpdateTimeN1 = now.sub(new BN(1000));
+                    const rewardsPerTokenN1 = new BN(2000);
+                    const totalClaimedRewardsN1 = new BN(1000);
+                    const lastUpdateTimeR1 = now.add(new BN(10000));
+                    const rewardsPerTokenR1 = new BN(200000);
+                    const totalClaimedRewardsR1 = new BN(99999);
+
+                    const lastUpdateTimeN2 = now.sub(new BN(111));
+                    const rewardsPerTokenN2 = new BN(9999999);
+                    const totalClaimedRewardsN2 = new BN(5555);
+                    const lastUpdateTimeR2 = now.add(new BN(32423423));
+                    const rewardsPerTokenR2 = new BN(8);
+                    const totalClaimedRewardsR2 = new BN(0);
+
+                    await store.setPoolsRewardData(
+                        [poolToken.address, poolToken.address, poolToken2.address, poolToken2.address],
+                        [networkToken.address, reserveToken.address, networkToken.address, reserveToken2.address],
+                        [lastUpdateTimeN1, lastUpdateTimeR1, lastUpdateTimeN2, lastUpdateTimeR2],
+                        [rewardsPerTokenN1, rewardsPerTokenR1, rewardsPerTokenN2, rewardsPerTokenR2],
+                        [totalClaimedRewardsN1, totalClaimedRewardsR1, totalClaimedRewardsN2, totalClaimedRewardsR2],
+                        { from: seeder }
+                    );
+
+                    const poolDataN1 = await getPoolRewards(poolToken, networkToken);
+                    expect(poolDataN1.lastUpdateTime).to.be.bignumber.equal(lastUpdateTimeN1);
+                    expect(poolDataN1.rewardPerToken).to.be.bignumber.equal(rewardsPerTokenN1);
+                    expect(poolDataN1.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewardsN1);
+
+                    const poolDataR1 = await getPoolRewards(poolToken, reserveToken);
+                    expect(poolDataR1.lastUpdateTime).to.be.bignumber.equal(lastUpdateTimeR1);
+                    expect(poolDataR1.rewardPerToken).to.be.bignumber.equal(rewardsPerTokenR1);
+                    expect(poolDataR1.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewardsR1);
+
+                    const poolDataN2 = await getPoolRewards(poolToken2, networkToken);
+                    expect(poolDataN2.lastUpdateTime).to.be.bignumber.equal(lastUpdateTimeN2);
+                    expect(poolDataN2.rewardPerToken).to.be.bignumber.equal(rewardsPerTokenN2);
+                    expect(poolDataN2.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewardsN2);
+
+                    const poolDataR2 = await getPoolRewards(poolToken2, reserveToken2);
+                    expect(poolDataR2.lastUpdateTime).to.be.bignumber.equal(lastUpdateTimeR2);
+                    expect(poolDataR2.rewardPerToken).to.be.bignumber.equal(rewardsPerTokenR2);
+                    expect(poolDataR2.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewardsR2);
+                });
+            });
+
+            describe('provider rewards', async () => {
+                const provider = accounts[3];
+                const provider2 = accounts[4];
+
+                it('should revert when a non-seeder attempts to seed provider rewards', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: owner }
+                        ),
+                        'ERR_ACCESS_DENIED'
+                    );
                 });
 
-                expect(await store.isPoolParticipating.call(poolToken.address)).to.be.true();
-                expect(await store.isReserveParticipating.call(poolToken.address, networkToken.address)).to.be.true();
-                expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
+                it('should revert when seeding zero address pools', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            ZERO_ADDRESS,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
 
-                expect(await store.isPoolParticipating.call(poolToken2.address)).to.be.true();
-                expect(await store.isReserveParticipating.call(poolToken2.address, networkToken.address)).to.be.true();
-                expect(await store.isReserveParticipating.call(poolToken2.address, reserveToken2.address)).to.be.true();
+                it('should revert when seeding zero address reserves', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            ZERO_ADDRESS,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_ADDRESS'
+                    );
+                });
 
-                let program1 = await getPoolProgram(poolToken);
-                expect(program1.startTime).to.be.bignumber.equal(startTime);
-                expect(program1.endTime).to.be.bignumber.equal(endTime);
-                expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
-                expect(program1.reserveTokens[0]).to.eql(networkToken.address);
-                expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
-                expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-                expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                it('should revert when seeding with an invalid multiplier', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION.sub(new BN(1))],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_MULTIPLIER'
+                    );
 
-                const programs = await getPoolPrograms();
-                expect(programs.length).to.eql(2);
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION.mul(new BN(3))],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_MULTIPLIER'
+                    );
+                });
 
-                program1 = programs[0];
-                expect(program1.poolToken).to.eql(poolToken.address);
-                expect(program1.startTime).to.be.bignumber.equal(startTime);
-                expect(program1.endTime).to.be.bignumber.equal(endTime);
-                expect(program1.rewardRate).to.be.bignumber.equal(rewardRate);
-                expect(program1.reserveTokens[0]).to.eql(networkToken.address);
-                expect(program1.reserveTokens[1]).to.eql(reserveToken.address);
-                expect(program1.rewardShares[0]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
-                expect(program1.rewardShares[1]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
+                it('should revert when seeding pools with invalid length data', async () => {
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider, provider2],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
 
-                let program2 = await getPoolProgram(poolToken2);
-                expect(program2.startTime).to.be.bignumber.equal(startTime2);
-                expect(program2.endTime).to.be.bignumber.equal(endTime2);
-                expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
-                expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
-                expect(program2.reserveTokens[1]).to.eql(networkToken.address);
-                expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
-                expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000), new BN(12)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
 
-                program2 = programs[1];
-                expect(program2.poolToken).to.eql(poolToken2.address);
-                expect(program2.startTime).to.be.bignumber.equal(startTime2);
-                expect(program2.endTime).to.be.bignumber.equal(endTime2);
-                expect(program2.rewardRate).to.be.bignumber.equal(rewardRate2);
-                expect(program2.reserveTokens[0]).to.eql(reserveToken2.address);
-                expect(program2.reserveTokens[1]).to.eql(networkToken.address);
-                expect(program2.rewardShares[0]).to.be.bignumber.equal(BASE_TOKEN_REWARDS_SHARE);
-                expect(program2.rewardShares[1]).to.be.bignumber.equal(NETWORK_TOKEN_REWARDS_SHARE);
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000), new BN(5000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000), new BN(50000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now, now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000), new BN(1)],
+                            [PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+
+                    await expectRevert(
+                        store.setProviderRewardData(
+                            poolToken.address,
+                            networkToken.address,
+                            [provider],
+                            [new BN(100000)],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            [now],
+                            [new BN(5000)],
+                            [PPM_RESOLUTION, PPM_RESOLUTION],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
+                });
+
+                it('should allow seeding provider rewards', async () => {
+                    let providerRewards = await getProviderRewards(provider, poolToken, networkToken);
+                    expect(providerRewards.rewardPerToken).to.be.bignumber.equal(new BN(0));
+
+                    let providerRewards2 = await getProviderRewards(provider, poolToken, networkToken);
+                    expect(providerRewards2.rewardPerToken).to.be.bignumber.equal(new BN(0));
+
+                    const rewardPerToken = new BN(1);
+                    const pendingBaseRewards = new BN(0);
+                    const totalClaimedRewards = new BN(1000);
+                    const effectiveStakingTime = now;
+                    const baseRewardsDebt = new BN(1245);
+                    const baseRewardsDebtMultiplier = PPM_RESOLUTION;
+
+                    const rewardPerToken2 = new BN(1000000);
+                    const pendingBaseRewards2 = new BN(555);
+                    const totalClaimedRewards2 = new BN(13);
+                    const effectiveStakingTime2 = now.add(new BN(6000));
+                    const baseRewardsDebt2 = new BN(3333343);
+                    const baseRewardsDebtMultiplier2 = PPM_RESOLUTION.mul(new BN(2));
+
+                    await store.setProviderRewardData(
+                        poolToken.address,
+                        networkToken.address,
+                        [provider, provider2],
+                        [rewardPerToken, rewardPerToken2],
+                        [pendingBaseRewards, pendingBaseRewards2],
+                        [totalClaimedRewards, totalClaimedRewards2],
+                        [effectiveStakingTime, effectiveStakingTime2],
+                        [baseRewardsDebt, baseRewardsDebt2],
+                        [baseRewardsDebtMultiplier, baseRewardsDebtMultiplier2],
+                        { from: seeder }
+                    );
+
+                    providerRewards = await getProviderRewards(provider, poolToken, networkToken);
+                    expect(providerRewards.rewardPerToken).to.be.bignumber.equal(rewardPerToken);
+                    expect(providerRewards.pendingBaseRewards).to.be.bignumber.equal(pendingBaseRewards);
+                    expect(providerRewards.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewards);
+                    expect(providerRewards.effectiveStakingTime).to.be.bignumber.equal(effectiveStakingTime);
+                    expect(providerRewards.baseRewardsDebt).to.be.bignumber.equal(baseRewardsDebt);
+                    expect(providerRewards.baseRewardsDebtMultiplier).to.be.bignumber.equal(baseRewardsDebtMultiplier);
+
+                    providerRewards2 = await getProviderRewards(provider2, poolToken, networkToken);
+                    expect(providerRewards2.rewardPerToken).to.be.bignumber.equal(rewardPerToken2);
+                    expect(providerRewards2.pendingBaseRewards).to.be.bignumber.equal(pendingBaseRewards2);
+                    expect(providerRewards2.totalClaimedRewards).to.be.bignumber.equal(totalClaimedRewards2);
+                    expect(providerRewards2.effectiveStakingTime).to.be.bignumber.equal(effectiveStakingTime2);
+                    expect(providerRewards2.baseRewardsDebt).to.be.bignumber.equal(baseRewardsDebt2);
+                    expect(providerRewards2.baseRewardsDebtMultiplier).to.be.bignumber.equal(
+                        baseRewardsDebtMultiplier2
+                    );
+                });
             });
         });
     });
@@ -897,7 +1320,7 @@ describe('StakingRewardsStore', () => {
 
         it('should revert when a non-owner attempts to update pool rewards', async () => {
             await expectRevert(
-                store.updateRewardsData(
+                store.updatePoolRewardsData(
                     poolToken.address,
                     reserveToken.address,
                     new BN(0),
@@ -921,7 +1344,7 @@ describe('StakingRewardsStore', () => {
             const rewardPerToken = new BN(10000);
             const totalClaimedRewards = new BN(5555555);
 
-            await store.updateRewardsData(
+            await store.updatePoolRewardsData(
                 poolToken.address,
                 reserveToken.address,
                 lastUpdateTime,
@@ -960,9 +1383,9 @@ describe('StakingRewardsStore', () => {
         it('should revert when a non-owner attempts to update provider rewards data', async () => {
             await expectRevert(
                 store.updateProviderRewardsData(
-                    provider,
                     poolToken.address,
                     reserveToken.address,
+                    provider,
                     new BN(1000),
                     new BN(0),
                     new BN(0),
@@ -991,9 +1414,9 @@ describe('StakingRewardsStore', () => {
             const baseRewardsDebt = new BN(9999999);
             const baseRewardsDebtMultiplier = new BN(100000);
             await store.updateProviderRewardsData(
-                provider,
                 poolToken.address,
                 reserveToken.address,
+                provider,
                 rewardPerToken,
                 pendingBaseRewards,
                 totalClaimedRewards,

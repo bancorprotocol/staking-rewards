@@ -1,14 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
+const Contract = require('web3-eth-contract');
+const { set, get } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
-const BATCH_SIZE = 5000;
-const ETH_RESERVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-const MKR_RESERVE_ADDRESS = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
+const ETH_RESERVE_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const MKR_RESERVE_ADDRESS = '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2';
 
-const getLiquidityTask = async (env) => {
+const BATCH_SIZE = 5000;
+
+const getLiquidityChangesTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
             contracts.LiquidityProtectionStoreOld.methods.protectedLiquidity(id),
@@ -29,39 +32,31 @@ const getLiquidityTask = async (env) => {
         };
     };
 
-    const getReserveTokenInfo = async (reserveToken) => {
+    const getTokenInfo = async (token) => {
+        const eq = (address1, address2) => {
+            return address1.toLowerCase() === address2.toLowerCase();
+        };
+
         let name;
         let symbol;
-        if (reserveToken === ETH_RESERVE_ADDRESS) {
+        if (eq(token, ETH_RESERVE_ADDRESS)) {
             name = 'Ethereum Reserve';
             symbol = 'ETH';
-        } else if (reserveToken === MKR_RESERVE_ADDRESS) {
+        } else if (eq(token, MKR_RESERVE_ADDRESS)) {
             name = 'MakerDAO';
             symbol = 'MKR';
         } else {
-            const ReserveToken = new Contract(settings.externalContracts.ERC20.abi, reserveToken);
-            name = await web3Provider.call(ReserveToken.methods.name());
-            symbol = await web3Provider.call(ReserveToken.methods.symbol());
+            const ERC20Token = new Contract(ERC20_ABI, token);
+            name = await web3Provider.call(ERC20Token.methods.name());
+            symbol = await web3Provider.call(ERC20Token.methods.symbol());
         }
 
         return { name, symbol };
     };
 
-    const addSnapshot = (snapshots, timestamp, blockNumber, reserveAmount) => {
-        const snapshot = {
-            timestamp,
-            blockNumber,
-            reserveAmount
-        };
-        const existing = snapshots.findIndex((i) => i.timestamp == timestamp && i.blockNumber == blockNumber);
-        if (existing !== -1) {
-            snapshots[existing] = snapshot;
-        } else {
-            snapshots.push(snapshot);
-        }
-    };
+    const getProtectionLiquidityChanges = async (data, fromBlock, toBlock) => {
+        const { liquidity, pools } = data;
 
-    const getProtectionLiquidityChanges = async (liquidity, fromBlock, toBlock) => {
         let eventCount = 0;
         for (let i = fromBlock; i < toBlock; i += BATCH_SIZE) {
             const endBlock = Math.min(i + BATCH_SIZE - 1, toBlock);
@@ -104,45 +99,23 @@ const getLiquidityTask = async (env) => {
                             arg('tx', transactionHash)
                         );
 
-                        if (!liquidity[poolToken]) {
-                            const PoolToken = new Contract(settings.externalContracts.ERC20.abi, poolToken);
-                            const name = await web3Provider.call(PoolToken.methods.name());
-                            const symbol = await web3Provider.call(PoolToken.methods.symbol());
-                            liquidity[poolToken] = { name, symbol };
-                        }
-
-                        const poolTokenRecord = liquidity[poolToken];
-                        if (!poolTokenRecord.reserveTokens) {
-                            poolTokenRecord.reserveTokens = {};
-                        }
-
-                        if (!poolTokenRecord.reserveTokens[reserveToken]) {
-                            const { name, symbol } = await getReserveTokenInfo(reserveToken);
-                            poolTokenRecord.reserveTokens[reserveToken] = {
-                                name,
-                                symbol,
-                                reserveAmount: 0,
-                                snapshots: [
-                                    {
-                                        timestamp,
-                                        blockNumber,
-                                        reserveAmount: new BN(reserveAmount).toString()
-                                    }
-                                ]
-                            };
-                        }
-
-                        const reserveTokenRecord = poolTokenRecord.reserveTokens[reserveToken];
-                        reserveTokenRecord.reserveAmount = new BN(reserveTokenRecord.reserveAmount)
-                            .add(new BN(reserveAmount))
-                            .toString();
-
-                        addSnapshot(
-                            reserveTokenRecord.snapshots,
-                            timestamp,
+                        liquidity.push({
+                            event: 'Add',
                             blockNumber,
-                            reserveTokenRecord.reserveAmount
-                        );
+                            timestamp,
+                            provider,
+                            poolToken,
+                            reserveToken,
+                            reserveAmount: reserveAmount.toString()
+                        });
+
+                        if (!get(pools, [poolToken])) {
+                            set(pools, [poolToken], await getTokenInfo(poolToken));
+                        }
+
+                        if (!get(pools, [poolToken, reserveToken])) {
+                            set(pools, [poolToken, reserveToken], await getTokenInfo(reserveToken));
+                        }
 
                         eventCount++;
 
@@ -228,33 +201,16 @@ const getLiquidityTask = async (env) => {
                         }
 
                         const { poolToken, reserveToken } = matches[0];
-                        const poolTokenRecord = liquidity[poolToken];
-                        const reserveTokenRecord = poolTokenRecord.reserveTokens[reserveToken];
 
-                        if (new BN(reserveTokenRecord.reserveAmount).lt(new BN(newReserveAmount))) {
-                            error(
-                                'Update liquidity can only decrease the reserve token amount for',
-                                arg('poolToken', poolToken),
-                                arg('reserveToken', reserveToken),
-                                '[',
-                                arg('expected', reserveTokenRecord.reserveAmount),
-                                'to be less than',
-                                arg('actual', newReserveAmount),
-                                ']'
-                            );
-                        }
-
-                        reserveTokenRecord.reserveAmount = new BN(reserveTokenRecord.reserveAmount)
-                            .add(new BN(newReserveAmount))
-                            .sub(new BN(prevReserveAmount))
-                            .toString();
-
-                        addSnapshot(
-                            reserveTokenRecord.snapshots,
-                            timestamp,
+                        liquidity.push({
+                            event: 'Remove',
                             blockNumber,
-                            reserveTokenRecord.reserveAmount
-                        );
+                            timestamp,
+                            provider,
+                            poolToken,
+                            reserveToken,
+                            reserveAmount: new BN(prevReserveAmount).sub(new BN(newReserveAmount)).toString()
+                        });
 
                         eventCount++;
 
@@ -280,32 +236,15 @@ const getLiquidityTask = async (env) => {
                             arg('tx', transactionHash)
                         );
 
-                        const poolTokenRecord = liquidity[poolToken];
-                        const reserveTokenRecord = poolTokenRecord.reserveTokens[reserveToken];
-
-                        if (new BN(reserveTokenRecord.reserveAmount).lt(new BN(reserveAmount))) {
-                            error(
-                                'Remove liquidity can only decrease the reserve token amount for',
-                                arg('poolToken', poolToken),
-                                arg('reserveToken', reserveToken),
-                                '[',
-                                arg('expected', reserveTokenRecord.reserveAmount),
-                                'to be less than',
-                                arg('actual', reserveAmount),
-                                ']'
-                            );
-                        }
-
-                        reserveTokenRecord.reserveAmount = new BN(reserveTokenRecord.reserveAmount)
-                            .sub(new BN(reserveAmount))
-                            .toString();
-
-                        addSnapshot(
-                            reserveTokenRecord.snapshots,
-                            timestamp,
+                        liquidity.push({
+                            event: 'Remove',
                             blockNumber,
-                            reserveTokenRecord.reserveAmount
-                        );
+                            timestamp,
+                            provider,
+                            poolToken,
+                            reserveToken,
+                            reserveAmount: reserveAmount.toString()
+                        });
 
                         eventCount++;
 
@@ -318,108 +257,38 @@ const getLiquidityTask = async (env) => {
         info('Finished processing all new protection change events', arg('count', eventCount));
     };
 
-    const verifyProtectionLiquidity = async (liquidity, toBlock) => {
-        info('Verifying all reserve amounts at', arg('blockNumber', toBlock));
+    const verifyProtectionLiquidityChanges = async (data) => {
+        const { liquidity } = data;
 
-        for (const [poolToken, poolTokenData] of Object.entries(liquidity)) {
-            for (const [reserveToken, data] of Object.entries(poolTokenData.reserveTokens)) {
-                trace('Verifying', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
+        info('Verifying all new protection change events', arg('blockNumber', toBlock));
 
-                const { reserveAmount } = data;
+        // Verify that the events are sorted in an ascending order.
+        for (let i = 0; i + 1 < liquidity.length - 1; ++i) {
+            const event1 = liquidity[i];
+            const event2 = liquidity[i + 1];
 
-                const actualAmount = await web3Provider.call(
-                    contracts.LiquidityProtectionStoreOld.methods.totalProtectedReserveAmount(poolToken, reserveToken),
-                    {},
-                    toBlock
-                );
-                if (!new BN(reserveAmount).eq(new BN(actualAmount))) {
-                    error(
-                        'Wrong liquidity',
-                        arg('poolToken', poolToken),
-                        arg('reserveToken', reserveToken),
-                        '[',
-                        arg('expected', reserveAmount),
-                        arg('actual', actualAmount),
-                        ']'
-                    );
-                }
-
-                const { snapshots } = data;
-
-                for (const snapshot of snapshots) {
-                    const { blockNumber, timestamp, reserveAmount } = snapshot;
-
-                    // Verify snapshot values.
-                    const actualSnapshotAmount = await web3Provider.call(
-                        contracts.LiquidityProtectionStoreOld.methods.totalProtectedReserveAmount(
-                            poolToken,
-                            reserveToken
-                        ),
-                        {},
-                        blockNumber
-                    );
-                    if (!new BN(actualSnapshotAmount).eq(new BN(reserveAmount))) {
-                        error(
-                            'Wrong snapshot liquidity',
-                            arg('poolToken', poolToken),
-                            arg('reserveToken', reserveToken),
-                            arg('blockNumber', blockNumber),
-                            arg('timestamp', reserveToken),
-                            '[',
-                            arg('expected', reserveAmount),
-                            arg('actual', actualSnapshotAmount),
-                            ']'
-                        );
-                    }
-
-                    // Verify snapshot timestamps.
-                    const block = await web3Provider.getBlock(blockNumber);
-                    const { timestamp: blockTimeStamp } = block;
-                    if (timestamp != blockTimeStamp) {
-                        error(
-                            'Wrong snapshot timestamp',
-                            arg('poolToken', poolToken),
-                            arg('reserveToken', reserveToken),
-                            arg('blockNumber', blockNumber),
-                            arg('timestamp', reserveToken),
-                            '[',
-                            arg('expected', timestamp),
-                            arg('actual', blockTimeStamp),
-                            ']'
-                        );
-                    }
-                }
-
-                // Verify that the snapshots array is sorted in an ascending order.
-                for (let i = 0; i + 1 < snapshots.length - 1; ++i) {
-                    const snapshot1 = snapshots[i];
-                    const snapshot2 = snapshots[i + 1];
-                    if (snapshot1.timestamp > snapshot2.timestamp) {
-                        error(
-                            'Wrong snapshots order',
-                            arg('poolToken', poolToken),
-                            arg('reserveToken', reserveToken),
-                            arg('snapshot1', snapshot1),
-                            arg('snapshot2', snapshot2)
-                        );
-                    }
-                }
+            if (event1.blockNumber > event2.blockNumber || event1.timestamp > event2.timestamp) {
+                error('Wrong events order', arg('event1', event1), arg('event2', event2));
             }
         }
     };
 
     const getProtectedLiquidity = async (data, fromBlock, toBlock) => {
         if (!data.liquidity) {
-            data.liquidity = {};
+            data.liquidity = [];
         }
 
-        await getProtectionLiquidityChanges(data.liquidity, fromBlock, toBlock);
-        await verifyProtectionLiquidity(data.liquidity, toBlock);
+        if (!data.pools) {
+            data.pools = {};
+        }
+
+        await getProtectionLiquidityChanges(data, fromBlock, toBlock);
+        await verifyProtectionLiquidityChanges(data);
 
         data.lastBlockNumber = toBlock;
     };
 
-    const { settings, web3Provider, reorgOffset, contracts, Contract, test } = env;
+    const { settings, web3Provider, reorgOffset, contracts, test } = env;
 
     if (test) {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
@@ -431,7 +300,7 @@ const getLiquidityTask = async (env) => {
     );
 
     const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
-    const { abi: ERC20 } = JSON.parse(rawData);
+    const { abi: ERC20_ABI } = JSON.parse(rawData);
 
     const dbDir = path.resolve(__dirname, '../data');
     const dbPath = path.join(dbDir, 'liquidity.json');
@@ -470,4 +339,4 @@ const getLiquidityTask = async (env) => {
     fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 };
 
-module.exports = getLiquidityTask;
+module.exports = getLiquidityChangesTask;

@@ -6,7 +6,7 @@ const { info, trace, error, arg } = require('../utils/logger');
 
 const BATCH_SIZE = 200;
 
-const setLastRemovalTimes = async (env) => {
+const setLastRemovalTimesTask = async (env) => {
     const setLastRemovalTimes = async (lastRemovalTimes) => {
         info('Setting last removal times in batches of', arg('batchSize', BATCH_SIZE));
 
@@ -68,4 +68,4 @@ const setLastRemovalTimes = async (env) => {
     await verifyLastRemovalTimes(lastRemovalTimes);
 };
 
-module.exports = setLastRemovalTimes;
+module.exports = setLastRemovalTimesTask;

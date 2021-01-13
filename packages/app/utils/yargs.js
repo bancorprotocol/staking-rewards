@@ -37,17 +37,17 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Get all data'
     })
-    .option('get-liquidity', {
+    .option('get-liquidity-changes', {
         type: 'boolean',
         description: 'Get all liquidity changes'
-    })
-    .option('get-positions', {
-        type: 'boolean',
-        description: 'Get all positions'
     })
     .option('get-last-removal-times', {
         type: 'boolean',
         description: 'Get last removal times for all providers'
+    })
+    .option('get-rewards', {
+        type: 'boolean',
+        description: 'Get all rewards'
     })
 
     .option('set-all', {
@@ -61,6 +61,10 @@ const { argv } = yargs(hideBin(process.argv))
     .option('set-programs', {
         type: 'boolean',
         description: 'Set reward programs'
+    })
+    .option('set-rewards', {
+        type: 'boolean',
+        description: 'Set all rewards'
     });
 
 module.exports = argv;

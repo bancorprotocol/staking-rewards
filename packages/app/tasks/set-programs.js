@@ -1,13 +1,13 @@
 const humanizeDuration = require('humanize-duration');
 const BN = require('bn.js');
 
-const { info, error, arg } = require('../utils/logger');
+const { info, trace, error, arg } = require('../utils/logger');
 
 const BATCH_SIZE = 200;
 
 const setProgramsTask = async (env) => {
     const setPrograms = async (programs) => {
-        info('Adding programs');
+        info('Adding programs in batches of', arg('batchSize', BATCH_SIZE));
 
         let totalGas = 0;
 
@@ -36,6 +36,7 @@ const setProgramsTask = async (env) => {
                 const participating = await web3Provider.call(
                     contracts.StakingRewardsStore.methods.isPoolParticipating(poolToken)
                 );
+
                 if (participating) {
                     info('Skipping already participating program', arg('poolToken', poolToken));
 
@@ -83,8 +84,8 @@ const setProgramsTask = async (env) => {
         info('Finished adding new pools times', arg('totalGas', totalGas));
     };
 
-    const verityPrograms = async (programs) => {
-        info('Verifying pools');
+    const verifyPrograms = async (programs) => {
+        info('Verifying programs');
 
         for (const program of programs) {
             const {
@@ -98,7 +99,7 @@ const setProgramsTask = async (env) => {
                 rewardRate
             } = program;
 
-            info('Verifying program', arg('poolToken', poolToken));
+            trace('Verifying program', arg('poolToken', poolToken));
 
             const data = await web3Provider.call(contracts.StakingRewardsStore.methods.poolProgram(poolToken));
 
@@ -152,12 +153,14 @@ const setProgramsTask = async (env) => {
                 );
             }
         }
+
+        info('Finished verifying programs');
     };
 
     const { programs, web3Provider, contracts } = env;
 
     await setPrograms(programs);
-    await verityPrograms(programs);
+    await verifyPrograms(programs);
 };
 
 module.exports = setProgramsTask;

@@ -11,7 +11,7 @@ struct PoolProgram {
     uint32[2] rewardShares;
 }
 
-struct Rewards {
+struct PoolRewards {
     uint256 lastUpdateTime;
     uint256 rewardPerToken;
     uint256 totalClaimedRewards;
@@ -66,7 +66,7 @@ interface IStakingRewardsStore {
             uint32[2][] memory
         );
 
-    function rewards(IERC20 poolToken, IERC20 reserveToken)
+    function poolRewards(IERC20 poolToken, IERC20 reserveToken)
         external
         view
         returns (
@@ -75,7 +75,7 @@ interface IStakingRewardsStore {
             uint256
         );
 
-    function updateRewardsData(
+    function updatePoolRewardsData(
         IERC20 poolToken,
         IERC20 reserveToken,
         uint256 lastUpdateTime,
@@ -84,9 +84,9 @@ interface IStakingRewardsStore {
     ) external;
 
     function providerRewards(
-        address provider,
         IERC20 poolToken,
-        IERC20 reserveToken
+        IERC20 reserveToken,
+        address provider
     )
         external
         view
@@ -100,9 +100,9 @@ interface IStakingRewardsStore {
         );
 
     function updateProviderRewardsData(
-        address provider,
         IERC20 poolToken,
         IERC20 reserveToken,
+        address provider,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
         uint256 totalClaimedRewards,

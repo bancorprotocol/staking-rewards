@@ -53,15 +53,17 @@ class Provider {
         this.queryWeb3.eth.accounts.wallet.add(account);
         this.sendWeb3.eth.accounts.wallet.add(account);
 
-        this.gasPrice = toWei((gasPrice || 0).toString(), 'gwei');
+        if (gasPrice) {
+            this.gasPrice = toWei((gasPrice || 0).toString(), 'gwei');
 
-        info(
-            'Default price is set to',
-            arg('gasPrice', this.gasPrice),
-            '(wei)',
-            arg('gasPrice', fromWei(this.gasPrice.toString(), 'gwei')),
-            '(gwei)'
-        );
+            info(
+                'Default price is set to',
+                arg('gasPrice', this.gasPrice),
+                '(wei)',
+                arg('gasPrice', fromWei(this.gasPrice.toString(), 'gwei')),
+                '(gwei)'
+            );
+        }
 
         Contract.setProvider(this.queryWeb3Provider);
     }
@@ -80,7 +82,7 @@ class Provider {
         Contract.setProvider(this.sendWeb3Provider);
 
         if (!options.gasPrice) {
-            if (!test && !init && Number(this.gasPrice) === 0) {
+            if (!test && Number(this.gasPrice) === 0) {
                 error("Gas price isn't set. Aborting");
             }
 
@@ -148,11 +150,13 @@ class Provider {
     static unlockedAccounts() {
         const {
             externalContracts: {
-                TokenGovernance: { governor }
+                TokenGovernance: { governor },
+                CheckpointStore: { owner: checkpointStoreOwner },
+                ContractRegistry: { owner: contractRegistryOwner }
             }
         } = settings;
 
-        return [governor];
+        return [governor, checkpointStoreOwner, contractRegistryOwner];
     }
 }
 

@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 
 const Contract = require('web3-eth-contract');
-const { keccak256 } = require('web3-utils');
+const { keccak256, asciiToHex } = require('web3-utils');
 
 const { info, error, warning, arg } = require('./logger');
 const Provider = require('./provider');
@@ -11,9 +11,7 @@ const { test, init, reorgOffset } = require('./yargs');
 const settings = require('../settings.json');
 const programs = require('../programs.json');
 
-const ROLE_OWNER = keccak256('ROLE_OWNER');
-const ROLE_MINTER = keccak256('ROLE_MINTER');
-const ROLE_SEEDER = keccak256('ROLE_SEEDER');
+const LIQUIDITY_PROTECTION = asciiToHex('LiquidityProtection');
 
 let contracts = {};
 let web3Provider;
@@ -47,88 +45,91 @@ const setup = async () => {
         rawData = fs.readFileSync(path.join(externalContractsDir, 'CheckpointStore.json'));
         ({ abi } = JSON.parse(rawData));
         contracts.CheckpointStore = new Contract(abi, address);
+
+        ({ address } = externalContracts.ContractRegistry);
+        rawData = fs.readFileSync(path.join(externalContractsDir, 'ContractRegistry.json'));
+        ({ abi } = JSON.parse(rawData));
+        contracts.ContractRegistry = new Contract(abi, address);
+    };
+
+    const deploySystemContract = async (name, arguments = []) => {
+        const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
+
+        info(`Deploying ${name}`);
+
+        const rawData = fs.readFileSync(path.join(systemContractsDir, `${name}.json`));
+        const { abi, bytecode } = JSON.parse(rawData);
+
+        const contract = new Contract(abi);
+        const instance = await web3Provider.send(contract.deploy({ data: bytecode, arguments }));
+
+        const { address } = instance.options;
+
+        info(`Deployed new ${name} to`, arg('address', address));
+
+        contracts[name] = new Contract(abi, address);
+    };
+
+    const registerContract = async (key, contract) => {
+        info(`Registering ${contract} in ContractRegistry`);
+
+        const {
+            externalContracts: {
+                ContractRegistry: { owner }
+            }
+        } = settings;
+
+        return web3Provider.send(
+            contracts.ContractRegistry.methods.registerAddress(key, contracts[contract].options.address),
+            { from: owner }
+        );
+    };
+
+    const grantRole = async (contract, role, name, options = {}) => {
+        info(`Granting ${name} the ${role} role on ${contract}`);
+
+        const address = name.startsWith('0x') ? name : contracts[name].options.address;
+        return web3Provider.send(contracts[contract].methods.grantRole(keccak256(role), address), options);
     };
 
     const setupSystemContracts = async () => {
         const { externalContracts, systemContracts } = settings;
 
         if (init) {
-            info('Deploying StakingRewardsStore');
+            info('Deploying contracts');
 
-            const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
-
-            let rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewardsStore.json'));
-            let { abi, bytecode } = JSON.parse(rawData);
-
-            const StakingRewardsStore = new Contract(abi);
-            let instance = await web3Provider.send(StakingRewardsStore.deploy({ data: bytecode }));
-
-            const { address: stakingStoreAddress } = instance.options;
-
-            info('Deployed new StakingRewardsStore to', arg('address', stakingStoreAddress));
-
-            contracts.StakingRewardsStore = new Contract(abi, stakingStoreAddress);
-
-            info('Deploying StakingRewards');
-
-            rawData = fs.readFileSync(path.join(systemContractsDir, 'StakingRewards.json'));
-            ({ abi, bytecode } = JSON.parse(rawData));
-
-            const StakingRewards = new Contract(abi);
-            const arguments = [
-                stakingStoreAddress,
+            await deploySystemContract('TestCheckpointStore');
+            await deploySystemContract('StakingRewardsStore');
+            await deploySystemContract('TestStakingRewards', [
+                contracts.StakingRewardsStore.options.address,
                 contracts.TokenGovernance.options.address,
-                contracts.CheckpointStore.options.address,
+                contracts.TestCheckpointStore.options.address,
                 externalContracts.ContractRegistry.address
-            ];
+            ]);
 
-            instance = await web3Provider.send(StakingRewards.deploy({ data: bytecode, arguments }));
-            const { address: stakingAddress } = instance.options;
+            await deploySystemContract('TestLiquidityProtectionDataStore');
+            await deploySystemContract('TestLiquidityProtection', [
+                contracts.TestLiquidityProtectionDataStore.options.address,
+                contracts.TestStakingRewards.options.address,
+                contracts.TestCheckpointStore.options.address
+            ]);
 
-            info('Deployed new StakingRewards to', arg('address', stakingAddress));
+            info('Registering contracts');
 
-            contracts.StakingRewards = new Contract(abi, stakingAddress);
+            await registerContract(LIQUIDITY_PROTECTION, 'TestLiquidityProtection');
 
             info('Granting required permissions');
 
-            info('Granting StakingRewardsStore ownership to StakingRewards');
-
-            await web3Provider.send(contracts.StakingRewardsStore.methods.grantRole(ROLE_OWNER, stakingAddress));
-
-            info('Granting the deployer owner permissions on StakingRewardsStore');
-
-            await web3Provider.send(
-                contracts.StakingRewardsStore.methods.grantRole(ROLE_OWNER, web3Provider.getDefaultAccount())
-            );
-
-            info('Granting the deployer seeding permissions on StakingRewardsStore');
-
-            await web3Provider.send(
-                contracts.StakingRewardsStore.methods.grantRole(ROLE_SEEDER, web3Provider.getDefaultAccount())
-            );
-
-            info('Granting TokenGovernance minting permissions to StakingRewards');
-
-            const {
-                TokenGovernance: { governor }
-            } = externalContracts;
-
-            await web3Provider.send(contracts.TokenGovernance.methods.grantRole(ROLE_MINTER, stakingAddress), {
-                from: governor
+            await grantRole('StakingRewardsStore', 'ROLE_OWNER', 'TestStakingRewards');
+            await grantRole('StakingRewardsStore', 'ROLE_OWNER', web3Provider.getDefaultAccount());
+            await grantRole('StakingRewardsStore', 'ROLE_SEEDER', web3Provider.getDefaultAccount());
+            await grantRole('TokenGovernance', 'ROLE_MINTER', 'TestStakingRewards', {
+                from: externalContracts.TokenGovernance.governor
             });
-
-            info('Granting the deployer seeding permissions on CheckpointStore');
-
-            const {
-                CheckpointStore: { owner }
-            } = externalContracts;
-
-            await web3Provider.send(
-                contracts.CheckpointStore.methods.grantRole(ROLE_SEEDER, web3Provider.getDefaultAccount()),
-                {
-                    from: owner
-                }
-            );
+            await grantRole('CheckpointStore', 'ROLE_SEEDER', web3Provider.getDefaultAccount(), {
+                from: externalContracts.CheckpointStore.owner
+            });
+            await grantRole('TestStakingRewards', 'ROLE_PUBLISHER', 'TestLiquidityProtection');
         } else {
             let { abi, address } = systemContracts.StakingRewardsStore;
             if (abi && address) {
@@ -156,9 +157,9 @@ const setup = async () => {
             programs,
             web3Provider,
             contracts,
-            Contract,
             reorgOffset,
-            test
+            test,
+            init
         };
     } catch (e) {
         error(e);

@@ -22,8 +22,8 @@ contract TestStakingRewards is StakingRewards, TestTime {
         IERC20 poolToken,
         IERC20 reserveToken
     ) external view returns (uint256) {
-        Rewards memory rewardsData = poolRewards(poolToken, reserveToken);
-        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+        PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
+        ProviderRewards memory providerRewards = providerRewards(poolToken, reserveToken, provider);
         PoolProgram memory program = poolProgram(poolToken);
 
         return
@@ -31,7 +31,7 @@ contract TestStakingRewards is StakingRewards, TestTime {
                 provider,
                 poolToken,
                 reserveToken,
-                rewardsData,
+                poolRewardsData,
                 providerRewards,
                 program,
                 liquidityProtectionStore()

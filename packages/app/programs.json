@@ -115,7 +115,7 @@
         "networkToken": "0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c",
         "reserveToken": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
         "startTime": 1609152089,
-        "endTime": 1609152089,
+        "endTime": 1616409689,
         "reserveTokenRate": 300000,
         "networkTokenRate": 700000,
         "rewardRate": "16534391534391534"

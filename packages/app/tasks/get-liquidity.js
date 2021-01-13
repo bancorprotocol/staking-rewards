@@ -23,6 +23,8 @@ const REMOVE_LIQUIDITY_ABI = [
     }
 ];
 
+const PPM_RESOLUTION = new BN(1000000);
+
 const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
@@ -238,6 +240,10 @@ const getLiquidityTask = async (env) => {
                             arg('tx', transactionHash)
                         );
 
+                        if (new BN(newReserveAmount).gte(new BN(prevReserveAmount))) {
+                            error('Updated liquidity can only decrease the entire reserve token amount');
+                        }
+
                         // Try to find the pool and reserves tokens by matching the position in a previous block.
                         // Please note that we are assuming that a single position wasn't added and removed in the
                         // same block.
@@ -293,12 +299,17 @@ const getLiquidityTask = async (env) => {
 
                         const id = matches[0];
                         const position = positions[id];
+                        const portion = new BN(prevReserveAmount)
+                            .sub(new BN(newReserveAmount))
+                            .mul(new BN(PPM_RESOLUTION))
+                            .div(new BN(prevReserveAmount));
 
                         const { poolToken, reserveToken } = position;
 
                         liquidity.push({
                             event: 'Remove',
                             id,
+                            portion: portion.toString(),
                             blockNumber,
                             timestamp,
                             provider,
@@ -310,6 +321,7 @@ const getLiquidityTask = async (env) => {
                         trace(
                             'Position updated',
                             arg('id', id),
+                            arg('portion', portion),
                             arg('provider', position.provider),
                             arg('poolToken', position.poolToken),
                             arg('reserveToken', position.reserveToken),
@@ -422,11 +434,29 @@ const getLiquidityTask = async (env) => {
 
                         const id = matches[0];
                         const position = positions[id];
+                        const portion = new BN(position.reserveAmount)
+                            .mul(new BN(PPM_RESOLUTION))
+                            .div(new BN(reserveAmount));
+
+                        if (!new BN(portion).eq(PPM_RESOLUTION)) {
+                            error(
+                                'Remove liquidity can only remove the whole liquidity',
+                                arg('id', id),
+                                arg('portion', portion),
+                                arg('poolToken', position.poolToken),
+                                arg('reserveToken', position.reserveToken),
+                                '[',
+                                arg('expected', position.reserveAmount),
+                                arg('actual', reserveAmount),
+                                ']'
+                            );
+                        }
 
                         if (!new BN(position.reserveAmount).eq(new BN(reserveAmount))) {
                             error(
                                 'Remove liquidity can only decrease the entire reserve token amount for',
                                 arg('id', id),
+                                arg('portion', portion),
                                 arg('poolToken', position.poolToken),
                                 arg('reserveToken', position.reserveToken),
                                 '[',
@@ -439,6 +469,7 @@ const getLiquidityTask = async (env) => {
                         trace(
                             'Position removed',
                             arg('id', id),
+                            arg('portion', portion),
                             arg('provider', position.provider),
                             arg('poolToken', position.poolToken),
                             arg('reserveToken', position.reserveToken),
@@ -453,6 +484,7 @@ const getLiquidityTask = async (env) => {
                         liquidity.push({
                             event: 'Remove',
                             id,
+                            portion: portion.toString(),
                             blockNumber,
                             timestamp,
                             provider,
@@ -489,10 +521,12 @@ const getLiquidityTask = async (env) => {
 
         // Verify positions.
         for (const change of liquidity) {
-            const { event, id, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
+            const { event } = change;
             if (event !== 'Remove') {
                 continue;
             }
+
+            const { id, portion, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
 
             const position = await getPosition(id, blockNumber - 1);
             const newPosition = await getPosition(id, blockNumber);

@@ -33,11 +33,7 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'number',
         description: 'The gas price in wei to use for setting transactions (in gwei)'
     })
-    .option('get-all', {
-        type: 'boolean',
-        description: 'Get all data'
-    })
-    .option('get-liquidity-changes', {
+    .option('get-liquidity', {
         type: 'boolean',
         description: 'Get all liquidity changes'
     })
@@ -45,19 +41,11 @@ const { argv } = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Get last removal times for all providers'
     })
-    .option('get-positions', {
-        type: 'boolean',
-        description: 'Get all positions'
-    })
     .option('get-rewards', {
         type: 'boolean',
         description: 'Get all rewards'
     })
 
-    .option('set-all', {
-        type: 'boolean',
-        description: 'Set all data'
-    })
     .option('set-last-removal-times', {
         type: 'boolean',
         description: 'Set last removal times for all providers'

@@ -23,6 +23,8 @@
     chalk "^2.0.0"
     js-tokens "^4.0.0"
 
+"@bancor/contracts@file:../contracts":
+  version "0.6.28"
 
 "@bancor/token-governance@bancorprotocol/token-governance":
   version "0.1.0"

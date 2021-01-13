@@ -28,7 +28,7 @@ const PPM_RESOLUTION = new BN(1000000);
 const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
-            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidity(id),
+            contracts.LiquidityProtectionStore.methods.protectedLiquidity(id),
             {},
             blockNumber
         );
@@ -85,7 +85,7 @@ const getLiquidityTask = async (env) => {
                 'blocks'
             );
 
-            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStoreOld, 'allEvents', {
+            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStore, 'allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });
@@ -136,12 +136,12 @@ const getLiquidityTask = async (env) => {
                         // this position.
                         let matches = [];
                         const currentBlockIds = await web3Provider.call(
-                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            contracts.LiquidityProtectionStore.methods.protectedLiquidityIds(provider),
                             {},
                             blockNumber
                         );
                         const prevBLockIds = await web3Provider.call(
-                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            contracts.LiquidityProtectionStore.methods.protectedLiquidityIds(provider),
                             {},
                             blockNumber - 1
                         );
@@ -250,7 +250,7 @@ const getLiquidityTask = async (env) => {
                         const matches = [];
                         const prevBlock = blockNumber - 1;
                         let ids = await web3Provider.call(
-                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            contracts.LiquidityProtectionStore.methods.protectedLiquidityIds(provider),
                             {},
                             prevBlock
                         );
@@ -270,7 +270,7 @@ const getLiquidityTask = async (env) => {
                             );
 
                             ids = await web3Provider.call(
-                                contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                                contracts.LiquidityProtectionStore.methods.protectedLiquidityIds(provider),
                                 {},
                                 blockNumber
                             );
@@ -362,12 +362,12 @@ const getLiquidityTask = async (env) => {
                         // same block.
                         let matches = [];
                         const currentBlockIds = await web3Provider.call(
-                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            contracts.LiquidityProtectionStore.methods.protectedLiquidityIds(provider),
                             {},
                             blockNumber
                         );
                         const prevBLockIds = await web3Provider.call(
-                            contracts.LiquidityProtectionStoreOld.methods.protectedLiquidityIds(provider),
+                            contracts.LiquidityProtectionStore.methods.protectedLiquidityIds(provider),
                             {},
                             blockNumber - 1
                         );

@@ -23,7 +23,7 @@ const getLastRemovalTimes = async (env) => {
                 'blocks'
             );
 
-            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStoreOld, 'allEvents', {
+            const events = await web3Provider.getPastEvents(contracts.LiquidityProtectionStore, 'allEvents', {
                 fromBlock: i,
                 toBlock: endBlock
             });

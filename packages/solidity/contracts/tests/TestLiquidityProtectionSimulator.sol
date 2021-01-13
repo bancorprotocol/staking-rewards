@@ -15,10 +15,9 @@ import "@bancor/contracts/solidity/contracts/helpers/TestConverterRegistry.sol";
 
 import "./TestStakingRewards.sol";
 
-contract TestLiquidityProtection is LiquidityProtection, TestTime {
+contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
     using SafeERC20 for IERC20;
 
-    uint256 private _lastId;
     TestStakingRewards private immutable _stakingRewards;
     TestCheckpointStore private immutable _lastRemoveCheckpointStore;
 
@@ -49,42 +48,38 @@ contract TestLiquidityProtection is LiquidityProtection, TestTime {
         return TestTime.time();
     }
 
-    function addProviderLiquidity(
+    function simulateAddLiquidity(
         address provider,
         IConverterAnchor poolAnchor,
         IERC20Token reserveToken,
-        uint256 reserveAmount
+        uint256 reserveAmount,
+        uint256 timestamp
     ) public returns (uint256) {
+        setTime(timestamp);
+
         _stakingRewards.setTime(time());
+        _stakingRewards.onAddingLiquidity(provider, poolAnchor, reserveToken, 0, reserveAmount);
 
-        reserveToken.transferFrom(provider, address(this), reserveAmount);
-        IERC20(address(reserveToken)).safeApprove(address(this), reserveAmount);
-
-        _lastId = this.addLiquidityFor(provider, poolAnchor, reserveToken, reserveAmount);
-        return _lastId;
+        stats.increaseTotalAmounts(provider, IDSToken(address(poolAnchor)), reserveToken, 0, reserveAmount);
+        stats.addProviderPool(provider, IDSToken(address(poolAnchor)));
     }
 
-    function removeProviderLiquidity(
-        address payable provider,
-        uint256 id,
-        uint32 portion
+    function simulateRemoveLiquidity(
+        address provider,
+        IConverterAnchor poolAnchor,
+        IERC20Token reserveToken,
+        uint256 reserveAmount,
+        uint256 timestamp
     ) public payable {
-        _stakingRewards.setTime(time());
+        setTime(timestamp);
+
         _lastRemoveCheckpointStore.setTime(time());
 
-        ProtectedLiquidity memory liquidity = protectedLiquidity(id, provider);
+        _stakingRewards.setTime(time());
+        _stakingRewards.onRemovingLiquidity(0, provider, poolAnchor, reserveToken, 0, reserveAmount);
 
-        uint256 reserveAmount;
-        if (portion == PPM_RESOLUTION) {
-            reserveAmount = liquidity.reserveAmount;
-        } else {
-            reserveAmount = liquidity.reserveAmount.mul(portion) / PPM_RESOLUTION;
-        }
+        stats.decreaseTotalAmounts(provider, IDSToken(address(poolAnchor)), reserveToken, 0, reserveAmount);
 
-        removeLiquidity(provider, id, portion);
-    }
-
-    function lastId() public view returns (uint256) {
-        return _lastId;
+        _lastRemoveCheckpointStore.addCheckpoint(provider);
     }
 }

@@ -146,13 +146,23 @@ class Provider {
     static unlockedAccounts() {
         const {
             externalContracts: {
+                LiquidityProtectionStore: { owner: liquidityProtectionStoreOwner },
+                LiquidityProtectionSettings: { owner: liquidityProtectionSettingsOwner },
+                LiquidityProtection: { owner: liquidityProtectionOwner },
                 TokenGovernance: { governor },
                 CheckpointStore: { owner: checkpointStoreOwner },
                 ContractRegistry: { owner: contractRegistryOwner }
             }
         } = settings;
 
-        return [governor, checkpointStoreOwner, contractRegistryOwner];
+        return [
+            liquidityProtectionStoreOwner,
+            liquidityProtectionSettingsOwner,
+            liquidityProtectionOwner,
+            governor,
+            checkpointStoreOwner,
+            contractRegistryOwner
+        ];
     }
 }
 

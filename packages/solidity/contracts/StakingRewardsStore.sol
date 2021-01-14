@@ -80,7 +80,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         // set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
         _setRoleAdmin(ROLE_OWNER, ROLE_SUPERVISOR);
-        _setRoleAdmin(ROLE_SEEDER, ROLE_OWNER);
+        _setRoleAdmin(ROLE_SEEDER, ROLE_SUPERVISOR);
 
         // allow the deployer to initially govern the contract.
         _setupRole(ROLE_SUPERVISOR, _msgSender());

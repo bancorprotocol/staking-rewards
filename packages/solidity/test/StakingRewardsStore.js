@@ -171,7 +171,7 @@ describe('StakingRewardsStore', () => {
 
             expect(await newStore.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
             expect(await newStore.getRoleAdmin.call(ROLE_OWNER)).to.eql(ROLE_SUPERVISOR);
-            expect(await newStore.getRoleAdmin.call(ROLE_SEEDER)).to.eql(ROLE_OWNER);
+            expect(await newStore.getRoleAdmin.call(ROLE_SEEDER)).to.eql(ROLE_SUPERVISOR);
 
             expect(await newStore.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
             expect(await newStore.hasRole.call(ROLE_OWNER, supervisor)).to.be.false();

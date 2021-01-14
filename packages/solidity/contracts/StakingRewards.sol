@@ -242,7 +242,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param claim whether to actually claim the rewards
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return all pending rewards
      */
@@ -263,7 +263,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolTokens the list of participating pools to query
      * @param claim whether to actually claim the rewards
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return all pending rewards
      */
@@ -296,7 +296,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolToken the pool to query
      * @param claim whether to actually claim the rewards
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return reward all pending rewards
      */
@@ -332,7 +332,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param program the pool program info
      * @param claim whether to actually claim the rewards
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return reward all pending rewards
      */
@@ -451,7 +451,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev claims specific provider's pending rewards from all participating pools
      *
      * @param provider the owner of the liquidity
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return all claimed rewards
      */
@@ -465,7 +465,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
      * @param maxAmount an optional cap on the rewards to claim
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return all pending rewards
      */
@@ -510,7 +510,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param maxAmount an optional cap on the rewards to stake
      * @param poolToken the pool token representing the new rewards pool
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return all staked rewards and the ID of the new position
      */
@@ -530,7 +530,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolTokens the list of participating pools to query
      * @param newPoolToken the pool token representing the new rewards pool
      * @param maxAmount an optional cap on the rewards to stake
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return all staked rewards and the ID of the new position
      */
@@ -570,7 +570,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      */
     function storeRewards(
@@ -589,7 +589,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param poolToken the list of participating pools to query
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      */
     function storeRewards(
@@ -651,7 +651,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @dev updates pending rewards for a specific of provider
      *
      * @param provider the owner of the liquidity
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      */
     function updateRewards(address provider, ILiquidityProtectionStats lpStats) private {
         IDSToken[] memory poolTokens = lpStats.providerPools(provider);
@@ -676,7 +676,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param reserveToken the reserve token representing the liquidity in the pool
      * @param poolRewardsData the rewards data of the pool
      * @param program the pool program info
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return the aggregated reward rate per-token
      */
@@ -725,7 +725,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolRewardsData the rewards data of the pool
      * @param providerRewards the rewards data of the provider
      * @param program the pool program info
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return the base rewards since the last claim
      */
@@ -756,7 +756,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolRewardsData the rewards data of the pool
      * @param providerRewards the rewards data of the provider
      * @param program the pool program info
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      *
      * @return full rewards and the respective rewards multiplier
      */
@@ -804,7 +804,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token representing the liquidity in the pool
-     * @param lpStats liquidity protection data store
+     * @param lpStats liquidity protection statistics store
      */
     function updateRewards(
         address provider,

@@ -51,7 +51,7 @@ const RESERVE1_AMOUNT = new BN(10000000).mul(new BN(10).pow(new BN(18)));
 const RESERVE2_AMOUNT = new BN(25000000).mul(new BN(10).pow(new BN(18)));
 const TOTAL_SUPPLY = new BN(10).pow(new BN(36));
 
-describe.only('StakingRewards', () => {
+describe('StakingRewards', () => {
     let now;
     let prevNow;
     let contractRegistry;
@@ -831,7 +831,7 @@ describe.only('StakingRewards', () => {
                     const provider = providers[i];
 
                     describe('querying', async () => {
-                        it.only('should properly calculate all rewards', async () => {
+                        it('should properly calculate all rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
                             await testRewards(provider);

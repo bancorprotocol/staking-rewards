@@ -3,7 +3,7 @@ pragma solidity 0.6.12;
 
 import "../StakingRewards.sol";
 
-import "./TestTime.sol";
+import "@bancor/contracts/solidity/contracts/helpers/TestTime.sol";
 
 contract TestStakingRewards is StakingRewards, TestTime {
     constructor(
@@ -19,8 +19,8 @@ contract TestStakingRewards is StakingRewards, TestTime {
 
     function baseRewards(
         address provider,
-        IERC20 poolToken,
-        IERC20 reserveToken
+        IDSToken poolToken,
+        IERC20Token reserveToken
     ) external view returns (uint256) {
         PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
         ProviderRewards memory providerRewards = providerRewards(poolToken, reserveToken, provider);
@@ -34,7 +34,7 @@ contract TestStakingRewards is StakingRewards, TestTime {
                 poolRewardsData,
                 providerRewards,
                 program,
-                liquidityProtectionStore()
+                liquidityProtectionStats()
             );
     }
 }

@@ -19,10 +19,8 @@ class Provider {
         if (!test) {
             info('Running against mainnet');
 
-            this.queryWeb3Provider = WebsocketProvider;
-            this.queryWeb3 = new Web3(this.queryWeb3Provider);
-            this.sendWeb3Provider = HttpProvider;
-            this.sendWeb3 = new Web3(this.sendWeb3Provider);
+            this.queryWeb3 = new Web3(WebsocketProvider);
+            this.sendWeb3 = new Web3(HttpProvider);
         } else {
             info('Running against a mainnet fork (via Ganache)');
 
@@ -38,9 +36,7 @@ class Provider {
 
             info('Started forking the mainnet');
 
-            this.queryWeb3Provider = ganacheProvider;
-            this.sendWeb3Provider = ganacheProvider;
-            const web3 = new Web3(this.queryWeb3Provider);
+            const web3 = new Web3(ganacheProvider);
             this.queryWeb3 = web3;
             this.sendWeb3 = web3;
 
@@ -65,7 +61,7 @@ class Provider {
             );
         }
 
-        Contract.setProvider(this.queryWeb3Provider);
+        Contract.setProvider(this.queryWeb3);
     }
 
     getDefaultAccount() {
@@ -73,13 +69,13 @@ class Provider {
     }
 
     async call(method, options = {}, blockNumber) {
-        Contract.setProvider(this.queryWeb3Provider);
+        Contract.setProvider(this.queryWeb3);
 
         return method.call(options, blockNumber);
     }
 
     async send(method, options = {}) {
-        Contract.setProvider(this.sendWeb3Provider);
+        Contract.setProvider(this.sendWeb3);
 
         if (!options.gasPrice) {
             if (!test && Number(this.gasPrice) === 0) {
@@ -138,25 +134,35 @@ class Provider {
     }
 
     async getPastEvents(contract, event, options = {}) {
-        Contract.setProvider(this.queryWeb3Provider);
+        Contract.setProvider(this.queryWeb3);
 
         return contract.getPastEvents(event, options);
     }
 
-    async decodeParameters(typesArray, hexString) {
+    decodeParameters(typesArray, hexString) {
         return this.queryWeb3.eth.abi.decodeParameters(typesArray, hexString);
     }
 
     static unlockedAccounts() {
         const {
             externalContracts: {
+                LiquidityProtectionStore: { owner: liquidityProtectionStoreOwner },
+                LiquidityProtectionSettings: { owner: liquidityProtectionSettingsOwner },
+                LiquidityProtection: { owner: liquidityProtectionOwner },
                 TokenGovernance: { governor },
                 CheckpointStore: { owner: checkpointStoreOwner },
                 ContractRegistry: { owner: contractRegistryOwner }
             }
         } = settings;
 
-        return [governor, checkpointStoreOwner, contractRegistryOwner];
+        return [
+            liquidityProtectionStoreOwner,
+            liquidityProtectionSettingsOwner,
+            liquidityProtectionOwner,
+            governor,
+            checkpointStoreOwner,
+            contractRegistryOwner
+        ];
     }
 }
 

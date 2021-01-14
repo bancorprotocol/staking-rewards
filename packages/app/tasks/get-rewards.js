@@ -51,7 +51,7 @@ const getRewardsTask = async (env) => {
                     set(providerRewards, [poolToken, reserveToken, provider], {});
 
                     await web3Provider.send(
-                        contracts.TestLiquidityProtection.methods.addLiquidityAt(
+                        contracts.TestLiquidityProtectionSimulator.methods.simulateAddLiquidity(
                             provider,
                             poolToken,
                             reserveToken,
@@ -66,9 +66,13 @@ const getRewardsTask = async (env) => {
                 }
 
                 case 'Remove': {
+                    const { id, portion } = change;
+
                     trace(
                         'Applying liquidity removal event at block',
                         arg('blockNumber', blockNumber),
+                        arg('id', id),
+                        arg('portion', portion),
                         arg('provider', provider),
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken),
@@ -77,7 +81,7 @@ const getRewardsTask = async (env) => {
                     );
 
                     await web3Provider.send(
-                        contracts.TestLiquidityProtection.methods.removeLiquidityAt(
+                        contracts.TestLiquidityProtectionSimulator.methods.simulateRemoveLiquidity(
                             provider,
                             poolToken,
                             reserveToken,
@@ -226,7 +230,7 @@ const getRewardsTask = async (env) => {
     const getRewards = async (liquidity, fromBlock, toBlock) => {
         info('Getting all rewards from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
-        const data = await applyPositionChanges(liquidity.liquidity, fromBlock, toBlock);
+        const data = await applyPositionChanges(liquidity, fromBlock, toBlock);
         const { poolRewards, providerRewards } = await getRewardsData(data, toBlock);
         const pendingRewards = await getPendingRewards(providerRewards);
 
@@ -244,7 +248,7 @@ const getRewardsTask = async (env) => {
     const dbDir = path.resolve(__dirname, '../data');
     const liquidityDbPath = path.join(dbDir, 'liquidity.json');
     const rawData = fs.readFileSync(liquidityDbPath);
-    const liquidity = JSON.parse(rawData);
+    const { liquidity } = JSON.parse(rawData);
 
     const fromBlock = settings.genesisBlock;
     const toBlock = liquidity.lastBlockNumber;

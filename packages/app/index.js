@@ -7,7 +7,7 @@ const { info, error } = require('./utils/logger');
 
 const argv = require('./utils/yargs');
 
-const getLiquidityChangesTask = require('./tasks/get-liquidity-changes');
+const getLiquidityTask = require('./tasks/get-liquidity');
 const getLastRemovalTimesTask = require('./tasks/get-last-removal-times');
 const getRewardsTask = require('./tasks/get-rewards');
 
@@ -32,43 +32,34 @@ const main = async () => {
         const env = await setup();
 
         // Handle all the tasks in the right order.
-        const {
-            getAll,
-            getLiquidityChanges,
-            getLastRemovalTimes,
-            getRewards,
-            setAll,
-            setLastRemovalTimes,
-            setPrograms,
-            setRewards
-        } = argv;
+        const { getLiquidity, getLastRemovalTimes, getRewards, setLastRemovalTimes, setPrograms, setRewards } = argv;
 
         let programsSet = false;
 
-        if (getAll || getLiquidityChanges) {
-            await getLiquidityChangesTask(env);
+        if (getLiquidity) {
+            await getLiquidityTask(env);
         }
 
-        if (getAll || getLastRemovalTimes) {
+        if (getLastRemovalTimes) {
             await getLastRemovalTimesTask(env);
         }
 
-        if (getAll || getRewards) {
+        if (getRewards) {
             await setProgramsTask(env);
             programsSet = true;
 
             await getRewardsTask(env);
         }
 
-        if (setAll || setLastRemovalTimes) {
+        if (setLastRemovalTimes) {
             await setLastRemovalTimesTask(env);
         }
 
-        if (!programsSet && (setAll || setPrograms)) {
+        if (!programsSet && setPrograms) {
             await setProgramsTask(env);
         }
 
-        if (setAll || setRewards) {
+        if (setRewards) {
             await setRewardsTask(env);
         }
 

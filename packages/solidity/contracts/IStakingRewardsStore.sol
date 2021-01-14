@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@bancor/contracts/solidity/contracts/token/interfaces/IDSToken.sol";
+import "@bancor/contracts/solidity/contracts/token/interfaces/IERC20Token.sol";
 
 struct PoolProgram {
     uint256 startTime;
     uint256 endTime;
     uint256 rewardRate;
-    IERC20[2] reserveTokens;
+    IERC20Token[2] reserveTokens;
     uint32[2] rewardShares;
 }
 
@@ -27,30 +28,30 @@ struct ProviderRewards {
 }
 
 interface IStakingRewardsStore {
-    function isPoolParticipating(IERC20 poolToken) external view returns (bool);
+    function isPoolParticipating(IDSToken poolToken) external view returns (bool);
 
-    function isReserveParticipating(IERC20 poolToken, IERC20 reserveToken) external view returns (bool);
+    function isReserveParticipating(IDSToken poolToken, IERC20Token reserveToken) external view returns (bool);
 
     function addPoolProgram(
-        IERC20 poolToken,
-        IERC20[2] calldata reserveTokens,
+        IDSToken poolToken,
+        IERC20Token[2] calldata reserveTokens,
         uint32[2] calldata rewardShares,
         uint256 endTime,
         uint256 rewardRate
     ) external;
 
-    function removePoolProgram(IERC20 poolToken) external;
+    function removePoolProgram(IDSToken poolToken) external;
 
-    function extendPoolProgram(IERC20 poolToken, uint256 newEndTime) external;
+    function extendPoolProgram(IDSToken poolToken, uint256 newEndTime) external;
 
-    function poolProgram(IERC20 poolToken)
+    function poolProgram(IDSToken poolToken)
         external
         view
         returns (
             uint256,
             uint256,
             uint256,
-            IERC20[2] memory,
+            IERC20Token[2] memory,
             uint32[2] memory
         );
 
@@ -58,15 +59,15 @@ interface IStakingRewardsStore {
         external
         view
         returns (
-            IERC20[] memory,
+            IDSToken[] memory,
             uint256[] memory,
             uint256[] memory,
             uint256[] memory,
-            IERC20[2][] memory,
+            IERC20Token[2][] memory,
             uint32[2][] memory
         );
 
-    function poolRewards(IERC20 poolToken, IERC20 reserveToken)
+    function poolRewards(IDSToken poolToken, IERC20Token reserveToken)
         external
         view
         returns (
@@ -76,16 +77,16 @@ interface IStakingRewardsStore {
         );
 
     function updatePoolRewardsData(
-        IERC20 poolToken,
-        IERC20 reserveToken,
+        IDSToken poolToken,
+        IERC20Token reserveToken,
         uint256 lastUpdateTime,
         uint256 rewardPerToken,
         uint256 totalClaimedRewards
     ) external;
 
     function providerRewards(
-        IERC20 poolToken,
-        IERC20 reserveToken,
+        IDSToken poolToken,
+        IERC20Token reserveToken,
         address provider
     )
         external
@@ -100,8 +101,8 @@ interface IStakingRewardsStore {
         );
 
     function updateProviderRewardsData(
-        IERC20 poolToken,
-        IERC20 reserveToken,
+        IDSToken poolToken,
+        IERC20Token reserveToken,
         address provider,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,

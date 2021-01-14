@@ -507,7 +507,7 @@ const getLiquidityTask = async (env) => {
     const verifyProtectionLiquidityChanges = async (data) => {
         const { liquidity } = data;
 
-        info('Verifying all new protection change events', arg('blockNumber', toBlock));
+        info('Verifying all protection change events', arg('blockNumber', toBlock));
 
         // Verify that the events are sorted in an ascending order.
         for (let i = 0; i + 1 < liquidity.length - 1; ++i) {

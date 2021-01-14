@@ -31,7 +31,6 @@ const CONVERTER_FACTORY = web3.utils.asciiToHex('ConverterFactory');
 const LIQUIDITY_PROTECTION = web3.utils.asciiToHex('LiquidityProtection');
 
 const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
-const ROLE_REWARDS_DISTRIBUTOR = web3.utils.keccak256('ROLE_REWARDS_DISTRIBUTOR');
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
@@ -321,15 +320,12 @@ describe('StakingRewards', () => {
 
             expect(await newStaking.getRoleMemberCount.call(ROLE_SUPERVISOR)).to.be.bignumber.equal(new BN(1));
             expect(await newStaking.getRoleMemberCount.call(ROLE_PUBLISHER)).to.be.bignumber.equal(new BN(0));
-            expect(await newStaking.getRoleMemberCount.call(ROLE_REWARDS_DISTRIBUTOR)).to.be.bignumber.equal(new BN(0));
 
             expect(await newStaking.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
             expect(await newStaking.getRoleAdmin.call(ROLE_PUBLISHER)).to.eql(ROLE_SUPERVISOR);
-            expect(await newStaking.getRoleAdmin.call(ROLE_REWARDS_DISTRIBUTOR)).to.eql(ROLE_SUPERVISOR);
 
             expect(await newStaking.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
             expect(await newStaking.hasRole.call(ROLE_PUBLISHER, supervisor)).to.be.false();
-            expect(await newStaking.hasRole.call(ROLE_REWARDS_DISTRIBUTOR, supervisor)).to.be.false();
         });
 
         it('should initialize the state', async () => {

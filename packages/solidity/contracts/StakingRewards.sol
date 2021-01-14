@@ -29,9 +29,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the roles is used to restrict who is allowed to publish liquidity protection events.
     bytes32 public constant ROLE_PUBLISHER = keccak256("ROLE_PUBLISHER");
 
-    // the role is used to govern retroactive rewards distribution.
-    bytes32 public constant ROLE_REWARDS_DISTRIBUTOR = keccak256("ROLE_REWARDS_DISTRIBUTOR");
-
     uint32 private constant PPM_RESOLUTION = 1000000;
 
     // the weekly 25% increase of the rewards multiplier (in units of PPM).
@@ -105,7 +102,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
         _setRoleAdmin(ROLE_PUBLISHER, ROLE_SUPERVISOR);
-        _setRoleAdmin(ROLE_REWARDS_DISTRIBUTOR, ROLE_SUPERVISOR);
 
         // allow the deployer to initially govern the contract.
         _setupRole(ROLE_SUPERVISOR, _msgSender());
@@ -118,15 +114,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
     function _onlyPublisher() internal view {
         require(hasRole(ROLE_PUBLISHER, msg.sender), "ERR_ACCESS_DENIED");
-    }
-
-    modifier onlyRewardsDistributor() {
-        _onlyRewardsDistributor();
-        _;
-    }
-
-    function _onlyRewardsDistributor() internal view {
-        require(hasRole(ROLE_REWARDS_DISTRIBUTOR, msg.sender), "ERR_ACCESS_DENIED");
     }
 
     /**

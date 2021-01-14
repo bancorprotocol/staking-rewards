@@ -560,7 +560,7 @@ describe('StakingRewardsStore', () => {
             const seeder = accounts[5];
 
             beforeEach(async () => {
-                await store.grantRole(ROLE_SEEDER, seeder, { from: owner });
+                await store.grantRole(ROLE_SEEDER, seeder, { from: supervisor });
             });
 
             describe('pool programs', async () => {

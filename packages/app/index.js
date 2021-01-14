@@ -55,8 +55,8 @@ const main = async () => {
             while (true) {
                 info('Re-syncing liquidity changes. This operation might take some time to finish');
 
-                await getLiquidityTask(env);
-                await getRewardsTask(env, true);
+                await getLiquidityTask(env, { verify: false });
+                await getRewardsTask(env, { resume: true });
             }
         }
 

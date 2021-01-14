@@ -25,7 +25,7 @@ const REMOVE_LIQUIDITY_ABI = [
 
 const PPM_RESOLUTION = new BN(1000000);
 
-const getLiquidityTask = async (env) => {
+const getLiquidityTask = async (env, { verify = true } = {}) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
             contracts.LiquidityProtectionStore.methods.protectedLiquidity(id),
@@ -218,6 +218,8 @@ const getLiquidityTask = async (env) => {
 
                         eventCount++;
 
+                        data.lastBlockNumber = blockNumber;
+
                         break;
                     }
 
@@ -334,6 +336,8 @@ const getLiquidityTask = async (env) => {
                         position.reserveAmount = new BN(newReserveAmount).toString();
 
                         eventCount++;
+
+                        data.lastBlockNumber = blockNumber;
 
                         break;
                     }
@@ -495,6 +499,8 @@ const getLiquidityTask = async (env) => {
 
                         eventCount++;
 
+                        data.lastBlockNumber = blockNumber;
+
                         break;
                     }
                 }
@@ -575,9 +581,10 @@ const getLiquidityTask = async (env) => {
         }
 
         await getProtectionLiquidityChanges(data, fromBlock, toBlock);
-        await verifyProtectionLiquidityChanges(data);
 
-        data.lastBlockNumber = toBlock;
+        if (verify) {
+            await verifyProtectionLiquidityChanges(data);
+        }
     };
 
     const { settings, web3Provider, reorgOffset, contracts, test } = env;
@@ -616,6 +623,10 @@ const getLiquidityTask = async (env) => {
     }
 
     const toBlock = latestBlock - reorgOffset;
+    if (toBlock < fromBlock) {
+        error('Invalid block range', arg('fromBlock', fromBlock), arg('toBlock', toBlock));
+    }
+
     if (toBlock - fromBlock < reorgOffset) {
         error(
             'Unable to satisfy the reorg window. Please wait for additional',

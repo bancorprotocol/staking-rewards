@@ -834,7 +834,6 @@ describe.only('StakingRewards', () => {
                         it.only('should properly calculate all rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
-                            await printProviderRewards(provider, poolToken, reserveToken);
                             await testRewards(provider);
 
                             // Should return all rewards for a single day.

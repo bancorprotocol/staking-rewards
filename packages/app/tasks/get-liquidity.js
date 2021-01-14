@@ -526,7 +526,7 @@ const getLiquidityTask = async (env) => {
                 continue;
             }
 
-            const { id, portion, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
+            const { id, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
 
             const position = await getPosition(id, blockNumber - 1);
             const newPosition = await getPosition(id, blockNumber);

@@ -22,7 +22,7 @@ const getRewardsTask = async (env, resume = false) => {
             const { event, blockNumber, timestamp, provider, poolToken, reserveToken, reserveAmount } = change;
 
             if (blockNumber < fromBlock) {
-                error('Invalid', arg('blockNumber', blockNumber), '. Aborting');
+                continue;
             }
 
             if (blockNumber > toBlock) {

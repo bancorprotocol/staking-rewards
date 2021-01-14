@@ -382,9 +382,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // update provider rewards data with the remaining pending rewards and set the effective staking time to the
         // timestamp of the current block.
         _store.updateProviderRewardsData(
+            provider,
             poolToken,
             reserveToken,
-            provider,
             providerRewards.rewardPerToken,
             0,
             providerRewards.totalClaimedRewards.add(fullReward),
@@ -416,7 +416,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             for (uint256 j = 0; j < program.reserveTokens.length; ++j) {
                 IERC20Token reserveToken = program.reserveTokens[j];
 
-                ProviderRewards memory providerRewards = providerRewards(poolToken, reserveToken, provider);
+                ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
 
                 totalRewards = totalRewards.add(providerRewards.totalClaimedRewards);
             }
@@ -607,9 +607,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             // update store data with the store pending rewards and set the last update time to the timestamp of the
             // current block.
             _store.updateProviderRewardsData(
+                provider,
                 poolToken,
                 reserveToken,
-                provider,
                 providerRewards.rewardPerToken,
                 0,
                 providerRewards.totalClaimedRewards,
@@ -725,7 +725,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         PoolProgram memory program,
         ILiquidityProtectionStats lpStats
     ) internal view returns (uint256) {
-        uint256 totalProviderAmount = lpStats.totalProviderAmount(poolToken, reserveToken, provider);
+        uint256 totalProviderAmount = lpStats.totalProviderAmount(provider, poolToken, reserveToken);
         uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, poolRewardsData, program, lpStats);
 
         return
@@ -817,12 +817,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         );
 
         // update provider's rewards with the newly claimable base rewards and the new reward rate per-token.
-        ProviderRewards memory providerRewards = providerRewards(poolToken, reserveToken, provider);
+        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
 
         // if this is the first liquidity provision - set the effective staking time to the current time.
         if (
             providerRewards.effectiveStakingTime == 0 &&
-            lpStats.totalProviderAmount(poolToken, reserveToken, provider) == 0
+            lpStats.totalProviderAmount(provider, poolToken, reserveToken) == 0
         ) {
             providerRewards.effectiveStakingTime = time();
         }
@@ -834,9 +834,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         providerRewards.rewardPerToken = poolRewardsData.rewardPerToken;
 
         _store.updateProviderRewardsData(
+            provider,
             poolToken,
             reserveToken,
-            provider,
             providerRewards.rewardPerToken,
             providerRewards.pendingBaseRewards,
             providerRewards.totalClaimedRewards,
@@ -937,16 +937,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     /**
      * @dev returns provider rewards for a specific pool and reserve
      *
+     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token representing the liquidity in the pool
-     * @param provider the owner of the liquidity
      *
      * @return provider rewards for a specific pool and reserve
      */
     function providerRewards(
+        address provider,
         IDSToken poolToken,
-        IERC20Token reserveToken,
-        address provider
+        IERC20Token reserveToken
     ) internal view returns (ProviderRewards memory) {
         ProviderRewards memory data;
         (
@@ -956,7 +956,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             data.effectiveStakingTime,
             data.baseRewardsDebt,
             data.baseRewardsDebtMultiplier
-        ) = _store.providerRewards(poolToken, reserveToken, provider);
+        ) = _store.providerRewards(provider, poolToken, reserveToken);
 
         return data;
     }

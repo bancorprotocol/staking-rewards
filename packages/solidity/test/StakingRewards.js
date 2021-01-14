@@ -51,7 +51,7 @@ const RESERVE1_AMOUNT = new BN(10000000).mul(new BN(10).pow(new BN(18)));
 const RESERVE2_AMOUNT = new BN(25000000).mul(new BN(10).pow(new BN(18)));
 const TOTAL_SUPPLY = new BN(10).pow(new BN(36));
 
-describe('StakingRewards', () => {
+describe.only('StakingRewards', () => {
     let now;
     let prevNow;
     let contractRegistry;
@@ -142,9 +142,9 @@ describe('StakingRewards', () => {
 
     const getProviderRewards = async (provider, poolToken, reserveToken) => {
         const data = await store.providerRewards.call(
+            provider,
             poolToken.address || poolToken,
-            reserveToken.address || reserveToken,
-            provider
+            reserveToken.address || reserveToken
         );
 
         return {
@@ -170,9 +170,9 @@ describe('StakingRewards', () => {
         console.log('baseRewardsDebtMultiplier', data.baseRewardsDebtMultiplier.toString());
 
         const totalProviderAmount = await liquidityProtectionStats.totalProviderAmount.call(
+            provider,
             poolToken.address || poolToken,
-            reserveToken.address || reserveToken,
-            provider
+            reserveToken.address || reserveToken
         );
         console.log('totalProviderAmount', totalProviderAmount.toString());
 
@@ -470,13 +470,13 @@ describe('StakingRewards', () => {
                 set(programs, [poolToken, networkToken.address], new BN(0));
 
                 for (const provider of accounts) {
-                    set(positions, [poolToken, reserveToken, provider], []);
-                    set(positions, [poolToken, networkToken.address, provider], []);
+                    set(positions, [provider, poolToken, reserveToken], []);
+                    set(positions, [provider, poolToken, networkToken.address], []);
 
                     providerPools[provider] = {};
 
-                    set(reserveAmounts, [poolToken, reserveToken, provider], new BN(0));
-                    set(reserveAmounts, [poolToken, networkToken.address, provider], new BN(0));
+                    set(reserveAmounts, [provider, poolToken, reserveToken], new BN(0));
+                    set(reserveAmounts, [provider, poolToken, networkToken.address], new BN(0));
                 }
             }
         });
@@ -491,9 +491,9 @@ describe('StakingRewards', () => {
                 reserveTokens.push(reserveToken.address);
             }
 
-            reserveAmounts[poolToken.address][reserveToken.address][provider] = reserveAmounts[poolToken.address][
-                reserveToken.address
-            ][provider].add(reserveAmount);
+            reserveAmounts[provider][poolToken.address][reserveToken.address] = reserveAmounts[provider][
+                poolToken.address
+            ][reserveToken.address].add(reserveAmount);
 
             totalReserveAmounts[poolToken.address][reserveToken.address] = totalReserveAmounts[poolToken.address][
                 reserveToken.address
@@ -518,25 +518,25 @@ describe('StakingRewards', () => {
             );
 
             const id = await liquidityProtection.lastId.call();
-            positions[poolToken.address][reserveToken.address][provider].push(id);
+            positions[provider][poolToken.address][reserveToken.address].push(id);
         };
 
         const removeTestLiquidity = async (provider, poolToken, reserveToken, reserveAmount) => {
-            expect(reserveAmounts[poolToken.address][reserveToken.address][provider]).to.be.bignumber.gte(
+            expect(reserveAmounts[provider][poolToken.address][reserveToken.address]).to.be.bignumber.gte(
                 reserveAmount
             );
 
             expect(totalReserveAmounts[poolToken.address][reserveToken.address]).to.be.bignumber.gte(reserveAmount);
 
-            reserveAmounts[poolToken.address][reserveToken.address][provider] = reserveAmounts[poolToken.address][
-                reserveToken.address
-            ][provider].sub(reserveAmount);
+            reserveAmounts[provider][poolToken.address][reserveToken.address] = reserveAmounts[provider][
+                poolToken.address
+            ][reserveToken.address].sub(reserveAmount);
 
             totalReserveAmounts[poolToken.address][reserveToken.address] = totalReserveAmounts[poolToken.address][
                 reserveToken.address
             ].sub(reserveAmount);
 
-            if (reserveAmounts[poolToken.address][reserveToken.address][provider].eq(new BN(0))) {
+            if (reserveAmounts[provider][poolToken.address][reserveToken.address].eq(new BN(0))) {
                 providerPools[provider][poolToken.address].splice(
                     providerPools[provider][poolToken.address].indexOf(reserveToken.address),
                     1
@@ -549,7 +549,7 @@ describe('StakingRewards', () => {
 
                 if (
                     !reserveToken2 ||
-                    reserveAmounts[poolToken.address][reserveToken2.address][provider].eq(new BN(0))
+                    reserveAmounts[provider][poolToken.address][reserveToken2.address].eq(new BN(0))
                 ) {
                     providerPools[provider].poolTokens = [];
                 }
@@ -573,7 +573,7 @@ describe('StakingRewards', () => {
         };
 
         const removeLiquidity = async (provider, poolToken, reserveToken, portion) => {
-            const id = positions[poolToken.address][reserveToken.address][provider][0];
+            const id = positions[provider][poolToken.address][reserveToken.address][0];
             const position = await getPosition(provider, id);
 
             let reserveAmount;
@@ -642,7 +642,7 @@ describe('StakingRewards', () => {
                 return new BN(0);
             }
 
-            return reserveAmounts[poolToken][reserveToken][provider]
+            return reserveAmounts[provider][poolToken][reserveToken]
                 .mul(
                     duration
                         .mul(programs[poolToken].rewardRate)
@@ -831,9 +831,10 @@ describe('StakingRewards', () => {
                     const provider = providers[i];
 
                     describe('querying', async () => {
-                        it('should properly calculate all rewards', async () => {
+                        it.only('should properly calculate all rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
+                            await printProviderRewards(provider, poolToken, reserveToken);
                             await testRewards(provider);
 
                             // Should return all rewards for a single day.

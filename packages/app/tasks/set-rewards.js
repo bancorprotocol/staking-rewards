@@ -141,7 +141,7 @@ const setRewardsTask = async (env) => {
                     } = data;
 
                     const providerData = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
+                        contracts.StakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
                     );
 
                     const poolRewardPerToken = new BN(providerData[0]);
@@ -272,7 +272,7 @@ const setRewardsTask = async (env) => {
                     } = data;
 
                     const providerData = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
+                        contracts.StakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
                     );
 
                     const actualRewardPerToken = new BN(providerData[0]);

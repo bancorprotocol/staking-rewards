@@ -250,12 +250,13 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
     const rewardsDbPath = path.join(dbDir, 'rewards.json');
 
     const { liquidity, lastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
+
     let rewards = {};
 
     let fromBlock = settings.genesisBlock;
     if (resume) {
         rewards = JSON.parse(fs.readFileSync(rewardsDbPath));
-        ({ lastBlockNumber: fromBlock } = rewards);
+        fromBlock = rewards.lastBlockNumber + 1;
     }
 
     const toBlock = lastBlockNumber;

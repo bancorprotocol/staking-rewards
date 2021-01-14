@@ -25,7 +25,7 @@ const REMOVE_LIQUIDITY_ABI = [
 
 const PPM_RESOLUTION = new BN(1000000);
 
-const getLiquidityTask = async (env, { verify = true } = {}) => {
+const getLiquidityTask = async (env) => {
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
             contracts.LiquidityProtectionStore.methods.protectedLiquidity(id),
@@ -581,10 +581,7 @@ const getLiquidityTask = async (env, { verify = true } = {}) => {
         }
 
         await getProtectionLiquidityChanges(data, fromBlock, toBlock);
-
-        if (verify) {
-            await verifyProtectionLiquidityChanges(data);
-        }
+        await verifyProtectionLiquidityChanges(data);
     };
 
     const { settings, web3Provider, reorgOffset, contracts, test } = env;

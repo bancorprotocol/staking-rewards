@@ -15,6 +15,8 @@ const setLastRemovalTimesTask = require('./tasks/set-last-removal-times');
 const setProgramsTask = require('./tasks/set-programs');
 const setRewardsTask = require('./tasks/set-rewards');
 
+const GET_REWARDS_DELAY = 30000;
+
 const main = async () => {
     try {
         // Set up local DB.
@@ -53,9 +55,9 @@ const main = async () => {
             await getRewardsTask(env);
 
             while (true) {
-                info('Re-syncing liquidity changes. This operation might take some time to finish');
+                info(`Waiting for ${GET_REWARDS_DELAY / 1000} seconds`);
+                await new Promise((r) => setTimeout(r, GET_REWARDS_DELAY));
 
-                await getLiquidityTask(env, { verify: false });
                 await getRewardsTask(env, { resume: true });
             }
         }

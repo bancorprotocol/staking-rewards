@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
-const { set, extend } = require('lodash');
+const { set } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
@@ -237,6 +237,30 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
         return { poolRewards, providerRewards, pendingRewards, lastBlockNumber: toBlock };
     };
 
+    const isObject = (item) => item && typeof item === 'object' && !Array.isArray(item);
+
+    const mergeDeep = (target, ...sources) => {
+        if (!sources.length) {
+            return target;
+        }
+        const source = sources.shift();
+
+        if (isObject(target) && isObject(source)) {
+            for (const key in source) {
+                if (isObject(source[key])) {
+                    if (!target[key]) {
+                        Object.assign(target, { [key]: {} });
+                    }
+                    mergeDeep(target[key], source[key]);
+                } else {
+                    Object.assign(target, { [key]: source[key] });
+                }
+            }
+        }
+
+        return mergeDeep(target, ...sources);
+    };
+
     const { settings, programs, web3Provider, contracts, test, init } = env;
 
     if (!test || !init) {
@@ -249,19 +273,19 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
     const liquidityDbPath = path.join(dbDir, 'liquidity.json');
     const rewardsDbPath = path.join(dbDir, 'rewards.json');
 
-    const { liquidity, lastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
+    const { liquidity, lastBlockNumber: liquidityLastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
 
     let rewards = {};
-
     let fromBlock = settings.genesisBlock;
     if (resume) {
         rewards = JSON.parse(fs.readFileSync(rewardsDbPath));
         fromBlock = rewards.lastBlockNumber + 1;
     }
 
-    const toBlock = lastBlockNumber;
+    const toBlock = liquidityLastBlockNumber;
     const newRewards = await getRewards(liquidity, fromBlock, toBlock);
-    extend(rewards, newRewards);
+
+    mergeDeep(rewards, newRewards);
 
     fs.writeFileSync(rewardsDbPath, JSON.stringify(rewards, null, 2));
 };

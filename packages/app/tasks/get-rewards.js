@@ -21,10 +21,6 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
         for (const change of liquidity) {
             const { event, blockNumber, timestamp, provider, poolToken, reserveToken, reserveAmount } = change;
 
-            if (eventCount % 200 === 0) {
-                info('Processed up to', arg('blockNumber', blockNumber));
-            }
-
             if (blockNumber < fromBlock) {
                 continue;
             }

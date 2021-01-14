@@ -5,7 +5,7 @@ const { set } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
-const getRewardsTask = async (env) => {
+const getRewardsTask = async (env, resume = false) => {
     const isPoolParticipating = (poolToken) => {
         return programs.findIndex((p) => p.poolToken.toLowerCase() === poolToken.toLowerCase()) !== -1;
     };
@@ -234,7 +234,7 @@ const getRewardsTask = async (env) => {
         const { poolRewards, providerRewards } = await getRewardsData(data, toBlock);
         const pendingRewards = await getPendingRewards(providerRewards);
 
-        return { poolRewards, providerRewards, pendingRewards };
+        return { poolRewards, providerRewards, pendingRewards, lastBlockNumber: toBlock };
     };
 
     const { settings, programs, web3Provider, contracts, test, init } = env;
@@ -247,15 +247,18 @@ const getRewardsTask = async (env) => {
 
     const dbDir = path.resolve(__dirname, '../data');
     const liquidityDbPath = path.join(dbDir, 'liquidity.json');
-    const rawData = fs.readFileSync(liquidityDbPath);
-    const { liquidity } = JSON.parse(rawData);
+    const rewardsDbPath = path.join(dbDir, 'rewards.json');
 
-    const fromBlock = settings.genesisBlock;
-    const toBlock = liquidity.lastBlockNumber;
+    const { liquidity, lastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
 
+    let fromBlock = settings.genesisBlock;
+    if (resume) {
+        ({ lastBlockNumber: fromBlock } = JSON.parse(fs.readFileSync(rewardsDbPath)));
+    }
+
+    const toBlock = lastBlockNumber;
     const rewards = await getRewards(liquidity, fromBlock, toBlock);
 
-    const rewardsDbPath = path.join(dbDir, 'rewards.json');
     fs.writeFileSync(rewardsDbPath, JSON.stringify(rewards, null, 2));
 };
 

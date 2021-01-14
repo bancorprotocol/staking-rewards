@@ -3,7 +3,7 @@ const path = require('path');
 const mkdirp = require('mkdirp');
 
 const setup = require('./utils/web3');
-const { info, error } = require('./utils/logger');
+const { info, warning, error } = require('./utils/logger');
 
 const argv = require('./utils/yargs');
 
@@ -48,7 +48,16 @@ const main = async () => {
             await setProgramsTask(env);
             programsSet = true;
 
+            info('Bootstrapping rewards');
+
             await getRewardsTask(env);
+
+            while (true) {
+                info('Re-syncing liquidity changes. This operation might take some time to finish');
+
+                await getLiquidityTask(env);
+                await getRewardsTask(env, true);
+            }
         }
 
         if (setLastRemovalTimes) {

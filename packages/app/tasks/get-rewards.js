@@ -5,7 +5,7 @@ const { set } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 
-const getRewardsTask = async (env) => {
+const getRewardsTask = async (env, { resume = false } = {}) => {
     const isPoolParticipating = (poolToken) => {
         return programs.findIndex((p) => p.poolToken.toLowerCase() === poolToken.toLowerCase()) !== -1;
     };
@@ -22,7 +22,7 @@ const getRewardsTask = async (env) => {
             const { event, blockNumber, timestamp, provider, poolToken, reserveToken, reserveAmount } = change;
 
             if (blockNumber < fromBlock) {
-                error('Invalid', arg('blockNumber', blockNumber), '. Aborting');
+                continue;
             }
 
             if (blockNumber > toBlock) {
@@ -150,7 +150,7 @@ const getRewardsTask = async (env) => {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 for (const provider of Object.keys(providers)) {
                     const data = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(poolToken, reserveToken, provider)
+                        contracts.StakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
                     );
 
                     if (new BN(data[0]).eq(new BN(0))) {
@@ -234,7 +234,31 @@ const getRewardsTask = async (env) => {
         const { poolRewards, providerRewards } = await getRewardsData(data, toBlock);
         const pendingRewards = await getPendingRewards(providerRewards);
 
-        return { poolRewards, providerRewards, pendingRewards };
+        return { poolRewards, providerRewards, pendingRewards, lastBlockNumber: toBlock };
+    };
+
+    const isObject = (item) => item && typeof item === 'object' && !Array.isArray(item);
+
+    const mergeDeep = (target, ...sources) => {
+        if (!sources.length) {
+            return target;
+        }
+        const source = sources.shift();
+
+        if (isObject(target) && isObject(source)) {
+            for (const key in source) {
+                if (isObject(source[key])) {
+                    if (!target[key]) {
+                        Object.assign(target, { [key]: {} });
+                    }
+                    mergeDeep(target[key], source[key]);
+                } else {
+                    Object.assign(target, { [key]: source[key] });
+                }
+            }
+        }
+
+        return mergeDeep(target, ...sources);
     };
 
     const { settings, programs, web3Provider, contracts, test, init } = env;
@@ -247,15 +271,22 @@ const getRewardsTask = async (env) => {
 
     const dbDir = path.resolve(__dirname, '../data');
     const liquidityDbPath = path.join(dbDir, 'liquidity.json');
-    const rawData = fs.readFileSync(liquidityDbPath);
-    const { liquidity } = JSON.parse(rawData);
-
-    const fromBlock = settings.genesisBlock;
-    const toBlock = liquidity.lastBlockNumber;
-
-    const rewards = await getRewards(liquidity, fromBlock, toBlock);
-
     const rewardsDbPath = path.join(dbDir, 'rewards.json');
+
+    const { liquidity, lastBlockNumber: liquidityLastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
+
+    let rewards = {};
+    let fromBlock = settings.genesisBlock;
+    if (resume) {
+        rewards = JSON.parse(fs.readFileSync(rewardsDbPath));
+        fromBlock = rewards.lastBlockNumber + 1;
+    }
+
+    const toBlock = liquidityLastBlockNumber;
+    const newRewards = await getRewards(liquidity, fromBlock, toBlock);
+
+    mergeDeep(rewards, newRewards);
+
     fs.writeFileSync(rewardsDbPath, JSON.stringify(rewards, null, 2));
 };
 

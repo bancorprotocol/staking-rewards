@@ -218,6 +218,8 @@ const getLiquidityTask = async (env) => {
 
                         eventCount++;
 
+                        data.lastBlockNumber = blockNumber;
+
                         break;
                     }
 
@@ -334,6 +336,8 @@ const getLiquidityTask = async (env) => {
                         position.reserveAmount = new BN(newReserveAmount).toString();
 
                         eventCount++;
+
+                        data.lastBlockNumber = blockNumber;
 
                         break;
                     }
@@ -495,6 +499,8 @@ const getLiquidityTask = async (env) => {
 
                         eventCount++;
 
+                        data.lastBlockNumber = blockNumber;
+
                         break;
                     }
                 }
@@ -507,7 +513,7 @@ const getLiquidityTask = async (env) => {
     const verifyProtectionLiquidityChanges = async (data) => {
         const { liquidity } = data;
 
-        info('Verifying all new protection change events', arg('blockNumber', toBlock));
+        info('Verifying all protection change events', arg('blockNumber', toBlock));
 
         // Verify that the events are sorted in an ascending order.
         for (let i = 0; i + 1 < liquidity.length - 1; ++i) {
@@ -526,7 +532,7 @@ const getLiquidityTask = async (env) => {
                 continue;
             }
 
-            const { id, portion, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
+            const { id, blockNumber, provider, poolToken, reserveToken, reserveAmount } = change;
 
             const position = await getPosition(id, blockNumber - 1);
             const newPosition = await getPosition(id, blockNumber);
@@ -576,8 +582,6 @@ const getLiquidityTask = async (env) => {
 
         await getProtectionLiquidityChanges(data, fromBlock, toBlock);
         await verifyProtectionLiquidityChanges(data);
-
-        data.lastBlockNumber = toBlock;
     };
 
     const { settings, web3Provider, reorgOffset, contracts, test } = env;
@@ -616,6 +620,10 @@ const getLiquidityTask = async (env) => {
     }
 
     const toBlock = latestBlock - reorgOffset;
+    if (toBlock < fromBlock) {
+        error('Invalid block range', arg('fromBlock', fromBlock), arg('toBlock', toBlock));
+    }
+
     if (toBlock - fromBlock < reorgOffset) {
         error(
             'Unable to satisfy the reorg window. Please wait for additional',

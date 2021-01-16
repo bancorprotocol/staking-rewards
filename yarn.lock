@@ -25,7 +25,7 @@
 
 "@bancor/contracts@bancorprotocol/contracts#0.6.29":
   version "0.6.28"
-  resolved "https://codeload.github.com/bancorprotocol/contracts/tar.gz/2fe25c79b73fe32043219dbcfbd68224691dc2bb"
+  resolved "https://codeload.github.com/bancorprotocol/contracts/tar.gz/6d041cf68d9b1c6a2cf90c878e336d5a855ac88b"
 
 "@bancor/token-governance@bancorprotocol/token-governance":
   version "0.1.0"

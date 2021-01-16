@@ -97,7 +97,7 @@ describe('StakingRewardsStore', () => {
     };
 
     const getProviderRewards = async (provider, poolToken, reserveToken) => {
-        const data = await store.providerRewards.call(poolToken.address, reserveToken.address, provider);
+        const data = await store.providerRewards.call(provider, poolToken.address, reserveToken.address);
 
         return {
             rewardPerToken: data[0],
@@ -171,7 +171,7 @@ describe('StakingRewardsStore', () => {
 
             expect(await newStore.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
             expect(await newStore.getRoleAdmin.call(ROLE_OWNER)).to.eql(ROLE_SUPERVISOR);
-            expect(await newStore.getRoleAdmin.call(ROLE_SEEDER)).to.eql(ROLE_OWNER);
+            expect(await newStore.getRoleAdmin.call(ROLE_SEEDER)).to.eql(ROLE_SUPERVISOR);
 
             expect(await newStore.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
             expect(await newStore.hasRole.call(ROLE_OWNER, supervisor)).to.be.false();
@@ -560,7 +560,7 @@ describe('StakingRewardsStore', () => {
             const seeder = accounts[5];
 
             beforeEach(async () => {
-                await store.grantRole(ROLE_SEEDER, seeder, { from: owner });
+                await store.grantRole(ROLE_SEEDER, seeder, { from: supervisor });
             });
 
             describe('pool programs', async () => {
@@ -1383,9 +1383,9 @@ describe('StakingRewardsStore', () => {
         it('should revert when a non-owner attempts to update provider rewards data', async () => {
             await expectRevert(
                 store.updateProviderRewardsData(
+                    provider,
                     poolToken.address,
                     reserveToken.address,
-                    provider,
                     new BN(1000),
                     new BN(0),
                     new BN(0),
@@ -1414,9 +1414,9 @@ describe('StakingRewardsStore', () => {
             const baseRewardsDebt = new BN(9999999);
             const baseRewardsDebtMultiplier = new BN(100000);
             await store.updateProviderRewardsData(
+                provider,
                 poolToken.address,
                 reserveToken.address,
-                provider,
                 rewardPerToken,
                 pendingBaseRewards,
                 totalClaimedRewards,

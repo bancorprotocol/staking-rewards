@@ -43,7 +43,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     mapping(IDSToken => mapping(IERC20Token => PoolRewards)) internal _poolRewards;
 
     // the mapping between pools, reserve tokens, and provider specific rewards.
-    mapping(IDSToken => mapping(IERC20Token => mapping(address => ProviderRewards))) internal _providerRewards;
+    mapping(address => mapping(IDSToken => mapping(IERC20Token => ProviderRewards))) internal _providerRewards;
 
     // the mapping between providers and their respective last claim times.
     mapping(address => uint256) private _providerLastClaimTimes;
@@ -80,7 +80,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         // set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
         _setRoleAdmin(ROLE_OWNER, ROLE_SUPERVISOR);
-        _setRoleAdmin(ROLE_SEEDER, ROLE_OWNER);
+        _setRoleAdmin(ROLE_SEEDER, ROLE_SUPERVISOR);
 
         // allow the deployer to initially govern the contract.
         _setupRole(ROLE_SUPERVISOR, _msgSender());
@@ -441,16 +441,16 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev returns rewards data of a specific provider
      *
+     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
-     * @param provider the owner of the liquidity
      *
      * @return rewards data
      */
     function providerRewards(
+        address provider,
         IDSToken poolToken,
-        IERC20Token reserveToken,
-        address provider
+        IERC20Token reserveToken
     )
         external
         view
@@ -464,7 +464,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint32
         )
     {
-        ProviderRewards memory data = _providerRewards[poolToken][reserveToken][provider];
+        ProviderRewards memory data = _providerRewards[provider][poolToken][reserveToken];
 
         return (
             data.rewardPerToken,
@@ -479,9 +479,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     /**
      * @dev updates provider rewards data
      *
+     * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token in the rewards pool
-     * @param provider the owner of the liquidity
      * @param rewardPerToken the new reward rate per-token
      * @param pendingBaseRewards the updated pending base rewards
      * @param totalClaimedRewards the total claimed rewards up until now
@@ -490,9 +490,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param baseRewardsDebtMultiplier the updated base rewards debt multiplier
      */
     function updateProviderRewardsData(
+        address provider,
         IDSToken poolToken,
         IERC20Token reserveToken,
-        address provider,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
         uint256 totalClaimedRewards,
@@ -500,7 +500,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256 baseRewardsDebt,
         uint32 baseRewardsDebtMultiplier
     ) external override onlyOwner {
-        ProviderRewards storage data = _providerRewards[poolToken][reserveToken][provider];
+        ProviderRewards storage data = _providerRewards[provider][poolToken][reserveToken];
 
         data.rewardPerToken = rewardPerToken;
         data.pendingBaseRewards = pendingBaseRewards;
@@ -546,7 +546,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         );
 
         for (uint256 i = 0; i < length; ++i) {
-            ProviderRewards storage data = _providerRewards[poolToken][reserveToken][providers[i]];
+            ProviderRewards storage data = _providerRewards[providers[i]][poolToken][reserveToken];
 
             uint256 baseRewardsDebt = baseRewardsDebts[i];
             uint32 baseRewardsDebtMultiplier = baseRewardsDebtMultipliers[i];

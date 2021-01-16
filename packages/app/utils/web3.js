@@ -25,9 +25,6 @@ const setup = async () => {
 
     const initExternalContract = (name) => {
         const { externalContracts } = settings;
-
-        info('Setting up External Contracts');
-
         const externalContractsDir = path.resolve(
             __dirname,
             '../../../node_modules/@bancor/contracts/solidity/build/contracts'

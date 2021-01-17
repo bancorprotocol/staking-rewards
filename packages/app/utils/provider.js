@@ -129,6 +129,10 @@ class Provider {
         return this.queryWeb3.eth.getBlockNumber();
     }
 
+    async getLastBlock() {
+        return this.getBlock(await this.getBlockNumber());
+    }
+
     async getTransaction(transactionHash) {
         return this.queryWeb3.eth.getTransaction(transactionHash);
     }

@@ -3,11 +3,13 @@ pragma solidity 0.6.12;
 
 import "../StakingRewards.sol";
 
+import "./TestStakingRewardsStore.sol";
+
 import "@bancor/contracts/solidity/contracts/helpers/TestTime.sol";
 
 contract TestStakingRewards is StakingRewards, TestTime {
     constructor(
-        IStakingRewardsStore store,
+        TestStakingRewardsStore store,
         ITokenGovernance networkTokenGovernance,
         ICheckpointStore lastRemoveTimes,
         IContractRegistry registry
@@ -15,6 +17,10 @@ contract TestStakingRewards is StakingRewards, TestTime {
 
     function time() internal view override(Time, TestTime) returns (uint256) {
         return TestTime.time();
+    }
+
+    function setStoreTime(uint256 currentTime) public {
+        TestStakingRewardsStore(address(this.store())).setTime(currentTime);
     }
 
     function baseRewards(

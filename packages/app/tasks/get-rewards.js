@@ -120,7 +120,7 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
                 trace('Processing pool rewards', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
 
                 const data = await web3Provider.call(
-                    contracts.StakingRewardsStore.methods.poolRewards(poolToken, reserveToken)
+                    contracts.TestStakingRewardsStore.methods.poolRewards(poolToken, reserveToken)
                 );
 
                 if (new BN(data[0]).eq(new BN(0))) {
@@ -150,7 +150,7 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 for (const provider of Object.keys(providers)) {
                     const data = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
+                        contracts.TestStakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
                     );
 
                     if (new BN(data[0]).eq(new BN(0))) {

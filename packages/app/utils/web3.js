@@ -95,10 +95,10 @@ const setup = async () => {
             info('Deploying contracts');
 
             await deploySystemContract('TestCheckpointStore');
-            await deploySystemContract('StakingRewardsStore');
+            await deploySystemContract('TestStakingRewardsStore');
             await deploySystemContract('TestStakingRewards', {
                 arguments: [
-                    contracts.StakingRewardsStore.options.address,
+                    contracts.TestStakingRewardsStore.options.address,
                     contracts.TokenGovernance.options.address,
                     contracts.TestCheckpointStore.options.address,
                     externalContracts.ContractRegistry.address
@@ -117,6 +117,8 @@ const setup = async () => {
                     contracts.TestCheckpointStore.options.address
                 ]
             });
+
+            contracts.StakingRewardsStore = contracts.TestStakingRewardsStore;
 
             info('Registering contracts');
 
@@ -148,6 +150,14 @@ const setup = async () => {
                 }
             );
             await web3Provider.send(contracts.TestLiquidityProtectionSimulator.methods.acceptStoreOwnership());
+
+            info('Setting initial time  StakingRewardsStore');
+
+            const block = await web3Provider.getLastBlock();
+            const { timestamp } = block;
+
+            await web3Provider.send(contracts.TestStakingRewardsStore.methods.setTime(timestamp));
+            await web3Provider.send(contracts.TestStakingRewards.methods.setTime(timestamp));
         } else {
             let { abi, address } = systemContracts.StakingRewardsStore;
             if (abi && address) {

@@ -58,6 +58,8 @@ contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
         setTime(timestamp);
 
         _stakingRewards.setTime(time());
+        _stakingRewards.setStoreTime(time());
+
         _stakingRewards.onAddingLiquidity(provider, poolAnchor, reserveToken, 0, reserveAmount);
 
         stats.increaseTotalAmounts(provider, IDSToken(address(poolAnchor)), reserveToken, 0, reserveAmount);
@@ -73,13 +75,14 @@ contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
     ) public payable {
         setTime(timestamp);
 
-        _lastRemoveCheckpointStore.setTime(time());
-
         _stakingRewards.setTime(time());
+        _stakingRewards.setStoreTime(time());
+
         _stakingRewards.onRemovingLiquidity(0, provider, poolAnchor, reserveToken, 0, reserveAmount);
 
-        stats.decreaseTotalAmounts(provider, IDSToken(address(poolAnchor)), reserveToken, 0, reserveAmount);
-
+        _lastRemoveCheckpointStore.setTime(time());
         _lastRemoveCheckpointStore.addCheckpoint(provider);
+
+        stats.decreaseTotalAmounts(provider, IDSToken(address(poolAnchor)), reserveToken, 0, reserveAmount);
     }
 }

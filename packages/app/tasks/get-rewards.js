@@ -65,13 +65,9 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
                 }
 
                 case 'Remove': {
-                    const { id, portion } = change;
-
                     trace(
                         'Applying liquidity removal event at block',
                         arg('blockNumber', blockNumber),
-                        arg('id', id),
-                        arg('portion', portion),
                         arg('provider', provider),
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken),

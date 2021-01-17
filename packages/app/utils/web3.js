@@ -44,19 +44,20 @@ const setup = async () => {
         initExternalContract('ContractRegistry');
         initExternalContract('LiquidityProtectionSettings');
         initExternalContract('LiquidityProtectionStore');
+        initExternalContract('LiquidityProtectionStats');
         initExternalContract('LiquidityProtection');
     };
 
-    const deploySystemContract = async (name, arguments = []) => {
+    const deploySystemContract = async (name, { arguments, contractName } = {}) => {
         const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
         info(`Deploying ${name}`);
 
-        const rawData = fs.readFileSync(path.join(systemContractsDir, `${name}.json`));
+        const rawData = fs.readFileSync(path.join(systemContractsDir, `${contractName || name}.json`));
         const { abi, bytecode } = JSON.parse(rawData);
 
         const contract = new Contract(abi);
-        const instance = await web3Provider.send(contract.deploy({ data: bytecode, arguments }));
+        const instance = await web3Provider.send(contract.deploy({ data: bytecode, arguments: arguments || [] }));
 
         const { address } = instance.options;
 
@@ -95,23 +96,27 @@ const setup = async () => {
 
             await deploySystemContract('TestCheckpointStore');
             await deploySystemContract('StakingRewardsStore');
-            await deploySystemContract('TestStakingRewards', [
-                contracts.StakingRewardsStore.options.address,
-                contracts.TokenGovernance.options.address,
-                contracts.TestCheckpointStore.options.address,
-                externalContracts.ContractRegistry.address
-            ]);
+            await deploySystemContract('TestStakingRewards', {
+                arguments: [
+                    contracts.StakingRewardsStore.options.address,
+                    contracts.TokenGovernance.options.address,
+                    contracts.TestCheckpointStore.options.address,
+                    externalContracts.ContractRegistry.address
+                ]
+            });
 
-            await deploySystemContract('LiquidityProtectionStats');
-            await deploySystemContract('TestLiquidityProtectionSimulator', [
-                contracts.TestStakingRewards.options.address,
-                contracts.LiquidityProtectionSettings.options.address,
-                contracts.LiquidityProtectionStore.options.address,
-                contracts.LiquidityProtectionStats.options.address,
-                contracts.TokenGovernance.options.address,
-                contracts.TokenGovernance.options.address,
-                contracts.TestCheckpointStore.options.address
-            ]);
+            await deploySystemContract('TestLiquidityProtectionStats', { contractName: 'LiquidityProtectionStats' });
+            await deploySystemContract('TestLiquidityProtectionSimulator', {
+                arguments: [
+                    contracts.TestStakingRewards.options.address,
+                    contracts.LiquidityProtectionSettings.options.address,
+                    contracts.LiquidityProtectionStore.options.address,
+                    contracts.TestLiquidityProtectionStats.options.address,
+                    contracts.TokenGovernance.options.address,
+                    contracts.TokenGovernance.options.address,
+                    contracts.TestCheckpointStore.options.address
+                ]
+            });
 
             info('Registering contracts');
 
@@ -131,7 +136,7 @@ const setup = async () => {
             await grantRole('LiquidityProtectionSettings', 'ROLE_OWNER', 'TestLiquidityProtectionSimulator', {
                 from: externalContracts.LiquidityProtectionSettings.owner
             });
-            await grantRole('LiquidityProtectionStats', 'ROLE_OWNER', 'TestLiquidityProtectionSimulator');
+            await grantRole('TestLiquidityProtectionStats', 'ROLE_OWNER', 'TestLiquidityProtectionSimulator');
 
             info('Transferring LiquidityProtectionStore ownership to TestLiquidityProtectionSimulator');
             await web3Provider.send(

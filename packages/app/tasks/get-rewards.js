@@ -1,9 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const BN = require('bn.js');
 const { set } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
+const DB = require('../utils/db');
 
 const getRewardsTask = async (env, { resume = false } = {}) => {
     const isPoolParticipating = (poolToken) => {
@@ -269,25 +268,24 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
 
     warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
 
-    const dbDir = path.resolve(__dirname, '../data');
-    const liquidityDbPath = path.join(dbDir, 'liquidity.json');
-    const rewardsDbPath = path.join(dbDir, 'rewards.json');
+    const rewardsDb = new DB('rewards');
 
-    const { liquidity, lastBlockNumber: liquidityLastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
-
-    let rewards = {};
-    let fromBlock = settings.genesisBlock;
     if (resume) {
-        rewards = JSON.parse(fs.readFileSync(rewardsDbPath));
-        fromBlock = rewards.lastBlockNumber + 1;
+        fromBlock = rewardsDb.data.lastBlockNumber + 1;
+    } else {
+        fromBlock = settings.genesisBlock;
+
+        rewardsDb.data = {};
     }
 
+    const liquidityDb = new DB('liquidity');
+    const { liquidity, lastBlockNumber: liquidityLastBlockNumber } = liquidityDb.data;
     const toBlock = liquidityLastBlockNumber;
     const newRewards = await getRewards(liquidity, fromBlock, toBlock);
 
-    mergeDeep(rewards, newRewards);
+    mergeDeep(rewardsDb.data, newRewards);
 
-    fs.writeFileSync(rewardsDbPath, JSON.stringify(rewards, null, 2));
+    rewardsDb.save();
 };
 
 module.exports = getRewardsTask;

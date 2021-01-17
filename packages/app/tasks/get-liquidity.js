@@ -5,6 +5,7 @@ const Contract = require('web3-eth-contract');
 const { set, get } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
+const DB = require('../utils/db');
 
 const ETH_RESERVE_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const MKR_RESERVE_ADDRESS = '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2';
@@ -414,20 +415,14 @@ const getLiquidityTask = async (env) => {
     const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
     const { abi: ERC20_ABI } = JSON.parse(rawData);
 
-    const dbDir = path.resolve(__dirname, '../data');
-    const dbPath = path.join(dbDir, 'liquidity.json');
-    let data = {};
-    if (fs.existsSync(dbPath)) {
-        const rawData = fs.readFileSync(dbPath);
-        data = JSON.parse(rawData);
-    }
+    const db = new DB('liquidity');
 
     let fromBlock;
-    if (!data.lastBlockNumber) {
+    if (!db.data.lastBlockNumber) {
         warning('DB last block number is missing. Starting from the beginning');
         fromBlock = settings.genesisBlock;
     } else {
-        fromBlock = data.lastBlockNumber + 1;
+        fromBlock = db.data.lastBlockNumber + 1;
     }
 
     const latestBlock = await web3Provider.getBlockNumber();
@@ -450,9 +445,9 @@ const getLiquidityTask = async (env) => {
 
     info('Getting protected liquidity from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
-    await getProtectedLiquidity(data, fromBlock, toBlock);
+    await getProtectedLiquidity(db.data, fromBlock, toBlock);
 
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+    db.save();
 };
 
 module.exports = getLiquidityTask;

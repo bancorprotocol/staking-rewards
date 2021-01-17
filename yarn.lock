@@ -24,8 +24,8 @@
     js-tokens "^4.0.0"
 
 "@bancor/contracts@bancorprotocol/contracts#0.6.29":
-  version "0.6.28"
-  resolved "https://codeload.github.com/bancorprotocol/contracts/tar.gz/6d041cf68d9b1c6a2cf90c878e336d5a855ac88b"
+  version "0.6.29"
+  resolved "https://codeload.github.com/bancorprotocol/contracts/tar.gz/d570c150cccf34591f34e385b15a0fc21e71a7c1"
 
 "@bancor/token-governance@bancorprotocol/token-governance":
   version "0.1.0"
@@ -8869,6 +8869,15 @@ promzard@^0.3.0:
   dependencies:
     read "1"
 
+proper-lockfile@^4.1.1:
+  version "4.1.1"
+  resolved "https://registry.yarnpkg.com/proper-lockfile/-/proper-lockfile-4.1.1.tgz#284cf9db9e30a90e647afad69deb7cb06881262c"
+  integrity sha512-1w6rxXodisVpn7QYvLk706mzprPTAPCYAqxMvctmPN3ekuRk/kuGkGc82pangZiAt4R3lwSuUzheTTn0/Yb7Zg==
+  dependencies:
+    graceful-fs "^4.1.11"
+    retry "^0.12.0"
+    signal-exit "^3.0.2"
+
 proto-list@~1.2.1:
   version "1.2.4"
   resolved "https://registry.yarnpkg.com/proto-list/-/proto-list-1.2.4.tgz#212d5bfe1318306a420f6402b8e26ff39647a849"
@@ -9472,6 +9481,11 @@ retry@^0.10.0:
   version "0.10.1"
   resolved "https://registry.yarnpkg.com/retry/-/retry-0.10.1.tgz#e76388d217992c252750241d3d3956fed98d8ff4"
   integrity sha1-52OI0heZLCUnUCQdPTlW/tmNj/Q=
+
+retry@^0.12.0:
+  version "0.12.0"
+  resolved "https://registry.yarnpkg.com/retry/-/retry-0.12.0.tgz#1b42a6266a21f07421d1b0b54b7dc167b01c013b"
+  integrity sha1-G0KmJmoh8HQh0bC1S33BZ7AcATs=
 
 reusify@^1.0.4:
   version "1.0.4"

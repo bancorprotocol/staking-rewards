@@ -120,7 +120,6 @@ const setup = async () => {
             info('Granting required permissions');
 
             await grantRole('StakingRewardsStore', 'ROLE_OWNER', 'TestStakingRewards');
-            await grantRole('StakingRewardsStore', 'ROLE_OWNER', web3Provider.getDefaultAccount());
             await grantRole('StakingRewardsStore', 'ROLE_SEEDER', web3Provider.getDefaultAccount());
             await grantRole('TokenGovernance', 'ROLE_MINTER', 'TestStakingRewards', {
                 from: externalContracts.TokenGovernance.governor

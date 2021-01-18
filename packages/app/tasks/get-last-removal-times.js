@@ -1,8 +1,7 @@
-const fs = require('fs');
-const path = require('path');
 const BN = require('bn.js');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
+const DB = require('../utils/db');
 
 const BATCH_SIZE = 5000;
 
@@ -146,20 +145,14 @@ const getLastRemovalTimes = async (env) => {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
     }
 
-    const dbDir = path.resolve(__dirname, '../data');
-    const dbPath = path.join(dbDir, 'last-removal-times.json');
-    let data = {};
-    if (fs.existsSync(dbPath)) {
-        const rawData = fs.readFileSync(dbPath);
-        data = JSON.parse(rawData);
-    }
+    const db = new DB('last-removal-times');
 
     let fromBlock;
-    if (!data.lastBlockNumber) {
+    if (!db.data.lastBlockNumber) {
         warning('DB last block number is missing. Starting from the beginning');
         fromBlock = settings.genesisBlock;
     } else {
-        fromBlock = data.lastBlockNumber + 1;
+        fromBlock = db.data.lastBlockNumber + 1;
     }
 
     const latestBlock = await web3Provider.getBlockNumber();
@@ -178,9 +171,9 @@ const getLastRemovalTimes = async (env) => {
 
     info('Getting last removal times', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
-    await getLastRemovalTimes(data, fromBlock, toBlock);
+    await getLastRemovalTimes(db.data, fromBlock, toBlock);
 
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+    db.save();
 };
 
 module.exports = getLastRemovalTimes;

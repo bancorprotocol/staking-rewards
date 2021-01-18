@@ -5,7 +5,7 @@ const ganache = require('ganache-core');
 const memdown = require('memdown');
 
 const { info, error, arg } = require('./logger');
-const { test, init, gasPrice } = require('./yargs');
+const { test, gasPrice } = require('./yargs');
 
 const settings = require('../settings.json');
 const providers = require('../providers.json');
@@ -78,7 +78,7 @@ class Provider {
         Contract.setProvider(this.sendWeb3);
 
         if (!options.gasPrice) {
-            if (!test && Number(this.gasPrice) === 0) {
+            if (!test && (!this.gasPrice || Number(this.gasPrice) === 0)) {
                 error("Gas price isn't set. Aborting");
             }
 
@@ -127,6 +127,10 @@ class Provider {
 
     async getBlockNumber() {
         return this.queryWeb3.eth.getBlockNumber();
+    }
+
+    async getLastBlock() {
+        return this.getBlock(await this.getBlockNumber());
     }
 
     async getTransaction(transactionHash) {

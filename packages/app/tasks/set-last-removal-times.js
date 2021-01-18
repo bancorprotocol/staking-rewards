@@ -1,8 +1,7 @@
-const fs = require('fs');
-const path = require('path');
 const BN = require('bn.js');
 
 const { info, trace, error, arg } = require('../utils/logger');
+const DB = require('../utils/db');
 
 const BATCH_SIZE = 200;
 
@@ -35,7 +34,7 @@ const setLastRemovalTimesTask = async (env) => {
     };
 
     const verifyLastRemovalTimes = async (lastRemovalTimes) => {
-        info('Verifying positions');
+        info('Verifying last removal times');
 
         for (const [provider, data] of Object.entries(lastRemovalTimes)) {
             trace('Verifying last removal time for', arg('provider', provider));
@@ -56,13 +55,8 @@ const setLastRemovalTimesTask = async (env) => {
 
     const { contracts, web3Provider } = env;
 
-    const dbDir = path.resolve(__dirname, '../data');
-    const dbPath = path.join(dbDir, 'last-removal-times.json');
-    if (!fs.existsSync(dbPath)) {
-        error('Unable to locate', arg('db', dbPath));
-    }
-
-    const { lastRemovalTimes } = JSON.parse(fs.readFileSync(dbPath));
+    const db = new DB('last-removal-times');
+    const { lastRemovalTimes } = db.data;
 
     await setLastRemovalTimes(lastRemovalTimes);
     await verifyLastRemovalTimes(lastRemovalTimes);

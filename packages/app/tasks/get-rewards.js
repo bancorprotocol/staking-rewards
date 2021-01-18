@@ -1,9 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const BN = require('bn.js');
 const { set } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
+const DB = require('../utils/db');
 
 const getRewardsTask = async (env, { resume = false } = {}) => {
     const isPoolParticipating = (poolToken) => {
@@ -66,13 +65,9 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
                 }
 
                 case 'Remove': {
-                    const { id, portion } = change;
-
                     trace(
                         'Applying liquidity removal event at block',
                         arg('blockNumber', blockNumber),
-                        arg('id', id),
-                        arg('portion', portion),
                         arg('provider', provider),
                         arg('poolToken', poolToken),
                         arg('reserveToken', reserveToken),
@@ -120,7 +115,7 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
                 trace('Processing pool rewards', arg('poolToken', poolToken), arg('reserveToken', reserveToken));
 
                 const data = await web3Provider.call(
-                    contracts.StakingRewardsStore.methods.poolRewards(poolToken, reserveToken)
+                    contracts.TestStakingRewardsStore.methods.poolRewards(poolToken, reserveToken)
                 );
 
                 if (new BN(data[0]).eq(new BN(0))) {
@@ -150,7 +145,7 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 for (const provider of Object.keys(providers)) {
                     const data = await web3Provider.call(
-                        contracts.StakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
+                        contracts.TestStakingRewardsStore.methods.providerRewards(provider, poolToken, reserveToken)
                     );
 
                     if (new BN(data[0]).eq(new BN(0))) {
@@ -269,25 +264,24 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
 
     warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
 
-    const dbDir = path.resolve(__dirname, '../data');
-    const liquidityDbPath = path.join(dbDir, 'liquidity.json');
-    const rewardsDbPath = path.join(dbDir, 'rewards.json');
+    const rewardsDb = new DB('rewards');
 
-    const { liquidity, lastBlockNumber: liquidityLastBlockNumber } = JSON.parse(fs.readFileSync(liquidityDbPath));
-
-    let rewards = {};
-    let fromBlock = settings.genesisBlock;
     if (resume) {
-        rewards = JSON.parse(fs.readFileSync(rewardsDbPath));
-        fromBlock = rewards.lastBlockNumber + 1;
+        fromBlock = rewardsDb.data.lastBlockNumber + 1;
+    } else {
+        fromBlock = settings.genesisBlock;
+
+        rewardsDb.data = {};
     }
 
+    const liquidityDb = new DB('liquidity');
+    const { liquidity, lastBlockNumber: liquidityLastBlockNumber } = liquidityDb.data;
     const toBlock = liquidityLastBlockNumber;
     const newRewards = await getRewards(liquidity, fromBlock, toBlock);
 
-    mergeDeep(rewards, newRewards);
+    mergeDeep(rewardsDb.data, newRewards);
 
-    fs.writeFileSync(rewardsDbPath, JSON.stringify(rewards, null, 2));
+    rewardsDb.save();
 };
 
 module.exports = getRewardsTask;

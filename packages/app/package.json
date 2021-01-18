@@ -22,6 +22,7 @@
         "humanize-duration": "^3.25.0",
         "mkdirp": "^1.0.4",
         "moment": "^2.29.1",
+        "proper-lockfile": "^4.1.1",
         "web3": "1.3.0"
     },
     "devDependencies": {

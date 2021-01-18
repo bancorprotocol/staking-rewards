@@ -3,6 +3,7 @@ const path = require('path');
 const BN = require('bn.js');
 
 const { trace, info, error, arg } = require('../utils/logger');
+const DB = require('../utils/db');
 
 const BATCH_SIZE = 50;
 
@@ -348,14 +349,8 @@ const setRewardsTask = async (env) => {
 
     const { web3Provider, contracts } = env;
 
-    const dbDir = path.resolve(__dirname, '../data');
-    const dbPath = path.join(dbDir, 'rewards.json');
-    if (!fs.existsSync(dbPath)) {
-        error('Unable to locate', arg('db', dbPath));
-    }
-
-    const data = JSON.parse(fs.readFileSync(dbPath));
-    await setRewards(data);
+    const db = new DB('rewards');
+    await setRewards(db.data);
 };
 
 module.exports = setRewardsTask;

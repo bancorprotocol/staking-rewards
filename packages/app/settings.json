@@ -9,10 +9,9 @@
             "address": "0xd444ec18952c7caf09636f21807683dacc1d7da9",
             "owner": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
         },
-
         "LiquidityProtectionStore": {
             "address": "0xf5fab5dbd2f3bf675de4cb76517d4767013cfb55",
-            "owner": "0xc9d9dc719c49edfc6bf9e0f0400fc341ce93c298"
+            "owner": "0x9Ab934010E6f2D633FeEB5b6f1DdCeEdeD601BCF"
         },
         "LiquidityProtectionStats": {
             "address": "0x9712Bb50DC6Efb8a3d7D12cEA500a50967d2d471",

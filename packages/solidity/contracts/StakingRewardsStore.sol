@@ -86,22 +86,21 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         _setupRole(ROLE_SUPERVISOR, _msgSender());
     }
 
-    modifier onlyOwner() {
-        _onlyOwner();
+    // allows execution only by an owner
+    modifier onlyOwner {
+        _hasRole(ROLE_OWNER);
         _;
     }
 
-    function _onlyOwner() internal view {
-        require(hasRole(ROLE_OWNER, msg.sender), "ERR_ACCESS_DENIED");
-    }
-
-    modifier onlySeeder() {
-        _onlySeeder();
+    // allows execution only by a seeder
+    modifier onlySeeder {
+        _hasRole(ROLE_SEEDER);
         _;
     }
 
-    function _onlySeeder() internal view {
-        require(hasRole(ROLE_SEEDER, msg.sender), "ERR_ACCESS_DENIED");
+    // error message binary size optimization
+    function _hasRole(bytes32 role) internal view {
+        require(hasRole(role, msg.sender), "ERR_ACCESS_DENIED");
     }
 
     /**

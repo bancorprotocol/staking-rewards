@@ -87,13 +87,13 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     // allows execution only by an owner
-    modifier ownerOnly {
+    modifier onlyOwner {
         _hasRole(ROLE_OWNER);
         _;
     }
 
     // allows execution only by a seeder
-    modifier seederOnly {
+    modifier onlySeeder {
         _hasRole(ROLE_SEEDER);
         _;
     }

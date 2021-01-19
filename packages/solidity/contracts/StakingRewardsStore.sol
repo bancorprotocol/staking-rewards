@@ -28,6 +28,9 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     // the owner role is used to set the values in the store.
     bytes32 public constant ROLE_OWNER = keccak256("ROLE_OWNER");
 
+    // the manager role is used to manage the programs in the store.
+    bytes32 public constant ROLE_MANAGER = keccak256("ROLE_MANAGER");
+
     // the seeder roles is used to seed the store with past values.
     bytes32 public constant ROLE_SEEDER = keccak256("ROLE_SEEDER");
 
@@ -80,6 +83,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         // set up administrative roles.
         _setRoleAdmin(ROLE_SUPERVISOR, ROLE_SUPERVISOR);
         _setRoleAdmin(ROLE_OWNER, ROLE_SUPERVISOR);
+        _setRoleAdmin(ROLE_MANAGER, ROLE_SUPERVISOR);
         _setRoleAdmin(ROLE_SEEDER, ROLE_SUPERVISOR);
 
         // allow the deployer to initially govern the contract.
@@ -89,6 +93,12 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     // allows execution only by an owner
     modifier onlyOwner {
         _hasRole(ROLE_OWNER);
+        _;
+    }
+
+    // allows execution only by an manager
+    modifier onlyManager {
+        _hasRole(ROLE_MANAGER);
         _;
     }
 
@@ -149,7 +159,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint32[2] calldata rewardShares,
         uint256 endTime,
         uint256 rewardRate
-    ) external override onlyOwner validAddress(address(poolToken)) {
+    ) external override onlyManager validAddress(address(poolToken)) {
         uint256 currentTime = time();
 
         addPoolProgram(poolToken, reserveTokens, rewardShares, currentTime, endTime, rewardRate);
@@ -269,7 +279,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @param poolToken the pool token representing the rewards pool
      */
-    function removePoolProgram(IDSToken poolToken) external override onlyOwner {
+    function removePoolProgram(IDSToken poolToken) external override onlyManager {
         require(_pools.remove(address(poolToken)), "ERR_POOL_NOT_PARTICIPATING");
 
         delete _programs[poolToken];
@@ -283,7 +293,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      * @param poolToken the pool token representing the rewards pool
      * @param newEndTime the new ending time of the program
      */
-    function extendPoolProgram(IDSToken poolToken, uint256 newEndTime) external override onlyOwner {
+    function extendPoolProgram(IDSToken poolToken, uint256 newEndTime) external override onlyManager {
         require(isPoolParticipating(poolToken), "ERR_POOL_NOT_PARTICIPATING");
 
         PoolProgram storage program = _programs[poolToken];

@@ -32,6 +32,7 @@ const LIQUIDITY_PROTECTION = web3.utils.asciiToHex('LiquidityProtection');
 
 const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
+const ROLE_MANAGER = web3.utils.keccak256('ROLE_MANAGER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
 const ROLE_MINTED_TOKENS_ADMIN = web3.utils.keccak256('ROLE_MINTED_TOKENS_ADMIN');
@@ -269,7 +270,7 @@ describe('StakingRewards', () => {
         );
 
         await store.grantRole(ROLE_OWNER, staking.address);
-        await store.grantRole(ROLE_OWNER, defaultSender);
+        await store.grantRole(ROLE_MANAGER, defaultSender);
         await networkTokenGovernance.grantRole(ROLE_MINTER, staking.address);
 
         liquidityProtectionSettings = await LiquidityProtectionSettings.new(

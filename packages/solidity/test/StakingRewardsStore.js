@@ -20,6 +20,7 @@ const CONVERTER_FACTORY = web3.utils.asciiToHex('ConverterFactory');
 
 const ROLE_SUPERVISOR = web3.utils.keccak256('ROLE_SUPERVISOR');
 const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
+const ROLE_MANAGER = web3.utils.keccak256('ROLE_MANAGER');
 const ROLE_SEEDER = web3.utils.keccak256('ROLE_SEEDER');
 
 const PPM_RESOLUTION = new BN(1000000);
@@ -37,6 +38,8 @@ describe('StakingRewardsStore', () => {
     const supervisor = defaultSender;
     const owner = accounts[0];
     const nonOwner = accounts[1];
+    const manager = accounts[2];
+    const nonManager = accounts[3];
 
     const setTime = async (time) => {
         now = time;
@@ -157,6 +160,7 @@ describe('StakingRewardsStore', () => {
         store = await StakingRewardsStore.new();
 
         await store.grantRole(ROLE_OWNER, owner, { from: supervisor });
+        await store.grantRole(ROLE_MANAGER, manager, { from: supervisor });
 
         await setTime(new BN(1000));
     });
@@ -167,21 +171,24 @@ describe('StakingRewardsStore', () => {
 
             expect(await newStore.getRoleMemberCount.call(ROLE_SUPERVISOR)).to.be.bignumber.equal(new BN(1));
             expect(await newStore.getRoleMemberCount.call(ROLE_OWNER)).to.be.bignumber.equal(new BN(0));
+            expect(await newStore.getRoleMemberCount.call(ROLE_MANAGER)).to.be.bignumber.equal(new BN(0));
             expect(await newStore.getRoleMemberCount.call(ROLE_SEEDER)).to.be.bignumber.equal(new BN(0));
 
             expect(await newStore.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
             expect(await newStore.getRoleAdmin.call(ROLE_OWNER)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStore.getRoleAdmin.call(ROLE_MANAGER)).to.eql(ROLE_SUPERVISOR);
             expect(await newStore.getRoleAdmin.call(ROLE_SEEDER)).to.eql(ROLE_SUPERVISOR);
 
             expect(await newStore.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
             expect(await newStore.hasRole.call(ROLE_OWNER, supervisor)).to.be.false();
+            expect(await newStore.hasRole.call(ROLE_MANAGER, supervisor)).to.be.false();
             expect(await newStore.hasRole.call(ROLE_SEEDER, supervisor)).to.be.false();
         });
     });
 
     describe('pool programs', () => {
-        context('owner', async () => {
-            it('should revert when a non-owner attempts to add a pool', async () => {
+        context('manager', async () => {
+            it('should revert when a non-manager attempts to add a pool', async () => {
                 await expectRevert(
                     store.addPoolProgram(
                         poolToken.address,
@@ -189,7 +196,7 @@ describe('StakingRewardsStore', () => {
                         [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                         now.add(new BN(2000)),
                         new BN(1000),
-                        { from: nonOwner }
+                        { from: nonManager }
                     ),
                     'ERR_ACCESS_DENIED'
                 );
@@ -203,7 +210,7 @@ describe('StakingRewardsStore', () => {
                         [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                         now.add(new BN(2000)),
                         new BN(1000),
-                        { from: owner }
+                        { from: manager }
                     ),
                     'ERR_INVALID_ADDRESS'
                 );
@@ -218,7 +225,7 @@ describe('StakingRewardsStore', () => {
                         now.sub(new BN(1)),
                         new BN(1000),
                         {
-                            from: owner
+                            from: manager
                         }
                     ),
                     'ERR_INVALID_DURATION'
@@ -234,7 +241,7 @@ describe('StakingRewardsStore', () => {
                         now.add(new BN(2000)),
                         new BN(1000),
                         {
-                            from: owner
+                            from: manager
                         }
                     ),
                     'ERR_INVALID_REWARD_SHARES'
@@ -252,7 +259,7 @@ describe('StakingRewardsStore', () => {
                         now.add(new BN(2000)),
                         new BN(1000),
                         {
-                            from: owner
+                            from: manager
                         }
                     ),
                     'ERR_INVALID_RESERVE_TOKENS'
@@ -266,7 +273,7 @@ describe('StakingRewardsStore', () => {
                         now.add(new BN(2000)),
                         new BN(1000),
                         {
-                            from: owner
+                            from: manager
                         }
                     ),
                     'ERR_INVALID_RESERVE_TOKENS'
@@ -281,7 +288,7 @@ describe('StakingRewardsStore', () => {
                         [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                         now.add(new BN(2000)),
                         new BN(0),
-                        { from: owner }
+                        { from: manager }
                     ),
                     'ERR_ZERO_VALUE'
                 );
@@ -301,7 +308,7 @@ describe('StakingRewardsStore', () => {
                     [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                     endTime,
                     rewardRate,
-                    { from: owner }
+                    { from: manager }
                 );
                 expectEvent(res, 'PoolProgramAdded', {
                     poolToken: poolToken.address,
@@ -330,7 +337,7 @@ describe('StakingRewardsStore', () => {
                         [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                         now.add(new BN(1)),
                         rewardRate,
-                        { from: owner }
+                        { from: manager }
                     ),
                     'ERR_ALREADY_PARTICIPATING'
                 );
@@ -366,7 +373,7 @@ describe('StakingRewardsStore', () => {
                     endTime2,
                     rewardRate2,
                     {
-                        from: owner
+                        from: manager
                     }
                 );
                 expectEvent(res2, 'PoolProgramAdded', {
@@ -409,7 +416,7 @@ describe('StakingRewardsStore', () => {
                         [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                         now.add(new BN(1)),
                         rewardRate,
-                        { from: owner }
+                        { from: manager }
                     ),
                     'ERR_ALREADY_PARTICIPATING'
                 );
@@ -429,7 +436,7 @@ describe('StakingRewardsStore', () => {
                     [BASE_TOKEN_REWARDS_SHARE, NETWORK_TOKEN_REWARDS_SHARE],
                     endTime,
                     rewardRate,
-                    { from: owner }
+                    { from: manager }
                 );
                 expectEvent(res, 'PoolProgramAdded', {
                     poolToken: poolToken.address,
@@ -457,20 +464,20 @@ describe('StakingRewardsStore', () => {
                         [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                         endTime,
                         rewardRate,
-                        { from: owner }
+                        { from: manager }
                     );
                 });
 
-                it('should revert when a non-owner attempts to remove a pool', async () => {
+                it('should revert when a non-manager attempts to remove a pool', async () => {
                     await expectRevert(
-                        store.removePoolProgram(poolToken.address, { from: nonOwner }),
+                        store.removePoolProgram(poolToken.address, { from: nonManager }),
                         'ERR_ACCESS_DENIED'
                     );
                 });
 
                 it('should revert when removing an unregistered pool', async () => {
                     await expectRevert(
-                        store.removePoolProgram(poolToken2.address, { from: owner }),
+                        store.removePoolProgram(poolToken2.address, { from: manager }),
                         'ERR_POOL_NOT_PARTICIPATING'
                     );
                 });
@@ -479,7 +486,7 @@ describe('StakingRewardsStore', () => {
                     let programs = await getPoolPrograms();
                     expect(programs.length).to.eql(1);
 
-                    const res = await store.removePoolProgram(poolToken.address, { from: owner });
+                    const res = await store.removePoolProgram(poolToken.address, { from: manager });
                     expectEvent(res, 'PoolProgramRemoved', { poolToken: poolToken.address });
 
                     programs = await getPoolPrograms();
@@ -516,7 +523,7 @@ describe('StakingRewardsStore', () => {
 
                 it('should revert when trying to extend a non-existing program', async () => {
                     await expectRevert(
-                        store.extendPoolProgram(poolToken2.address, endTime.add(new BN(1)), { from: owner }),
+                        store.extendPoolProgram(poolToken2.address, endTime.add(new BN(1)), { from: manager }),
                         'ERR_POOL_NOT_PARTICIPATING'
                     );
                 });
@@ -527,28 +534,28 @@ describe('StakingRewardsStore', () => {
                     await setTime(endTime);
 
                     await expectRevert(
-                        store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
+                        store.extendPoolProgram(poolToken.address, newEndTime, { from: manager }),
                         'ERR_POOL_NOT_PARTICIPATING'
                     );
 
                     await setTime(endTime.add(new BN(1000)));
 
                     await expectRevert(
-                        store.extendPoolProgram(poolToken.address, newEndTime, { from: owner }),
+                        store.extendPoolProgram(poolToken.address, newEndTime, { from: manager }),
                         'ERR_POOL_NOT_PARTICIPATING'
                     );
                 });
 
                 it('should revert when trying to reduce a program', async () => {
                     await expectRevert(
-                        store.extendPoolProgram(poolToken.address, endTime.sub(new BN(1)), { from: owner }),
+                        store.extendPoolProgram(poolToken.address, endTime.sub(new BN(1)), { from: manager }),
                         'ERR_INVALID_DURATION'
                     );
                 });
 
                 it('should allow extending an ongoing program', async () => {
                     const newEndTime = endTime.add(new BN(10000));
-                    await store.extendPoolProgram(poolToken.address, newEndTime, { from: owner });
+                    await store.extendPoolProgram(poolToken.address, newEndTime, { from: manager });
 
                     const program = await getPoolProgram(poolToken);
                     expect(program.endTime).to.be.bignumber.equal(newEndTime);
@@ -1314,7 +1321,7 @@ describe('StakingRewardsStore', () => {
                 [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                 endTime,
                 rewardRate,
-                { from: owner }
+                { from: manager }
             );
         });
 
@@ -1376,7 +1383,7 @@ describe('StakingRewardsStore', () => {
                 [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
                 endTime,
                 rewardRate,
-                { from: owner }
+                { from: manager }
             );
         });
 

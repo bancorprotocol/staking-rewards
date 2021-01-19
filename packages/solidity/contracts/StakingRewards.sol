@@ -199,8 +199,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return all pending rewards
      */
-    function pendingRewards(address provider) external returns (uint256) {
-        return pendingRewards(provider, false, MAX_UINT256, liquidityProtectionStats());
+    function pendingRewards(address provider) external view returns (uint256) {
+        return pendingRewards(provider, liquidityProtectionStats());
     }
 
     /**
@@ -216,40 +216,33 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         address provider,
         IDSToken poolToken,
         IERC20Token reserveToken
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         PoolProgram memory program = poolProgram(poolToken);
 
         return
-            pendingRewards(provider, poolToken, reserveToken, program, false, MAX_UINT256, liquidityProtectionStats());
+            pendingRewards(provider, poolToken, reserveToken, program, liquidityProtectionStats());
     }
 
     /**
-     * @dev returns specific provider's pending rewards for all participating pools and optionally claims them
+     * @dev returns specific provider's pending rewards for all participating pools
      *
      * @param provider the owner of the liquidity
-     * @param claim whether to actually claim the rewards
-     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
      *
      * @return all pending rewards
      */
     function pendingRewards(
         address provider,
-        bool claim,
-        uint256 maxAmount,
         ILiquidityProtectionStats lpStats
-    ) private returns (uint256) {
-        return pendingRewards(provider, lpStats.providerPools(provider), claim, maxAmount, lpStats);
+    ) private view returns (uint256) {
+        return pendingRewards(provider, lpStats.providerPools(provider), lpStats);
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specific list of participating pools and optionally
-     * claims them
+     * @dev returns specific provider's pending rewards for a specific list of participating pools
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
-     * @param claim whether to actually claim the rewards
-     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
      *
      * @return all pending rewards
@@ -257,32 +250,24 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     function pendingRewards(
         address provider,
         IDSToken[] memory poolTokens,
-        bool claim,
-        uint256 maxAmount,
         ILiquidityProtectionStats lpStats
-    ) private returns (uint256) {
+    ) private view returns (uint256) {
         uint256 reward = 0;
 
         uint256 length = poolTokens.length;
-        for (uint256 i = 0; i < length && maxAmount > 0; ++i) {
-            uint256 poolReward = pendingRewards(provider, poolTokens[i], claim, maxAmount, lpStats);
+        for (uint256 i = 0; i < length; ++i) {
+            uint256 poolReward = pendingRewards(provider, poolTokens[i], lpStats);
             reward = reward.add(poolReward);
-
-            if (claim && maxAmount != MAX_UINT256) {
-                maxAmount = maxAmount.sub(poolReward);
-            }
         }
 
         return reward;
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specific pool and optionally claims them
+     * @dev returns specific provider's pending rewards for a specific pool
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool to query
-     * @param claim whether to actually claim the rewards
-     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
      *
      * @return reward all pending rewards
@@ -290,35 +275,27 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     function pendingRewards(
         address provider,
         IDSToken poolToken,
-        bool claim,
-        uint256 maxAmount,
         ILiquidityProtectionStats lpStats
-    ) private returns (uint256) {
+    ) private view returns (uint256) {
         uint256 reward = 0;
         PoolProgram memory program = poolProgram(poolToken);
 
-        for (uint256 i = 0; i < program.reserveTokens.length && maxAmount > 0; ++i) {
+        for (uint256 i = 0; i < program.reserveTokens.length; ++i) {
             uint256 reserveReward =
-                pendingRewards(provider, poolToken, program.reserveTokens[i], program, claim, maxAmount, lpStats);
+                pendingRewards(provider, poolToken, program.reserveTokens[i], program, lpStats);
             reward = reward.add(reserveReward);
-
-            if (claim && maxAmount != MAX_UINT256) {
-                maxAmount = maxAmount.sub(reserveReward);
-            }
         }
 
         return reward;
     }
 
     /**
-     * @dev returns specific provider's pending rewards for a specific pool/reserve and optionally claims them
+     * @dev returns specific provider's pending rewards for a specific pool/reserve
      *
      * @param provider the owner of the liquidity
      * @param poolToken the pool to query
      * @param reserveToken the reserve token representing the liquidity in the pool
      * @param program the pool program info
-     * @param claim whether to actually claim the rewards
-     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
      *
      * @return reward all pending rewards
@@ -329,7 +306,137 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IDSToken poolToken,
         IERC20Token reserveToken,
         PoolProgram memory program,
-        bool claim,
+        ILiquidityProtectionStats lpStats
+    ) private view returns (uint256) {
+        // calculate the new reward rate per-token
+        PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
+
+        // rewardPerToken must be calculated with the previous value of lastUpdateTime.
+        poolRewardsData.rewardPerToken = rewardPerToken(poolToken, reserveToken, poolRewardsData, program, lpStats);
+        poolRewardsData.lastUpdateTime = Math.min(time(), program.endTime);
+
+        // update provider's rewards with the newly claimable base rewards and the new reward rate per-token.
+        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+
+        // if this is the first liquidity provision - set the effective staking time to the current time.
+        if (
+            providerRewards.effectiveStakingTime == 0 &&
+            lpStats.totalProviderAmount(provider, poolToken, reserveToken) == 0
+        ) {
+            providerRewards.effectiveStakingTime = time();
+        }
+
+        // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken.
+        providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(
+            baseRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats)
+        );
+        providerRewards.rewardPerToken = poolRewardsData.rewardPerToken;
+
+        // get full rewards and the respective rewards multiplier.
+        (uint256 fullReward,) =
+            fullRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats);
+
+        return fullReward;
+    }
+
+    /**
+     * @dev claims specific provider's pending rewards for all participating pools
+     *
+     * @param provider the owner of the liquidity
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
+     * @param lpStats liquidity protection statistics store
+     *
+     * @return all pending rewards
+     */
+    function claimPendingRewards(
+        address provider,
+        uint256 maxAmount,
+        ILiquidityProtectionStats lpStats
+    ) private returns (uint256) {
+        return claimPendingRewards(provider, lpStats.providerPools(provider), maxAmount, lpStats);
+    }
+
+    /**
+     * @dev claims specific provider's pending rewards for a specific list of participating pools
+     *
+     * @param provider the owner of the liquidity
+     * @param poolTokens the list of participating pools to query
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
+     * @param lpStats liquidity protection statistics store
+     *
+     * @return all pending rewards
+     */
+    function claimPendingRewards(
+        address provider,
+        IDSToken[] memory poolTokens,
+        uint256 maxAmount,
+        ILiquidityProtectionStats lpStats
+    ) private returns (uint256) {
+        uint256 reward = 0;
+
+        uint256 length = poolTokens.length;
+        for (uint256 i = 0; i < length && maxAmount > 0; ++i) {
+            uint256 poolReward = claimPendingRewards(provider, poolTokens[i], maxAmount, lpStats);
+            reward = reward.add(poolReward);
+
+            if (maxAmount != MAX_UINT256) {
+                maxAmount = maxAmount.sub(poolReward);
+            }
+        }
+
+        return reward;
+    }
+
+    /**
+     * @dev claims specific provider's pending rewards for a specific pool
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool to query
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
+     * @param lpStats liquidity protection statistics store
+     *
+     * @return reward all pending rewards
+     */
+    function claimPendingRewards(
+        address provider,
+        IDSToken poolToken,
+        uint256 maxAmount,
+        ILiquidityProtectionStats lpStats
+    ) private returns (uint256) {
+        uint256 reward = 0;
+        PoolProgram memory program = poolProgram(poolToken);
+
+        for (uint256 i = 0; i < program.reserveTokens.length && maxAmount > 0; ++i) {
+            uint256 reserveReward =
+                claimPendingRewards(provider, poolToken, program.reserveTokens[i], program, maxAmount, lpStats);
+            reward = reward.add(reserveReward);
+
+            if (maxAmount != MAX_UINT256) {
+                maxAmount = maxAmount.sub(reserveReward);
+            }
+        }
+
+        return reward;
+    }
+
+    /**
+     * @dev claims specific provider's pending rewards for a specific pool/reserve
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool to query
+     * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param program the pool program info
+     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
+     * @param lpStats liquidity protection statistics store
+     *
+     * @return reward all pending rewards
+     */
+
+    function claimPendingRewards(
+        address provider,
+        IDSToken poolToken,
+        IERC20Token reserveToken,
+        PoolProgram memory program,
         uint256 maxAmount,
         ILiquidityProtectionStats lpStats
     ) private returns (uint256) {
@@ -340,10 +447,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // get full rewards and the respective rewards multiplier.
         (uint256 fullReward, uint32 multiplier) =
             fullRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats);
-
-        if (!claim) {
-            return fullReward;
-        }
 
         // mark any debt as repaid.
         providerRewards.baseRewardsDebt = 0;
@@ -477,7 +580,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 maxAmount,
         ILiquidityProtectionStats lpStats
     ) private returns (uint256) {
-        uint256 amount = pendingRewards(provider, poolTokens, true, maxAmount, lpStats);
+        uint256 amount = claimPendingRewards(provider, poolTokens, maxAmount, lpStats);
         if (amount == 0) {
             return amount;
         }
@@ -543,7 +646,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IDSToken newPoolToken,
         ILiquidityProtectionStats lpStats
     ) private returns (uint256, uint256) {
-        uint256 amount = pendingRewards(provider, poolTokens, true, maxAmount, lpStats);
+        uint256 amount = claimPendingRewards(provider, poolTokens, maxAmount, lpStats);
         if (amount == 0) {
             return (amount, 0);
         }
@@ -660,12 +763,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         for (uint256 i = 0; i < poolTokens.length; ++i) {
             IDSToken poolToken = poolTokens[i];
-
             PoolProgram memory program = poolProgram(poolToken);
 
             for (uint256 j = 0; j < program.reserveTokens.length; ++j) {
                 IERC20Token reserveToken = program.reserveTokens[j];
-
                 updateRewards(provider, poolToken, reserveToken, lpStats);
             }
         }

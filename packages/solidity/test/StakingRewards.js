@@ -878,7 +878,7 @@ describe('StakingRewards', () => {
                             await testReserveRewards(provider, poolToken, reserveToken, duration.weeks(4));
                         });
 
-                        it.only('should properly calculate pool specific multipliers', async () => {
+                        it('should properly calculate pool specific multipliers', async () => {
                             // Should return the correct multiplier for a duration of one second.
                             let actualMultiplier;
                             let expectedMultiplier;

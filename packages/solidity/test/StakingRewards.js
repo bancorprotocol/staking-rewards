@@ -884,35 +884,55 @@ describe('StakingRewards', () => {
                             let expectedMultiplier;
                             let stakingDuration = duration.seconds(1);
                             await setTime(now.add(stakingDuration));
-                            actualMultiplier = await staking.rewardsMultiplier.call(provider, poolToken.address, networkToken.address);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
 
                             // Should return the correct multiplier for a duration of a single day after program start.
                             stakingDuration = duration.days(1);
                             await setTime(programStartTime.add(stakingDuration));
-                            actualMultiplier = await staking.rewardsMultiplier.call(provider, poolToken.address, networkToken.address);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
 
                             // Should return the correct multiplier for a duration of a single week after program start.
                             stakingDuration = duration.weeks(1);
                             await setTime(programStartTime.add(stakingDuration));
-                            actualMultiplier = await staking.rewardsMultiplier.call(provider, poolToken.address, networkToken.address);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
 
                             // Should return full multiplier for a duration of at least 4 weeks after program start.
                             stakingDuration = duration.weeks(4);
                             await setTime(programEndTime);
-                            actualMultiplier = await staking.rewardsMultiplier.call(provider, poolToken.address, networkToken.address);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
 
                             // Should return full multiplier after the ending time of the program.
                             stakingDuration = duration.weeks(4);
                             await setTime(programEndTime.add(duration.days(1)));
-                            actualMultiplier = await staking.rewardsMultiplier.call(provider, poolToken.address, networkToken.address);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
                         });

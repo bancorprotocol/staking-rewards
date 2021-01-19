@@ -19,8 +19,8 @@
         "qtest": "mocha",
         "coverage": "truffle run coverage",
         "lint": "yarn lint:sol",
-        "lint:sol": "solhint --max-warnings 0 \"solidity/contracts/**/*.sol\"",
-        "format": "prettier --check --write solidity/**/*.sol solidity/**/*.js scripts/**/*.js *.js --config .prettierrc"
+        "lint:sol": "solhint --max-warnings 0 \"contracts/**/*.sol\"",
+        "format": "prettier --check --write contracts/**/*.sol test/**/*.js --config ../../.prettierrc"
     },
     "devDependencies": {
         "@bancor/contracts": "bancorprotocol/contracts#0.6.29",

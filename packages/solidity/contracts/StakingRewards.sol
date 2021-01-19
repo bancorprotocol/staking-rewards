@@ -397,6 +397,21 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev returns the current rewards multiplier for a provider in a given pool
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool to query
+     * @param reserveToken the reserve token representing the liquidity in the pool
+     *
+     * @return rewards multiplier
+     */
+    function rewardsMultiplier(address provider, IDSToken poolToken, IERC20Token reserveToken) external view returns (uint32) {
+        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+        PoolProgram memory program = poolProgram(poolToken);
+        return rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);
+    }
+
+    /**
      * @dev returns specific provider's total claimed rewards from all participating pools
      *
      * @param provider the owner of the liquidity

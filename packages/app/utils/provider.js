@@ -10,6 +10,8 @@ const { test, gasPrice } = require('./yargs');
 const settings = require('../settings.json');
 const providers = require('../providers.json');
 
+const GAS_LIMIT_BUFFER = 0.1; // 10%
+
 class Provider {
     async initialize() {
         this.privateKey = require('../credentials.json').privateKey;
@@ -92,6 +94,9 @@ class Provider {
 
             if (!options.gas) {
                 options.gas = await method.estimateGas(options);
+
+                // Increase the gas limit by 10% (just to be on the safe side).
+                options.gas = Math.ceil(options.gas * (1 + GAS_LIMIT_BUFFER));
             }
 
             return method.send(options);

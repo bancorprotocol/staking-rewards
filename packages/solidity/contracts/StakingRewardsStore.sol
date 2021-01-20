@@ -288,16 +288,17 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     }
 
     /**
-     * @dev extends the ending time of a program
+     * @dev updates the ending time of a program
+     * note that the new ending time must be in the future
      *
      * @param poolToken the pool token representing the rewards pool
      * @param newEndTime the new ending time of the program
      */
-    function extendPoolProgram(IDSToken poolToken, uint256 newEndTime) external override onlyManager {
+    function setPoolProgramEndTime(IDSToken poolToken, uint256 newEndTime) external override onlyManager {
         require(isPoolParticipating(poolToken), "ERR_POOL_NOT_PARTICIPATING");
 
         PoolProgram storage program = _programs[poolToken];
-        require(newEndTime > program.endTime, "ERR_INVALID_DURATION");
+        require(newEndTime > time(), "ERR_INVALID_DURATION");
 
         program.endTime = newEndTime;
     }

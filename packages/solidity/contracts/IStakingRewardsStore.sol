@@ -42,7 +42,7 @@ interface IStakingRewardsStore {
 
     function removePoolProgram(IDSToken poolToken) external;
 
-    function extendPoolProgram(IDSToken poolToken, uint256 newEndTime) external;
+    function setPoolProgramEndTime(IDSToken poolToken, uint256 newEndTime) external;
 
     function poolProgram(IDSToken poolToken)
         external

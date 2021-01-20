@@ -36,6 +36,22 @@ const setup = async () => {
         contracts[name] = new Contract(abi, address);
     };
 
+    const initSystemContract = (name) => {
+        const { systemContracts } = settings;
+        const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
+
+        const { address } = systemContracts[name];
+        if (!address) {
+            warning(`Unable to retrieve ${name} settings`);
+
+            return;
+        }
+
+        const rawData = fs.readFileSync(path.join(systemContractsDir, `${name}.json`));
+        const { abi } = JSON.parse(rawData);
+        contracts[name] = new Contract(abi, address);
+    };
+
     const setupExternalContracts = async () => {
         info('Setting up External Contracts');
 
@@ -151,7 +167,7 @@ const setup = async () => {
             );
             await web3Provider.send(contracts.TestLiquidityProtectionSimulator.methods.acceptStoreOwnership());
 
-            info('Setting initial time  StakingRewardsStore');
+            info('Setting initial time StakingRewardsStore');
 
             const block = await web3Provider.getLastBlock();
             const { timestamp } = block;
@@ -159,19 +175,8 @@ const setup = async () => {
             await web3Provider.send(contracts.TestStakingRewardsStore.methods.setTime(timestamp));
             await web3Provider.send(contracts.TestStakingRewards.methods.setTime(timestamp));
         } else {
-            let { abi, address } = systemContracts.StakingRewardsStore;
-            if (abi && address) {
-                contracts.StakingRewardsStore = new Contract(abi, address);
-            } else {
-                warning('Unable to retrieve StakingRewardsStore settings');
-            }
-
-            ({ abi, address } = systemContracts.StakingRewards);
-            if (abi && address) {
-                contracts.StakingRewards = new Contract(abi, address);
-            } else {
-                warning('Unable to retrieve StakingRewards settings');
-            }
+            initSystemContract('StakingRewardsStore');
+            initSystemContract('StakingRewards');
         }
     };
 

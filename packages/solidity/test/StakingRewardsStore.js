@@ -450,7 +450,7 @@ describe('StakingRewardsStore', () => {
                 expect(await store.isReserveParticipating.call(poolToken.address, reserveToken.address)).to.be.true();
             });
 
-            context.only('with a registered pool', async () => {
+            context('with a registered pool', async () => {
                 let startTime;
                 let endTime;
 

@@ -51,6 +51,7 @@
         "solidity-coverage": "^0.7.13",
         "truffle": "5.1.56",
         "truffle-contract-size": "^2.0.1",
+        "truffle-flattener": "^1.5.0",
         "web3": "1.3.0"
     }
 }

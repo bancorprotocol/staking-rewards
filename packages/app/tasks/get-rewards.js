@@ -187,49 +187,13 @@ const getRewardsTask = async (env, { resume = false } = {}) => {
         return rewards;
     };
 
-    const getPendingRewards = async (providerRewards) => {
-        const pendingRewards = {};
-
-        info('Getting all provider pending rewards');
-
-        for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
-            for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
-                for (const provider of Object.keys(providers)) {
-                    trace(
-                        'Getting provider rewards',
-                        arg('provider', provider),
-                        arg('poolToken', poolToken),
-                        arg('reserveToken', reserveToken)
-                    );
-
-                    set(
-                        pendingRewards,
-                        [poolToken, reserveToken, provider],
-                        await web3Provider.call(
-                            contracts.TestStakingRewards.methods.pendingReserveRewards(
-                                provider,
-                                poolToken,
-                                reserveToken
-                            )
-                        )
-                    );
-                }
-            }
-        }
-
-        info('Finished getting all provider rewards');
-
-        return pendingRewards;
-    };
-
     const getRewards = async (liquidity, fromBlock, toBlock) => {
         info('Getting all rewards from', arg('fromBlock', fromBlock), 'to', arg('toBlock', toBlock));
 
         const data = await applyPositionChanges(liquidity, fromBlock, toBlock);
         const { poolRewards, providerRewards } = await getRewardsData(data, toBlock);
-        const pendingRewards = await getPendingRewards(providerRewards);
 
-        return { poolRewards, providerRewards, pendingRewards, lastBlockNumber: toBlock };
+        return { poolRewards, providerRewards, lastBlockNumber: toBlock };
     };
 
     const isObject = (item) => item && typeof item === 'object' && !Array.isArray(item);

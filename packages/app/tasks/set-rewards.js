@@ -340,11 +340,11 @@ const setRewardsTask = async (env) => {
     const setRewards = async (data) => {
         const { poolRewards, providerRewards } = data;
 
-        await setPoolRewards(poolRewards);
-        await verifyPoolRewards(poolRewards);
-
         await setProviderRewards(providerRewards);
         await verifyProviderRewards(providerRewards);
+
+        await setPoolRewards(poolRewards);
+        await verifyPoolRewards(poolRewards);
     };
 
     const { web3Provider, contracts } = env;

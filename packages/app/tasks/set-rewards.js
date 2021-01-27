@@ -5,7 +5,7 @@ const BN = require('bn.js');
 const { trace, info, error, arg } = require('../utils/logger');
 const DB = require('../utils/db');
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 25;
 
 const setRewardsTask = async (env) => {
     const setPoolRewards = async (poolRewards) => {

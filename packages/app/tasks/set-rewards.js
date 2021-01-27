@@ -124,8 +124,6 @@ const setRewardsTask = async (env) => {
 
         let filtered = 0;
 
-        const transactions = [];
-
         for (const [poolToken, reserveTokens] of Object.entries(providerRewards)) {
             for (const [reserveToken, providers] of Object.entries(reserveTokens)) {
                 const entries = Object.entries(providers);
@@ -224,30 +222,22 @@ const setRewardsTask = async (env) => {
                         );
                     }
 
-                    transactions.push(
-                        web3Provider.send(
-                            contracts.StakingRewardsStore.methods.setProviderRewardData(
-                                poolToken,
-                                reserveToken,
-                                providersBatch,
-                                rewardPerTokenBatch,
-                                pendingBaseRewardsBatch,
-                                totalClaimedRewardsBatch,
-                                effectiveStakingTimeBatch,
-                                baseRewardsDebtBatch,
-                                baseRewardsDebtMultiplierBatch
-                            )
+                    await web3Provider.send(
+                        contracts.StakingRewardsStore.methods.setProviderRewardData(
+                            poolToken,
+                            reserveToken,
+                            providersBatch,
+                            rewardPerTokenBatch,
+                            pendingBaseRewardsBatch,
+                            totalClaimedRewardsBatch,
+                            effectiveStakingTimeBatch,
+                            baseRewardsDebtBatch,
+                            baseRewardsDebtMultiplierBatch
                         )
                     );
                 }
             }
         }
-
-        return Promise.all(transactions).then((receipts) => {
-            const totalGas = receipts.reduce((res, receipt) => (res += receipt.gasUsed), 0);
-
-            info('Finished setting all provider rewards', arg('filtered', filtered), arg('totalGas', totalGas));
-        });
     };
 
     const verifyProviderRewards = async (providerRewards) => {

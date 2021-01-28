@@ -1,8 +1,12 @@
 {
     "genesisBlock": 11039642,
     "systemContracts": {
-        "StakingRewardsStore": {},
-        "StakingRewards": {}
+        "StakingRewardsStore": {
+            "address": "0x891AfF26593Da95e574E3f62619dAD6624FB5693"
+        },
+        "StakingRewards": {
+            "address": "0x457FE44E832181e1D3eCee0fc5be72cd9b36859f"
+        }
     },
     "externalContracts": {
         "LiquidityProtectionSettings": {

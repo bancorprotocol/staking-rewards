@@ -110,6 +110,9 @@ class Provider {
 
         if (!options.gas) {
             options.gas = await method.estimateGas(options);
+
+            // Increase the gas limit by 10% (just to be on the safe side).
+            options.gas = Math.ceil(options.gas * (1 + GAS_LIMIT_BUFFER));
         }
 
         const tx = {

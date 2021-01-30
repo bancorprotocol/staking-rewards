@@ -340,29 +340,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev claims specific provider's pending rewards for all participating pools
-     *
-     * @param provider the owner of the liquidity
-     * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
-     * @param lpStats liquidity protection statistics store
-     *
-     * @return all pending rewards
-     */
-    function claimPendingRewards(
-        address provider,
-        uint256 maxAmount,
-        ILiquidityProtectionStats lpStats
-    ) private returns (uint256) {
-        return claimPendingRewards(provider, lpStats.providerPools(provider), maxAmount, lpStats);
-    }
-
-    /**
      * @dev claims specific provider's pending rewards for a specific list of participating pools
      *
      * @param provider the owner of the liquidity
      * @param poolTokens the list of participating pools to query
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
+     * @param resetStakingTime true to reset the effective staking time, false to keep it as is
      *
      * @return all pending rewards
      */
@@ -370,13 +354,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         address provider,
         IDSToken[] memory poolTokens,
         uint256 maxAmount,
-        ILiquidityProtectionStats lpStats
+        ILiquidityProtectionStats lpStats,
+        bool resetStakingTime
     ) private returns (uint256) {
         uint256 reward = 0;
 
         uint256 length = poolTokens.length;
         for (uint256 i = 0; i < length && maxAmount > 0; ++i) {
-            uint256 poolReward = claimPendingRewards(provider, poolTokens[i], maxAmount, lpStats);
+            uint256 poolReward = claimPendingRewards(provider, poolTokens[i], maxAmount, lpStats, resetStakingTime);
             reward = reward.add(poolReward);
 
             if (maxAmount != MAX_UINT256) {
@@ -394,6 +379,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param poolToken the pool to query
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
+     * @param resetStakingTime true to reset the effective staking time, false to keep it as is
      *
      * @return reward all pending rewards
      */
@@ -401,14 +387,15 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         address provider,
         IDSToken poolToken,
         uint256 maxAmount,
-        ILiquidityProtectionStats lpStats
+        ILiquidityProtectionStats lpStats,
+        bool resetStakingTime
     ) private returns (uint256) {
         uint256 reward = 0;
         PoolProgram memory program = poolProgram(poolToken);
 
         for (uint256 i = 0; i < program.reserveTokens.length && maxAmount > 0; ++i) {
             uint256 reserveReward =
-                claimPendingRewards(provider, poolToken, program.reserveTokens[i], program, maxAmount, lpStats);
+                claimPendingRewards(provider, poolToken, program.reserveTokens[i], program, maxAmount, lpStats, resetStakingTime);
             reward = reward.add(reserveReward);
 
             if (maxAmount != MAX_UINT256) {
@@ -428,6 +415,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param program the pool program info
      * @param maxAmount an optional bound on the rewards to claim (when partial claiming is required)
      * @param lpStats liquidity protection statistics store
+     * @param resetStakingTime true to reset the effective staking time, false to keep it as is
      *
      * @return reward all pending rewards
      */
@@ -438,7 +426,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IERC20Token reserveToken,
         PoolProgram memory program,
         uint256 maxAmount,
-        ILiquidityProtectionStats lpStats
+        ILiquidityProtectionStats lpStats,
+        bool resetStakingTime
     ) private returns (uint256) {
         // update all provider's pending rewards, in order to apply retroactive reward multipliers.
         (PoolRewards memory poolRewardsData, ProviderRewards memory providerRewards) =
@@ -482,8 +471,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             poolRewardsData.totalClaimedRewards.add(fullReward)
         );
 
-        // update provider rewards data with the remaining pending rewards and set the effective staking time to the
-        // timestamp of the current block.
+        // update provider rewards data with the remaining pending rewards and if needed, set the effective
+        // staking time to the timestamp of the current block.
         _store.updateProviderRewardsData(
             provider,
             poolToken,
@@ -491,7 +480,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             providerRewards.rewardPerToken,
             0,
             providerRewards.totalClaimedRewards.add(fullReward),
-            time(),
+            resetStakingTime ? time() : providerRewards.effectiveStakingTime,
             providerRewards.baseRewardsDebt,
             providerRewards.baseRewardsDebtMultiplier
         );
@@ -580,7 +569,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 maxAmount,
         ILiquidityProtectionStats lpStats
     ) private returns (uint256) {
-        uint256 amount = claimPendingRewards(provider, poolTokens, maxAmount, lpStats);
+        uint256 amount = claimPendingRewards(provider, poolTokens, maxAmount, lpStats, true);
         if (amount == 0) {
             return amount;
         }
@@ -646,7 +635,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         IDSToken newPoolToken,
         ILiquidityProtectionStats lpStats
     ) private returns (uint256, uint256) {
-        uint256 amount = claimPendingRewards(provider, poolTokens, maxAmount, lpStats);
+        uint256 amount = claimPendingRewards(provider, poolTokens, maxAmount, lpStats, false);
         if (amount == 0) {
             return (amount, 0);
         }

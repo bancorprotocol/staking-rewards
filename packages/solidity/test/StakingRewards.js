@@ -880,6 +880,13 @@ describe('StakingRewards', () => {
                         });
 
                         it('should properly calculate pool specific multipliers', async () => {
+                            await addLiquidity(
+                                provider,
+                                poolToken,
+                                networkToken,
+                                new BN(1).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             // Should return the correct multiplier for a duration of one second.
                             let actualMultiplier;
                             let expectedMultiplier;
@@ -924,6 +931,23 @@ describe('StakingRewards', () => {
                                 networkToken.address
                             );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
+                            expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
+
+                            // Should keep the current multiplier after staking
+                            let reward = await staking.pendingRewards.call(provider);
+                            const totalProviderAmount = await liquidityProtectionStats.totalProviderAmount.call(
+                                provider,
+                                poolToken.address || poolToken,
+                                networkToken.address || reserveToken
+                            );
+
+                            let amount = reward.div(new BN(2));
+                            reward = await testStaking(provider, amount, poolToken, true);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
 
                             // Should return full multiplier after the ending time of the program.
@@ -1384,11 +1408,6 @@ describe('StakingRewards', () => {
 
                             expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(new BN(0));
 
-                            // Should return all weekly rewards, excluding previously granted rewards, but without the
-                            // multiplier bonus.
-                            await setTime(now.add(duration.weeks(1)));
-                            await testClaim(provider);
-
                             // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
                             // two weeks rewards multiplier.
                             await setTime(now.add(duration.weeks(2)));
@@ -1404,6 +1423,11 @@ describe('StakingRewards', () => {
 
                                 reward = await testStaking(provider, amount, poolToken4);
                             }
+
+                            // Should return all weekly rewards, excluding previously granted rewards, but without the
+                            // multiplier bonus.
+                            await setTime(now.add(duration.weeks(1)));
+                            await testClaim(provider);
 
                             // Should return all program rewards, excluding previously granted rewards + max retroactive
                             // multipliers.

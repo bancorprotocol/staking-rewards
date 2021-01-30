@@ -880,6 +880,13 @@ describe('StakingRewards', () => {
                         });
 
                         it('should properly calculate pool specific multipliers', async () => {
+                            await addLiquidity(
+                                provider,
+                                poolToken,
+                                networkToken,
+                                new BN(1).mul(new BN(10).pow(new BN(18)))
+                            );
+
                             // Should return the correct multiplier for a duration of one second.
                             let actualMultiplier;
                             let expectedMultiplier;
@@ -924,6 +931,17 @@ describe('StakingRewards', () => {
                                 networkToken.address
                             );
                             expectedMultiplier = getRewardsMultiplier(stakingDuration);
+                            expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
+
+                            // Should keep the current multiplier after staking
+                            let reward = await staking.pendingRewards.call(provider);
+                            let amount = reward.div(new BN(10));
+                            await testStaking(provider, amount, poolToken, true);
+                            actualMultiplier = await staking.rewardsMultiplier.call(
+                                provider,
+                                poolToken.address,
+                                networkToken.address
+                            );
                             expect(actualMultiplier).to.be.bignumber.equal(expectedMultiplier);
 
                             // Should return full multiplier after the ending time of the program.
@@ -1389,8 +1407,7 @@ describe('StakingRewards', () => {
                             await setTime(now.add(duration.weeks(1)));
                             await testClaim(provider);
 
-                            // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
-                            // two weeks rewards multiplier.
+                            // Should return all the rewards for the two weeks, excluding previously granted rewards
                             await setTime(now.add(duration.weeks(2)));
 
                             reward = await staking.pendingRewards.call(provider);

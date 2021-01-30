@@ -935,12 +935,6 @@ describe('StakingRewards', () => {
 
                             // Should keep the current multiplier after staking
                             let reward = await staking.pendingRewards.call(provider);
-                            const totalProviderAmount = await liquidityProtectionStats.totalProviderAmount.call(
-                                provider,
-                                poolToken.address || poolToken,
-                                networkToken.address || reserveToken
-                            );
-
                             let amount = reward.div(new BN(2));
                             reward = await testStaking(provider, amount, poolToken, true);
                             actualMultiplier = await staking.rewardsMultiplier.call(

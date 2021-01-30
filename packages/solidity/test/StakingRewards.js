@@ -1408,8 +1408,12 @@ describe('StakingRewards', () => {
 
                             expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(new BN(0));
 
-                            // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
-                            // two weeks rewards multiplier.
+                            // Should return all weekly rewards, excluding previously granted rewards, but without the
+                            // multiplier bonus.
+                            await setTime(now.add(duration.weeks(1)));
+                            await testClaim(provider);
+
+                            // Should return all the rewards for the two weeks, excluding previously granted rewards
                             await setTime(now.add(duration.weeks(2)));
 
                             reward = await staking.pendingRewards.call(provider);
@@ -1423,11 +1427,6 @@ describe('StakingRewards', () => {
 
                                 reward = await testStaking(provider, amount, poolToken4);
                             }
-
-                            // Should return all weekly rewards, excluding previously granted rewards, but without the
-                            // multiplier bonus.
-                            await setTime(now.add(duration.weeks(1)));
-                            await testClaim(provider);
 
                             // Should return all program rewards, excluding previously granted rewards + max retroactive
                             // multipliers.

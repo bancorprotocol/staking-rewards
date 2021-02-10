@@ -5,6 +5,7 @@ import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/Liqui
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionSettings.sol";
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionStore.sol";
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionStats.sol";
+import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionSystemStore.sol";
 import "@bancor/contracts-solidity/solidity/contracts/utility/ContractRegistry.sol";
 import "@bancor/contracts-solidity/solidity/contracts/converter/ConverterBase.sol";
 import "@bancor/contracts-solidity/solidity/contracts/converter/ConverterRegistryData.sol";

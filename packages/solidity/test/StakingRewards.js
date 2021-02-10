@@ -37,7 +37,6 @@ const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 const ROLE_MANAGER = web3.utils.keccak256('ROLE_MANAGER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
-const ROLE_MINTED_TOKENS_ADMIN = web3.utils.keccak256('ROLE_MINTED_TOKENS_ADMIN');
 const ROLE_PUBLISHER = web3.utils.keccak256('ROLE_PUBLISHER');
 
 const PPM_RESOLUTION = new BN(1000000);
@@ -304,10 +303,9 @@ describe('StakingRewards', () => {
 
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
 
-        await liquidityProtection.setEventsSubscriber(staking.address);
+        await liquidityProtectionSettings.addSubscriber(staking.address);
 
         await liquidityProtectionSettings.grantRole(ROLE_OWNER, liquidityProtection.address);
-        await liquidityProtectionSettings.grantRole(ROLE_MINTED_TOKENS_ADMIN, liquidityProtection.address);
         await liquidityProtectionStats.grantRole(ROLE_OWNER, liquidityProtection.address);
         await checkpointStore.grantRole(ROLE_OWNER, liquidityProtection.address);
         await liquidityProtectionStore.transferOwnership(liquidityProtection.address);

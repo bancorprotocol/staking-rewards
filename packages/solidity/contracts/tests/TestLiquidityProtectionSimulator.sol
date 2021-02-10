@@ -19,14 +19,12 @@ contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
     using SafeERC20 for IERC20;
 
     TestStakingRewards private immutable _stakingRewards;
-    TestCheckpointStore private immutable _lastRemoveCheckpointStore;
 
     constructor(TestStakingRewards stakingRewards, address[8] memory contractAddresses)
         public
         LiquidityProtection(contractAddresses)
     {
         _stakingRewards = stakingRewards;
-        _lastRemoveCheckpointStore = TestCheckpointStore(contractAddresses[7]);
     }
 
     function time() internal view override(Time, TestTime) returns (uint256) {
@@ -65,8 +63,8 @@ contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
 
         _stakingRewards.onRemovingLiquidity(0, provider, poolAnchor, reserveToken, 0, reserveAmount);
 
-        _lastRemoveCheckpointStore.setTime(time());
-        _lastRemoveCheckpointStore.addCheckpoint(provider);
+        TestCheckpointStore(address(lastRemoveCheckpointStore)).setTime(time());
+        TestCheckpointStore(address(lastRemoveCheckpointStore)).addCheckpoint(provider);
 
         stats.decreaseTotalAmounts(provider, IDSToken(address(poolAnchor)), reserveToken, 0, reserveAmount);
     }

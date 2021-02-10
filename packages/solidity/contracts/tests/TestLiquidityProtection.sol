@@ -20,14 +20,12 @@ contract TestLiquidityProtection is LiquidityProtection, TestTime {
 
     uint256 private _lastId;
     TestStakingRewards private immutable _stakingRewards;
-    TestCheckpointStore private immutable _lastRemoveCheckpointStore;
 
     constructor(TestStakingRewards stakingRewards, address[8] memory contractAddresses)
         public
         LiquidityProtection(contractAddresses)
     {
         _stakingRewards = stakingRewards;
-        _lastRemoveCheckpointStore = TestCheckpointStore(contractAddresses[7]);
     }
 
     function time() internal view override(Time, TestTime) returns (uint256) {
@@ -55,7 +53,7 @@ contract TestLiquidityProtection is LiquidityProtection, TestTime {
         uint32 portion
     ) public payable {
         _stakingRewards.setTime(time());
-        _lastRemoveCheckpointStore.setTime(time());
+        TestCheckpointStore(address(lastRemoveCheckpointStore)).setTime(time());
 
         ProtectedLiquidity memory liquidity = protectedLiquidity(id, provider);
 

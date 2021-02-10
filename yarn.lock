@@ -23,9 +23,10 @@
     chalk "^2.0.0"
     js-tokens "^4.0.0"
 
-"@bancor/contracts@bancorprotocol/contracts#0.6.29":
-  version "0.6.29"
-  resolved "https://codeload.github.com/bancorprotocol/contracts/tar.gz/d570c150cccf34591f34e385b15a0fc21e71a7c1"
+"@bancor/contracts-solidity@^0.6.32":
+  version "0.6.32"
+  resolved "https://registry.yarnpkg.com/@bancor/contracts-solidity/-/contracts-solidity-0.6.32.tgz#5d5ac221a327f1cee53a3f3158190c429288bb03"
+  integrity sha512-TLxPjDGtA455t8K03tjPrXYmdn2YqvknJazmdd83l8dLCApbfdBSHNbQGs0u1tYw67crCMshhhmbop9Lmj2wYg==
 
 "@bancor/token-governance@bancorprotocol/token-governance":
   version "0.1.0"

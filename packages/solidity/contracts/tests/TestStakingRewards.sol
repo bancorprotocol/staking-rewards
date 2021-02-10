@@ -5,7 +5,7 @@ import "../StakingRewards.sol";
 
 import "./TestStakingRewardsStore.sol";
 
-import "@bancor/contracts/solidity/contracts/helpers/TestTime.sol";
+import "./TestTime.sol";
 
 contract TestStakingRewards is StakingRewards, TestTime {
     constructor(

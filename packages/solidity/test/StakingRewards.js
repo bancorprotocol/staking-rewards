@@ -15,6 +15,8 @@ const LiquidityProtection = contract.fromArtifact('TestLiquidityProtection');
 const LiquidityProtectionSettings = contract.fromArtifact('LiquidityProtectionSettings');
 const LiquidityProtectionStore = contract.fromArtifact('LiquidityProtectionStore');
 const LiquidityProtectionStats = contract.fromArtifact('LiquidityProtectionStats');
+const LiquidityProtectionSystemStore = contract.fromArtifact('LiquidityProtectionSystemStore');
+const TokenHolder = contract.fromArtifact('TokenHolder');
 const ConverterRegistry = contract.fromArtifact('TestConverterRegistry');
 const ConverterRegistryData = contract.fromArtifact('ConverterRegistryData');
 const ContractRegistry = contract.fromArtifact('ContractRegistry');
@@ -69,6 +71,8 @@ describe('StakingRewards', () => {
     let liquidityProtectionSettings;
     let liquidityProtectionStats;
     let liquidityProtectionStore;
+    let liquidityProtectionSystemStore;
+    let liquidityProtectionWallet;
     let liquidityProtection;
     let store;
     let staking;
@@ -282,14 +286,20 @@ describe('StakingRewards', () => {
 
         liquidityProtectionStore = await LiquidityProtectionStore.new();
         liquidityProtectionStats = await LiquidityProtectionStats.new();
+        liquidityProtectionSystemStore = await LiquidityProtectionSystemStore.new();
+        liquidityProtectionWallet = await TokenHolder.new();
         liquidityProtection = await LiquidityProtection.new(
             staking.address,
-            liquidityProtectionSettings.address,
-            liquidityProtectionStore.address,
-            liquidityProtectionStats.address,
-            networkTokenGovernance.address,
-            govTokenGovernance.address,
-            checkpointStore.address
+            [
+                liquidityProtectionSettings.address,
+                liquidityProtectionStore.address,
+                liquidityProtectionStats.address,
+                liquidityProtectionSystemStore.address,
+                liquidityProtectionWallet.address,
+                networkTokenGovernance.address,
+                govTokenGovernance.address,
+                checkpointStore.address
+            ]
         );
 
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);

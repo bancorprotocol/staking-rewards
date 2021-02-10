@@ -7,12 +7,12 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "@bancor/token-governance/contracts/ITokenGovernance.sol";
-import "@bancor/contracts/solidity/contracts/utility/ContractRegistryClient.sol";
-import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
-import "@bancor/contracts/solidity/contracts/utility/Time.sol";
-import "@bancor/contracts/solidity/contracts/utility/interfaces/ICheckpointStore.sol";
-import "@bancor/contracts/solidity/contracts/liquidity-protection/interfaces/ILiquidityProtection.sol";
-import "@bancor/contracts/solidity/contracts/liquidity-protection/interfaces/ILiquidityProtectionEventsSubscriber.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/ContractRegistryClient.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/Utils.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/Time.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/interfaces/ICheckpointStore.sol";
+import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/interfaces/ILiquidityProtection.sol";
+import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/interfaces/ILiquidityProtectionEventsSubscriber.sol";
 
 import "./IStakingRewardsStore.sol";
 

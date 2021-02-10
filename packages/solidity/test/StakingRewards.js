@@ -15,6 +15,8 @@ const LiquidityProtection = contract.fromArtifact('TestLiquidityProtection');
 const LiquidityProtectionSettings = contract.fromArtifact('LiquidityProtectionSettings');
 const LiquidityProtectionStore = contract.fromArtifact('LiquidityProtectionStore');
 const LiquidityProtectionStats = contract.fromArtifact('LiquidityProtectionStats');
+const LiquidityProtectionSystemStore = contract.fromArtifact('LiquidityProtectionSystemStore');
+const TokenHolder = contract.fromArtifact('TokenHolder');
 const ConverterRegistry = contract.fromArtifact('TestConverterRegistry');
 const ConverterRegistryData = contract.fromArtifact('ConverterRegistryData');
 const ContractRegistry = contract.fromArtifact('ContractRegistry');
@@ -35,7 +37,6 @@ const ROLE_OWNER = web3.utils.keccak256('ROLE_OWNER');
 const ROLE_MANAGER = web3.utils.keccak256('ROLE_MANAGER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
-const ROLE_MINTED_TOKENS_ADMIN = web3.utils.keccak256('ROLE_MINTED_TOKENS_ADMIN');
 const ROLE_PUBLISHER = web3.utils.keccak256('ROLE_PUBLISHER');
 
 const PPM_RESOLUTION = new BN(1000000);
@@ -69,6 +70,8 @@ describe('StakingRewards', () => {
     let liquidityProtectionSettings;
     let liquidityProtectionStats;
     let liquidityProtectionStore;
+    let liquidityProtectionSystemStore;
+    let liquidityProtectionWallet;
     let liquidityProtection;
     let store;
     let staking;
@@ -282,26 +285,34 @@ describe('StakingRewards', () => {
 
         liquidityProtectionStore = await LiquidityProtectionStore.new();
         liquidityProtectionStats = await LiquidityProtectionStats.new();
+        liquidityProtectionSystemStore = await LiquidityProtectionSystemStore.new();
+        liquidityProtectionWallet = await TokenHolder.new();
         liquidityProtection = await LiquidityProtection.new(
             staking.address,
-            liquidityProtectionSettings.address,
-            liquidityProtectionStore.address,
-            liquidityProtectionStats.address,
-            networkTokenGovernance.address,
-            govTokenGovernance.address,
-            checkpointStore.address
+            [
+                liquidityProtectionSettings.address,
+                liquidityProtectionStore.address,
+                liquidityProtectionStats.address,
+                liquidityProtectionSystemStore.address,
+                liquidityProtectionWallet.address,
+                networkTokenGovernance.address,
+                govTokenGovernance.address,
+                checkpointStore.address
+            ]
         );
 
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
 
-        await liquidityProtection.setEventsSubscriber(staking.address);
+        await liquidityProtectionSettings.addSubscriber(staking.address);
 
         await liquidityProtectionSettings.grantRole(ROLE_OWNER, liquidityProtection.address);
-        await liquidityProtectionSettings.grantRole(ROLE_MINTED_TOKENS_ADMIN, liquidityProtection.address);
         await liquidityProtectionStats.grantRole(ROLE_OWNER, liquidityProtection.address);
+        await liquidityProtectionSystemStore.grantRole(ROLE_OWNER, liquidityProtection.address);
         await checkpointStore.grantRole(ROLE_OWNER, liquidityProtection.address);
         await liquidityProtectionStore.transferOwnership(liquidityProtection.address);
         await liquidityProtection.acceptStoreOwnership();
+        await liquidityProtectionWallet.transferOwnership(liquidityProtection.address);
+        await liquidityProtection.acceptWalletOwnership();
         await networkTokenGovernance.grantRole(ROLE_MINTER, liquidityProtection.address);
         await govTokenGovernance.grantRole(ROLE_MINTER, liquidityProtection.address);
 

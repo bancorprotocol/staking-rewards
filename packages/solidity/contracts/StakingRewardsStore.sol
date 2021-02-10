@@ -5,12 +5,12 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
-import "@bancor/contracts/solidity/contracts/utility/Utils.sol";
-import "@bancor/contracts/solidity/contracts/utility/Time.sol";
-import "@bancor/contracts/solidity/contracts/utility/interfaces/IOwned.sol";
-import "@bancor/contracts/solidity/contracts/converter/interfaces/IConverter.sol";
-import "@bancor/contracts/solidity/contracts/token/interfaces/IDSToken.sol";
-import "@bancor/contracts/solidity/contracts/token/interfaces/IERC20Token.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/Utils.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/Time.sol";
+import "@bancor/contracts-solidity/solidity/contracts/utility/interfaces/IOwned.sol";
+import "@bancor/contracts-solidity/solidity/contracts/converter/interfaces/IConverter.sol";
+import "@bancor/contracts-solidity/solidity/contracts/token/interfaces/IDSToken.sol";
+import "@bancor/contracts-solidity/solidity/contracts/token/interfaces/IERC20Token.sol";
 
 import "./IStakingRewardsStore.sol";
 

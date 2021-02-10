@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
-import "@bancor/contracts/solidity/contracts/token/interfaces/IDSToken.sol";
-import "@bancor/contracts/solidity/contracts/token/interfaces/IERC20Token.sol";
+import "@bancor/contracts-solidity/solidity/contracts/token/interfaces/IDSToken.sol";
+import "@bancor/contracts-solidity/solidity/contracts/token/interfaces/IERC20Token.sol";
 
 struct PoolProgram {
     uint256 startTime;

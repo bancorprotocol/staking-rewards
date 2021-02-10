@@ -307,9 +307,12 @@ describe('StakingRewards', () => {
 
         await liquidityProtectionSettings.grantRole(ROLE_OWNER, liquidityProtection.address);
         await liquidityProtectionStats.grantRole(ROLE_OWNER, liquidityProtection.address);
+        await liquidityProtectionSystemStore.grantRole(ROLE_OWNER, liquidityProtection.address);
         await checkpointStore.grantRole(ROLE_OWNER, liquidityProtection.address);
         await liquidityProtectionStore.transferOwnership(liquidityProtection.address);
         await liquidityProtection.acceptStoreOwnership();
+        await liquidityProtectionWallet.transferOwnership(liquidityProtection.address);
+        await liquidityProtection.acceptWalletOwnership();
         await networkTokenGovernance.grantRole(ROLE_MINTER, liquidityProtection.address);
         await govTokenGovernance.grantRole(ROLE_MINTER, liquidityProtection.address);
 

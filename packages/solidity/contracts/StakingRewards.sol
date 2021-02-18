@@ -219,8 +219,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ) external view returns (uint256) {
         PoolProgram memory program = poolProgram(poolToken);
 
-        return
-            pendingRewards(provider, poolToken, reserveToken, program, liquidityProtectionStats());
+        return pendingRewards(provider, poolToken, reserveToken, program, liquidityProtectionStats());
     }
 
     /**
@@ -231,10 +230,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return all pending rewards
      */
-    function pendingRewards(
-        address provider,
-        ILiquidityProtectionStats lpStats
-    ) private view returns (uint256) {
+    function pendingRewards(address provider, ILiquidityProtectionStats lpStats) private view returns (uint256) {
         return pendingRewards(provider, lpStats.providerPools(provider), lpStats);
     }
 
@@ -281,8 +277,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         PoolProgram memory program = poolProgram(poolToken);
 
         for (uint256 i = 0; i < program.reserveTokens.length; ++i) {
-            uint256 reserveReward =
-                pendingRewards(provider, poolToken, program.reserveTokens[i], program, lpStats);
+            uint256 reserveReward = pendingRewards(provider, poolToken, program.reserveTokens[i], program, lpStats);
             reward = reward.add(reserveReward);
         }
 
@@ -333,7 +328,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         providerRewards.rewardPerToken = poolRewardsData.rewardPerToken;
 
         // get full rewards and the respective rewards multiplier.
-        (uint256 fullReward,) =
+        (uint256 fullReward, ) =
             fullRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats);
 
         return fullReward;
@@ -395,7 +390,15 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         for (uint256 i = 0; i < program.reserveTokens.length && maxAmount > 0; ++i) {
             uint256 reserveReward =
-                claimPendingRewards(provider, poolToken, program.reserveTokens[i], program, maxAmount, lpStats, resetStakingTime);
+                claimPendingRewards(
+                    provider,
+                    poolToken,
+                    program.reserveTokens[i],
+                    program,
+                    maxAmount,
+                    lpStats,
+                    resetStakingTime
+                );
             reward = reward.add(reserveReward);
 
             if (maxAmount != MAX_UINT256) {
@@ -497,7 +500,11 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return rewards multiplier
      */
-    function rewardsMultiplier(address provider, IDSToken poolToken, IERC20Token reserveToken) external view returns (uint32) {
+    function rewardsMultiplier(
+        address provider,
+        IDSToken poolToken,
+        IERC20Token reserveToken
+    ) external view returns (uint32) {
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
         PoolProgram memory program = poolProgram(poolToken);
         return rewardsMultiplier(provider, providerRewards.effectiveStakingTime, program);

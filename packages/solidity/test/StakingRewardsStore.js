@@ -1381,7 +1381,6 @@ describe('StakingRewardsStore', () => {
 
     describe('provider rewards data', () => {
         const provider = accounts[5];
-        const reserveAmount = new BN(1000);
 
         beforeEach(async () => {
             const startTime = now;

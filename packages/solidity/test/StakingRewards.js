@@ -287,19 +287,16 @@ describe('StakingRewards', () => {
         liquidityProtectionStats = await LiquidityProtectionStats.new();
         liquidityProtectionSystemStore = await LiquidityProtectionSystemStore.new();
         liquidityProtectionWallet = await TokenHolder.new();
-        liquidityProtection = await LiquidityProtection.new(
-            staking.address,
-            [
-                liquidityProtectionSettings.address,
-                liquidityProtectionStore.address,
-                liquidityProtectionStats.address,
-                liquidityProtectionSystemStore.address,
-                liquidityProtectionWallet.address,
-                networkTokenGovernance.address,
-                govTokenGovernance.address,
-                checkpointStore.address
-            ]
-        );
+        liquidityProtection = await LiquidityProtection.new(staking.address, [
+            liquidityProtectionSettings.address,
+            liquidityProtectionStore.address,
+            liquidityProtectionStats.address,
+            liquidityProtectionSystemStore.address,
+            liquidityProtectionWallet.address,
+            networkTokenGovernance.address,
+            govTokenGovernance.address,
+            checkpointStore.address
+        ]);
 
         await contractRegistry.registerAddress(LIQUIDITY_PROTECTION, liquidityProtection.address);
 

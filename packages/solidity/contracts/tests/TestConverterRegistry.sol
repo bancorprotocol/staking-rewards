@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.6.12;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "@bancor/contracts-solidity/solidity/contracts/converter/ConverterRegistry.sol";
 
 /*
@@ -17,7 +20,7 @@ contract TestConverterRegistry is ConverterRegistry {
         string memory _symbol,
         uint8 _decimals,
         uint32 _maxConversionFee,
-        IERC20Token[] memory _reserveTokens,
+        IERC20[] memory _reserveTokens,
         uint32[] memory _reserveWeights
     ) public override returns (IConverter) {
         createdConverter = super.newConverter(

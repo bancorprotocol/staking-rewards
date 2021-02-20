@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtection.sol";
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionSettings.sol";
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionStore.sol";
@@ -34,7 +36,7 @@ contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
     function simulateAddLiquidity(
         address provider,
         IConverterAnchor poolAnchor,
-        IERC20Token reserveToken,
+        IERC20 reserveToken,
         uint256 reserveAmount,
         uint256 timestamp
     ) public returns (uint256) {
@@ -52,7 +54,7 @@ contract TestLiquidityProtectionSimulator is LiquidityProtection, TestTime {
     function simulateRemoveLiquidity(
         address provider,
         IConverterAnchor poolAnchor,
-        IERC20Token reserveToken,
+        IERC20 reserveToken,
         uint256 reserveAmount,
         uint256 timestamp
     ) public payable {

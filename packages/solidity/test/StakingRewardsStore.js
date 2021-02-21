@@ -27,6 +27,8 @@ const PPM_RESOLUTION = new BN(1000000);
 const NETWORK_TOKEN_REWARDS_SHARE = new BN(700000); // 70%
 const BASE_TOKEN_REWARDS_SHARE = new BN(300000); // 30%
 
+const MAX_REWARD_RATE = new BN(2).pow(new BN(128)).sub(new BN(1));
+
 describe('StakingRewardsStore', () => {
     let converterRegistry;
     let store;
@@ -291,6 +293,20 @@ describe('StakingRewardsStore', () => {
                         { from: manager }
                     ),
                     'ERR_ZERO_VALUE'
+                );
+            });
+
+            it('should revert when adding pools with too high reward rate', async () => {
+                await expectRevert(
+                    store.addPoolProgram(
+                        poolToken.address,
+                        [networkToken.address, reserveToken.address],
+                        [NETWORK_TOKEN_REWARDS_SHARE, BASE_TOKEN_REWARDS_SHARE],
+                        now.add(new BN(2000)),
+                        MAX_REWARD_RATE.add(new BN(1)),
+                        { from: manager }
+                    ),
+                    'ERR_REWARD_RATE_TOO_HIGH'
                 );
             });
 

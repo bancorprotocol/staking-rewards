@@ -955,45 +955,53 @@ describe('StakingRewardsStore', () => {
                         'ERR_INVALID_LENGTH'
                     );
 
-                    store.setPoolsRewardData(
-                        [poolToken.address],
-                        [networkToken.address, reserveToken.address],
-                        [now.sub(new BN(1))],
-                        [new BN(1000)],
-                        [new BN(5000)],
-                        { from: seeder }
-                    ),
-                        'ERR_INVALID_LENGTH';
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address],
+                            [networkToken.address, reserveToken.address],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
 
-                    store.setPoolsRewardData(
-                        [poolToken.address],
-                        [networkToken.address],
-                        [now.sub(new BN(1)), now],
-                        [new BN(1000)],
-                        [new BN(5000)],
-                        { from: seeder }
-                    ),
-                        'ERR_INVALID_LENGTH';
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address],
+                            [networkToken.address],
+                            [now.sub(new BN(1)), now],
+                            [new BN(1000)],
+                            [new BN(5000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
 
-                    store.setPoolsRewardData(
-                        [poolToken.address],
-                        [networkToken.address],
-                        [now.sub(new BN(1))],
-                        [new BN(1000), new BN(1)],
-                        [new BN(5000)],
-                        { from: seeder }
-                    ),
-                        'ERR_INVALID_LENGTH';
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address],
+                            [networkToken.address],
+                            [now.sub(new BN(1))],
+                            [new BN(1000), new BN(1)],
+                            [new BN(5000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
 
-                    store.setPoolsRewardData(
-                        [poolToken.address],
-                        [networkToken.address],
-                        [now.sub(new BN(1))],
-                        [new BN(1000)],
-                        [new BN(5000), new BN(100000)],
-                        { from: seeder }
-                    ),
-                        'ERR_INVALID_LENGTH';
+                    await expectRevert(
+                        store.setPoolsRewardData(
+                            [poolToken.address],
+                            [networkToken.address],
+                            [now.sub(new BN(1))],
+                            [new BN(1000)],
+                            [new BN(5000), new BN(100000)],
+                            { from: seeder }
+                        ),
+                        'ERR_INVALID_LENGTH'
+                    );
                 });
 
                 it('should allow seeding pools rewards', async () => {

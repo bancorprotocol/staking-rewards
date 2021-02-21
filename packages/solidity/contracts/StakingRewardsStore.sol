@@ -430,7 +430,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     ) external onlySeeder {
         uint256 length = poolTokens.length;
         require(
-            length == reserveTokens.length && length == lastUpdateTimes.length && length == rewardsPerToken.length,
+            length == reserveTokens.length &&
+                length == lastUpdateTimes.length &&
+                length == rewardsPerToken.length &&
+                length == totalClaimedRewards.length,
             "ERR_INVALID_LENGTH"
         );
 

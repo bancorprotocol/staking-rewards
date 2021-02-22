@@ -36,27 +36,6 @@ const { argv } = yargs(hideBin(process.argv))
     .option('get-liquidity', {
         type: 'boolean',
         description: 'Get all liquidity changes'
-    })
-    .option('get-last-removal-times', {
-        type: 'boolean',
-        description: 'Get last removal times for all providers'
-    })
-    .option('get-rewards', {
-        type: 'boolean',
-        description: 'Get all rewards'
-    })
-
-    .option('set-last-removal-times', {
-        type: 'boolean',
-        description: 'Set last removal times for all providers'
-    })
-    .option('set-programs', {
-        type: 'boolean',
-        description: 'Set reward programs'
-    })
-    .option('set-rewards', {
-        type: 'boolean',
-        description: 'Set all rewards'
     });
 
 module.exports = argv;

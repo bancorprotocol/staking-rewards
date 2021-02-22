@@ -161,7 +161,6 @@ class Provider {
                 LiquidityProtectionStore: { owner: liquidityProtectionStoreOwner },
                 LiquidityProtectionSettings: { owner: liquidityProtectionSettingsOwner },
                 LiquidityProtection: { owner: liquidityProtectionOwner },
-                TokenGovernance: { governor },
                 CheckpointStore: { owner: checkpointStoreOwner },
                 ContractRegistry: { owner: contractRegistryOwner }
             }

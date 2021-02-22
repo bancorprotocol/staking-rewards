@@ -4,13 +4,13 @@ pragma solidity 0.6.12;
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "@bancor/contracts-solidity/solidity/contracts/utility/Utils.sol";
 import "@bancor/contracts-solidity/solidity/contracts/utility/Time.sol";
 import "@bancor/contracts-solidity/solidity/contracts/utility/interfaces/IOwned.sol";
 import "@bancor/contracts-solidity/solidity/contracts/converter/interfaces/IConverter.sol";
 import "@bancor/contracts-solidity/solidity/contracts/token/interfaces/IDSToken.sol";
-import "@bancor/contracts-solidity/solidity/contracts/token/interfaces/IERC20Token.sol";
 
 import "./IStakingRewardsStore.sol";
 
@@ -45,10 +45,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     EnumerableSet.AddressSet private _pools;
 
     // the mapping between pools, reserve tokens, and their rewards.
-    mapping(IDSToken => mapping(IERC20Token => PoolRewards)) internal _poolRewards;
+    mapping(IDSToken => mapping(IERC20 => PoolRewards)) internal _poolRewards;
 
     // the mapping between pools, reserve tokens, and provider specific rewards.
-    mapping(address => mapping(IDSToken => mapping(IERC20Token => ProviderRewards))) internal _providerRewards;
+    mapping(address => mapping(IDSToken => mapping(IERC20 => ProviderRewards))) internal _providerRewards;
 
     // the mapping between providers and their respective last claim times.
     mapping(address => uint256) private _providerLastClaimTimes;
@@ -136,7 +136,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return whether the specified reserve is participating in the rewards program
      */
-    function isReserveParticipating(IDSToken poolToken, IERC20Token reserveToken) public view override returns (bool) {
+    function isReserveParticipating(IDSToken poolToken, IERC20 reserveToken) public view override returns (bool) {
         if (!isPoolParticipating(poolToken)) {
             return false;
         }
@@ -157,7 +157,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function addPoolProgram(
         IDSToken poolToken,
-        IERC20Token[2] calldata reserveTokens,
+        IERC20[2] calldata reserveTokens,
         uint32[2] calldata rewardShares,
         uint256 endTime,
         uint256 rewardRate
@@ -181,7 +181,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function addPastPoolPrograms(
         IDSToken[] calldata poolTokens,
-        IERC20Token[2][] calldata reserveTokens,
+        IERC20[2][] calldata reserveTokens,
         uint32[2][] calldata rewardShares,
         uint256[] calldata startTime,
         uint256[] calldata endTimes,
@@ -221,7 +221,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function addPastPoolProgram(
         IDSToken poolToken,
-        IERC20Token[2] calldata reserveTokens,
+        IERC20[2] calldata reserveTokens,
         uint32[2] calldata rewardShares,
         uint256 startTime,
         uint256 endTime,
@@ -243,7 +243,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function addPoolProgram(
         IDSToken poolToken,
-        IERC20Token[2] calldata reserveTokens,
+        IERC20[2] calldata reserveTokens,
         uint32[2] calldata rewardShares,
         uint256 startTime,
         uint256 endTime,
@@ -319,7 +319,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256,
             uint256,
             uint256,
-            IERC20Token[2] memory,
+            IERC20[2] memory,
             uint32[2] memory
         )
     {
@@ -342,7 +342,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             uint256[] memory,
             uint256[] memory,
             uint256[] memory,
-            IERC20Token[2][] memory,
+            IERC20[2][] memory,
             uint32[2][] memory
         )
     {
@@ -352,7 +352,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
         uint256[] memory startTimes = new uint256[](length);
         uint256[] memory endTimes = new uint256[](length);
         uint256[] memory rewardRates = new uint256[](length);
-        IERC20Token[2][] memory reserveTokens = new IERC20Token[2][](length);
+        IERC20[2][] memory reserveTokens = new IERC20[2][](length);
         uint32[2][] memory rewardShares = new uint32[2][](length);
 
         for (uint256 i = 0; i < length; ++i) {
@@ -378,7 +378,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      *
      * @return rewards data
      */
-    function poolRewards(IDSToken poolToken, IERC20Token reserveToken)
+    function poolRewards(IDSToken poolToken, IERC20 reserveToken)
         external
         view
         override
@@ -404,7 +404,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function updatePoolRewardsData(
         IDSToken poolToken,
-        IERC20Token reserveToken,
+        IERC20 reserveToken,
         uint256 lastUpdateTime,
         uint256 rewardPerToken,
         uint256 totalClaimedRewards
@@ -426,7 +426,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function setPoolsRewardData(
         IDSToken[] calldata poolTokens,
-        IERC20Token[] calldata reserveTokens,
+        IERC20[] calldata reserveTokens,
         uint256[] calldata lastUpdateTimes,
         uint256[] calldata rewardsPerToken,
         uint256[] calldata totalClaimedRewards
@@ -444,7 +444,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
             IDSToken poolToken = poolTokens[i];
             _validAddress(address(poolToken));
 
-            IERC20Token reserveToken = reserveTokens[i];
+            IERC20 reserveToken = reserveTokens[i];
             _validAddress(address(reserveToken));
 
             PoolRewards storage data = _poolRewards[poolToken][reserveToken];
@@ -466,7 +466,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     function providerRewards(
         address provider,
         IDSToken poolToken,
-        IERC20Token reserveToken
+        IERC20 reserveToken
     )
         external
         view
@@ -508,7 +508,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     function updateProviderRewardsData(
         address provider,
         IDSToken poolToken,
-        IERC20Token reserveToken,
+        IERC20 reserveToken,
         uint256 rewardPerToken,
         uint256 pendingBaseRewards,
         uint256 totalClaimedRewards,
@@ -541,7 +541,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
      */
     function setProviderRewardData(
         IDSToken poolToken,
-        IERC20Token reserveToken,
+        IERC20 reserveToken,
         address[] memory providers,
         uint256[] memory rewardsPerToken,
         uint256[] memory pendingBaseRewards,

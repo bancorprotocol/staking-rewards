@@ -47,9 +47,9 @@ const getLiquidityTask = async (env) => {
             name = 'MakerDAO';
             symbol = 'MKR';
         } else {
-            const ERC20Token = new Contract(ERC20_ABI, token);
-            name = await web3Provider.call(ERC20Token.methods.name());
-            symbol = await web3Provider.call(ERC20Token.methods.symbol());
+            const ERC20 = new Contract(ERC20_ABI, token);
+            name = await web3Provider.call(ERC20.methods.name());
+            symbol = await web3Provider.call(ERC20.methods.symbol());
         }
 
         return { name, symbol };
@@ -412,7 +412,7 @@ const getLiquidityTask = async (env) => {
         '../../../node_modules/@bancor/contracts-solidity/solidity/build/contracts'
     );
 
-    const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20Token.json'));
+    const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20.json'));
     const { abi: ERC20_ABI } = JSON.parse(rawData);
 
     const db = new DB('liquidity');

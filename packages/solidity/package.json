@@ -14,7 +14,6 @@
     "license": "MIT",
     "scripts": {
         "compile": "truffle compile",
-        "build": "yarn build",
         "test": "yarn compile && yarn qtest",
         "qtest": "mocha",
         "coverage": "truffle run coverage",
@@ -24,9 +23,9 @@
         "verify": "truffle run verify"
     },
     "devDependencies": {
-        "@bancor/contracts-solidity": "^0.6.32",
+        "@bancor/contracts-solidity": "^0.6.33",
         "@bancor/token-governance": "bancorprotocol/token-governance",
-        "@openzeppelin/contracts": "3.3.0",
+        "@openzeppelin/contracts": "3.4.0",
         "@openzeppelin/test-environment": "^0.1.8",
         "@openzeppelin/test-helpers": "^0.5.9",
         "bn.js": "^5.1.3",

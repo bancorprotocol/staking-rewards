@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtection.sol";
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionSettings.sol";
 import "@bancor/contracts-solidity/solidity/contracts/liquidity-protection/LiquidityProtectionStore.sol";
@@ -35,7 +37,7 @@ contract TestLiquidityProtection is LiquidityProtection, TestTime {
     function addProviderLiquidity(
         address provider,
         IConverterAnchor poolAnchor,
-        IERC20Token reserveToken,
+        IERC20 reserveToken,
         uint256 reserveAmount
     ) public returns (uint256) {
         _stakingRewards.setTime(time());

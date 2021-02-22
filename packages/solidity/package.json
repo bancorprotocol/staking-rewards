@@ -23,7 +23,7 @@
         "verify": "truffle run verify"
     },
     "devDependencies": {
-        "@bancor/contracts-solidity": "^0.6.32",
+        "@bancor/contracts-solidity": "^0.6.33",
         "@bancor/token-governance": "bancorprotocol/token-governance",
         "@openzeppelin/contracts": "3.4.0",
         "@openzeppelin/test-environment": "^0.1.8",

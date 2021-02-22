@@ -23,10 +23,10 @@
     chalk "^2.0.0"
     js-tokens "^4.0.0"
 
-"@bancor/contracts-solidity@^0.6.32":
-  version "0.6.32"
-  resolved "https://registry.yarnpkg.com/@bancor/contracts-solidity/-/contracts-solidity-0.6.32.tgz#5d5ac221a327f1cee53a3f3158190c429288bb03"
-  integrity sha512-TLxPjDGtA455t8K03tjPrXYmdn2YqvknJazmdd83l8dLCApbfdBSHNbQGs0u1tYw67crCMshhhmbop9Lmj2wYg==
+"@bancor/contracts-solidity@^0.6.33":
+  version "0.6.33"
+  resolved "https://registry.yarnpkg.com/@bancor/contracts-solidity/-/contracts-solidity-0.6.33.tgz#bc4db406ec7808a51a432d2d36c14b16aedc1c63"
+  integrity sha512-gB89tZwrK3C0YHxjox2n6IPhjvKOsJ84MOzj3gXRCaksChXDj2oApD9nZeQruAIpCtj1LvT2Fmd0meI0oAjzRw==
 
 "@bancor/token-governance@bancorprotocol/token-governance":
   version "0.1.0"

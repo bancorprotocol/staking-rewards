@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "../StakingRewards.sol";
 
 import "./TestStakingRewardsStore.sol";
@@ -26,7 +28,7 @@ contract TestStakingRewards is StakingRewards, TestTime {
     function baseRewards(
         address provider,
         IDSToken poolToken,
-        IERC20Token reserveToken
+        IERC20 reserveToken
     ) external view returns (uint256) {
         PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
         ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);

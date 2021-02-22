@@ -36,6 +36,8 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
 
     uint32 private constant PPM_RESOLUTION = 1000000;
 
+    uint256 private constant MAX_REWARD_RATE = 2**128 - 1;
+
     // the mapping between pool tokens and their respective rewards program information.
     mapping(IDSToken => PoolProgram) private _programs;
 
@@ -249,6 +251,7 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     ) private {
         require(startTime < endTime && endTime > time(), "ERR_INVALID_DURATION");
         require(rewardRate > 0, "ERR_ZERO_VALUE");
+        require(rewardRate <= MAX_REWARD_RATE, "ERR_REWARD_RATE_TOO_HIGH");
         require(rewardShares[0].add(rewardShares[1]) == PPM_RESOLUTION, "ERR_INVALID_REWARD_SHARES");
 
         require(_pools.add(address(poolToken)), "ERR_ALREADY_PARTICIPATING");
@@ -430,7 +433,10 @@ contract StakingRewardsStore is IStakingRewardsStore, AccessControl, Utils, Time
     ) external onlySeeder {
         uint256 length = poolTokens.length;
         require(
-            length == reserveTokens.length && length == lastUpdateTimes.length && length == rewardsPerToken.length,
+            length == reserveTokens.length &&
+                length == lastUpdateTimes.length &&
+                length == rewardsPerToken.length &&
+                length == totalClaimedRewards.length,
             "ERR_INVALID_LENGTH"
         );
 

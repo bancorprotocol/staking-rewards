@@ -13,7 +13,6 @@
     "author": "Leonid Beder",
     "license": "MIT",
     "scripts": {
-        "build": "cd ../../node_modules/@bancor/contracts && truffle compile",
         "test": "mocha"
     },
     "dependencies": {

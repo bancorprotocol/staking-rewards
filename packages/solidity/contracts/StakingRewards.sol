@@ -736,9 +736,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
-     * @dev updates pending rewards for a list of providers
+     * @dev updates pending rewards for a list of providers in all pools
      *
      * @param providers owners of the liquidity
+     *
      */
     function updateRewards(address[] calldata providers) external {
         ILiquidityProtectionStats lpStats = liquidityProtectionStats();
@@ -746,6 +747,22 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 length = providers.length;
         for (uint256 i = 0; i < length; ++i) {
             updateRewards(providers[i], lpStats);
+        }
+    }
+
+    /**
+     * @dev updates pending rewards for a list of providers in a specific pool
+     *
+     * @param poolToken the participating pool to update
+     * @param providers owners of the liquidity
+     */
+    function updatePoolRewards(address[] calldata providers, IDSToken poolToken) external {
+        ILiquidityProtectionStats lpStats = liquidityProtectionStats();
+        PoolProgram memory program = poolProgram(poolToken);
+
+        uint256 length = providers.length;
+        for (uint256 i = 0; i < length; ++i) {
+            updateRewards(providers[i], poolToken, program, lpStats);
         }
     }
 
@@ -762,10 +779,26 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             IDSToken poolToken = poolTokens[i];
             PoolProgram memory program = poolProgram(poolToken);
 
-            for (uint256 j = 0; j < program.reserveTokens.length; ++j) {
-                IERC20 reserveToken = program.reserveTokens[j];
-                updateRewards(provider, poolToken, reserveToken, lpStats);
-            }
+            updateRewards(provider, poolToken, program, lpStats);
+        }
+    }
+
+    /**
+     * @dev updates pending rewards for a specific of provider
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the participating pool to update
+     * @param program the pool program info
+     * @param lpStats liquidity protection statistics store
+     */
+    function updateRewards(
+        address provider,
+        IDSToken poolToken,
+        PoolProgram memory program,
+        ILiquidityProtectionStats lpStats
+    ) private {
+        for (uint256 i = 0; i < program.reserveTokens.length; ++i) {
+            updateRewards(provider, poolToken, program.reserveTokens[i], lpStats);
         }
     }
 

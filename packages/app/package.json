@@ -1,7 +1,7 @@
 {
     "name": "@bancor/rewards-app",
-    "version": "0.0.1",
-    "description": "Bancor staking rewards distribution app",
+    "version": "0.1.0",
+    "description": "Bancor staking rewards management app",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/bancorprotocol/staking-rewards.git"

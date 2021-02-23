@@ -445,25 +445,19 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         providerRewards.baseRewardsDebt = 0;
         providerRewards.baseRewardsDebtMultiplier = 0;
 
-        if (maxAmount != MAX_UINT256) {
-            if (fullReward > maxAmount) {
-                // get the amount of the actual base rewards that were claimed.
-                if (multiplier == PPM_RESOLUTION) {
-                    providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
-                } else {
-                    providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
-                }
-
-                // store the current multiplier for future retroactive rewards correction.
-                providerRewards.baseRewardsDebtMultiplier = multiplier;
-
-                // grant only maxAmount rewards.
-                fullReward = maxAmount;
-
-                maxAmount = 0;
+        if (maxAmount != MAX_UINT256 && fullReward > maxAmount) {
+            // get the amount of the actual base rewards that were claimed.
+            if (multiplier == PPM_RESOLUTION) {
+                providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
             } else {
-                maxAmount = maxAmount.sub(fullReward);
+                providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
             }
+
+            // store the current multiplier for future retroactive rewards correction.
+            providerRewards.baseRewardsDebtMultiplier = multiplier;
+
+            // grant only maxAmount rewards.
+            fullReward = maxAmount;
         }
 
         // update pool rewards data total claimed rewards.

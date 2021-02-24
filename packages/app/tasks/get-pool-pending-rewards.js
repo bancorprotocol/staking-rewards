@@ -229,7 +229,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                     );
 
                     if (new BN(rewards).eq(new BN(0))) {
-                        info(
+                        trace(
                             'Skipping provider without pending rewards',
                             arg('provider', provider),
                             arg('poolToken', poolToken),
@@ -238,6 +238,14 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
 
                         continue;
                     }
+
+                    trace(
+                        'Storing pool pending rewards for',
+                        arg('provider', provider),
+                        arg('poolToken', poolToken),
+                        arg('reserveToken', reserveToken),
+                        arg('rewards', rewards)
+                    );
 
                     set(pendingRewards, [provider, poolToken, reserveToken], rewards);
                 }

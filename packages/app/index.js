@@ -8,6 +8,7 @@ const setup = require('./utils/web3');
 const { info, error, setVerbose, setMultiline } = require('./utils/logger');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
+const getPoolPendingRewardsTask = require('./tasks/get-pool-pending-rewards');
 
 const main = async () => {
     try {
@@ -73,6 +74,21 @@ const main = async () => {
                 () => {},
                 async () => getLiquidityTask(env)
             )
+            .command(
+                'get-pool-pending-rewards',
+                'Get pool pending rewards',
+                (yargs) => {
+                    return yargs.option('poolToken', {
+                        alias: 'p',
+                        description: 'The address of the pool token',
+                        type: 'string'
+                    });
+                },
+                async ({ poolToken }) => getPoolPendingRewardsTask(env, { poolToken })
+            )
+            .onFinishCommand(async () => {
+                env.web3Provider.disconnect();
+            })
             .demandCommand()
             .help()
             .parse();

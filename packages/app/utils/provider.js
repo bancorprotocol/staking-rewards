@@ -5,7 +5,6 @@ const ganache = require('ganache-core');
 const memdown = require('memdown');
 
 const { info, error, arg } = require('./logger');
-const { test, gasPrice } = require('./yargs');
 
 const settings = require('../settings.json');
 const providers = require('../providers.json');
@@ -13,7 +12,7 @@ const providers = require('../providers.json');
 const GAS_LIMIT_BUFFER = 0.1; // 10%
 
 class Provider {
-    async initialize() {
+    async initialize({ test, gasPrice }) {
         this.privateKey = require('../credentials.json').privateKey;
 
         const { WebsocketProvider, HttpProvider } = providers;
@@ -170,7 +169,6 @@ class Provider {
             liquidityProtectionStoreOwner,
             liquidityProtectionSettingsOwner,
             liquidityProtectionOwner,
-            governor,
             checkpointStoreOwner,
             contractRegistryOwner
         ];

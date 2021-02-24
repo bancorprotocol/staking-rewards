@@ -2,22 +2,21 @@ const path = require('path');
 const fs = require('fs');
 
 const Contract = require('web3-eth-contract');
-const { keccak256, asciiToHex } = require('web3-utils');
+const { keccak256 } = require('web3-utils');
 
 const { info, error, warning, arg } = require('./logger');
 const Provider = require('./provider');
-const { test, init, reorgOffset } = require('./yargs');
 
 const settings = require('../settings.json');
 
 let contracts = {};
 let web3Provider;
 
-const setup = async () => {
+const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     const setupProvider = async () => {
         web3Provider = new Provider();
 
-        await web3Provider.initialize();
+        await web3Provider.initialize({ test, gasPrice });
     };
 
     const initExternalContract = (name) => {

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const BN = require('bn.js');
-const { set } = require('lodash');
+const { set, unset } = require('lodash');
 
 const { trace, info, error, warning, arg } = require('../utils/logger');
 const DB = require('../utils/db');
@@ -235,6 +235,8 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             arg('poolToken', poolToken),
                             arg('reserveToken', reserveToken)
                         );
+
+                        unset(pendingRewards, [provider, poolToken, reserveToken], rewards);
 
                         continue;
                     }

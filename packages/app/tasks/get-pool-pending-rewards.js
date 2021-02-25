@@ -220,7 +220,6 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
 
         const { pendingRewards = {} } = data;
 
-        console.log(pool);
         for (const [provider, poolTokens] of Object.entries(pool)) {
             for (const [poolToken, reserveTokens] of Object.entries(poolTokens)) {
                 for (const reserveToken of Object.keys(reserveTokens)) {
@@ -274,7 +273,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
         error('Invalid pool token address');
     }
 
-    const db = new DB(`pending-rewards-${poolToken}`);
+    const db = new DB(`${poolToken}-pending-rewards`);
 
     let fromBlock;
     if (!db.data.lastBlockNumber) {

@@ -803,6 +803,69 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     }
 
     /**
+     * @dev updates pool and provider rewards. this function is called during every liquidity changes
+     *
+     * @param provider the owner of the liquidity
+     * @param poolToken the pool token representing the rewards pool
+     * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param lpStats liquidity protection statistics store
+     */
+    function updateRewards(
+        address provider,
+        IDSToken poolToken,
+        IERC20 reserveToken,
+        ILiquidityProtectionStats lpStats
+    ) private returns (PoolRewards memory, ProviderRewards memory) {
+        PoolProgram memory program = poolProgram(poolToken);
+
+        // calculate the new reward rate per-token and update it in the store.
+        PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
+
+        // rewardPerToken must be calculated with the previous value of lastUpdateTime.
+        poolRewardsData.rewardPerToken = rewardPerToken(poolToken, reserveToken, poolRewardsData, program, lpStats);
+        poolRewardsData.lastUpdateTime = Math.min(time(), program.endTime);
+
+        _store.updatePoolRewardsData(
+            poolToken,
+            reserveToken,
+            poolRewardsData.lastUpdateTime,
+            poolRewardsData.rewardPerToken,
+            poolRewardsData.totalClaimedRewards
+        );
+
+        // update provider's rewards with the newly claimable base rewards and the new reward rate per-token.
+        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
+
+        // if this is the first liquidity provision - set the effective staking time to the current time.
+        if (
+            providerRewards.effectiveStakingTime == 0 &&
+            lpStats.totalProviderAmount(provider, poolToken, reserveToken) == 0
+        ) {
+            providerRewards.effectiveStakingTime = time();
+        }
+
+        // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken.
+        providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(
+            baseRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats)
+        );
+        providerRewards.rewardPerToken = poolRewardsData.rewardPerToken;
+
+        _store.updateProviderRewardsData(
+            provider,
+            poolToken,
+            reserveToken,
+            providerRewards.rewardPerToken,
+            providerRewards.pendingBaseRewards,
+            providerRewards.totalClaimedRewards,
+            providerRewards.effectiveStakingTime,
+            providerRewards.baseRewardsDebt,
+            providerRewards.baseRewardsDebtMultiplier
+        );
+
+        return (poolRewardsData, providerRewards);
+    }
+
+    /**
      * @dev returns the aggregated reward rate per-token
      *
      * @param poolToken the participating pool to query
@@ -929,69 +992,6 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         verifyFullReward(fullReward, reserveToken, poolRewardsData, program);
 
         return (fullReward, multiplier);
-    }
-
-    /**
-     * @dev updates pool and provider rewards. this function is called during every liquidity changes
-     *
-     * @param provider the owner of the liquidity
-     * @param poolToken the pool token representing the rewards pool
-     * @param reserveToken the reserve token representing the liquidity in the pool
-     * @param lpStats liquidity protection statistics store
-     */
-    function updateRewards(
-        address provider,
-        IDSToken poolToken,
-        IERC20 reserveToken,
-        ILiquidityProtectionStats lpStats
-    ) private returns (PoolRewards memory, ProviderRewards memory) {
-        PoolProgram memory program = poolProgram(poolToken);
-
-        // calculate the new reward rate per-token and update it in the store.
-        PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
-
-        // rewardPerToken must be calculated with the previous value of lastUpdateTime.
-        poolRewardsData.rewardPerToken = rewardPerToken(poolToken, reserveToken, poolRewardsData, program, lpStats);
-        poolRewardsData.lastUpdateTime = Math.min(time(), program.endTime);
-
-        _store.updatePoolRewardsData(
-            poolToken,
-            reserveToken,
-            poolRewardsData.lastUpdateTime,
-            poolRewardsData.rewardPerToken,
-            poolRewardsData.totalClaimedRewards
-        );
-
-        // update provider's rewards with the newly claimable base rewards and the new reward rate per-token.
-        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
-
-        // if this is the first liquidity provision - set the effective staking time to the current time.
-        if (
-            providerRewards.effectiveStakingTime == 0 &&
-            lpStats.totalProviderAmount(provider, poolToken, reserveToken) == 0
-        ) {
-            providerRewards.effectiveStakingTime = time();
-        }
-
-        // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken.
-        providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(
-            baseRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats)
-        );
-        providerRewards.rewardPerToken = poolRewardsData.rewardPerToken;
-
-        _store.updateProviderRewardsData(
-            provider,
-            poolToken,
-            reserveToken,
-            providerRewards.rewardPerToken,
-            providerRewards.pendingBaseRewards,
-            providerRewards.totalClaimedRewards,
-            providerRewards.effectiveStakingTime,
-            providerRewards.baseRewardsDebt,
-            providerRewards.baseRewardsDebtMultiplier
-        );
-
-        return (poolRewardsData, providerRewards);
     }
 
     /**

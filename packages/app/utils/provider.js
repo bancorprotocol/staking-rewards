@@ -163,20 +163,12 @@ class Provider {
         const {
             externalContracts: {
                 LiquidityProtectionStore: { owner: liquidityProtectionStoreOwner },
-                LiquidityProtectionSettings: { owner: liquidityProtectionSettingsOwner },
                 LiquidityProtection: { owner: liquidityProtectionOwner },
-                CheckpointStore: { owner: checkpointStoreOwner },
                 ContractRegistry: { owner: contractRegistryOwner }
             }
         } = settings;
 
-        return [
-            liquidityProtectionStoreOwner,
-            liquidityProtectionSettingsOwner,
-            liquidityProtectionOwner,
-            checkpointStoreOwner,
-            contractRegistryOwner
-        ];
+        return [liquidityProtectionStoreOwner, liquidityProtectionOwner, contractRegistryOwner];
     }
 }
 

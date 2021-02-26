@@ -445,25 +445,19 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         providerRewards.baseRewardsDebt = 0;
         providerRewards.baseRewardsDebtMultiplier = 0;
 
-        if (maxAmount != MAX_UINT256) {
-            if (fullReward > maxAmount) {
-                // get the amount of the actual base rewards that were claimed.
-                if (multiplier == PPM_RESOLUTION) {
-                    providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
-                } else {
-                    providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
-                }
-
-                // store the current multiplier for future retroactive rewards correction.
-                providerRewards.baseRewardsDebtMultiplier = multiplier;
-
-                // grant only maxAmount rewards.
-                fullReward = maxAmount;
-
-                maxAmount = 0;
+        if (maxAmount != MAX_UINT256 && fullReward > maxAmount) {
+            // get the amount of the actual base rewards that were claimed.
+            if (multiplier == PPM_RESOLUTION) {
+                providerRewards.baseRewardsDebt = fullReward.sub(maxAmount);
             } else {
-                maxAmount = maxAmount.sub(fullReward);
+                providerRewards.baseRewardsDebt = fullReward.sub(maxAmount).mul(PPM_RESOLUTION).div(multiplier);
             }
+
+            // store the current multiplier for future retroactive rewards correction.
+            providerRewards.baseRewardsDebtMultiplier = multiplier;
+
+            // grant only maxAmount rewards.
+            fullReward = maxAmount;
         }
 
         // update pool rewards data total claimed rewards.
@@ -650,7 +644,14 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         // approve the LiquidityProtection contract to pull the rewards.
         ILiquidityProtection liquidityProtection = liquidityProtection();
-        _networkToken.safeApprove(address(liquidityProtection), amount);
+        address liquidityProtectionAddress = address(liquidityProtection);
+        uint256 allowance = _networkToken.allowance(address(this), liquidityProtectionAddress);
+        if (allowance < amount) {
+            if (allowance > 0) {
+                _networkToken.safeApprove(liquidityProtectionAddress, 0);
+            }
+            _networkToken.safeApprove(liquidityProtectionAddress, amount);
+        }
 
         // mint the reward tokens directly to the staking contract, so that the LiquidityProtection could pull the
         // rewards and attribute them to the provider.

@@ -825,10 +825,10 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         }
 
         // pendingBaseRewards must be calculated with the previous value of providerRewards.rewardPerToken.
-        uint256 baseRewards =
+        uint256 rewards =
             baseRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats);
-        if (baseRewards != 0) {
-            providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(baseRewards);
+        if (rewards != 0) {
+            providerRewards.pendingBaseRewards = providerRewards.pendingBaseRewards.add(rewards);
 
             update = true;
         }

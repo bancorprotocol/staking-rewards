@@ -2,7 +2,8 @@
     "genesisBlock": 11039642,
     "systemContracts": {
         "StakingRewardsStore": {
-            "address": "0x891AfF26593Da95e574E3f62619dAD6624FB5693"
+            "address": "0x891AfF26593Da95e574E3f62619dAD6624FB5693",
+            "supervisor": "0xB93081c32beFda94168483c78b780E601f07B192"
         },
         "StakingRewards": {
             "address": "0xB443DEA978B39178Cb05Ae005074227A4390DfCe"
@@ -21,8 +22,16 @@
             "address": "0x9Ab934010E6f2D633FeEB5b6f1DdCeEdeD601BCF",
             "owner": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
         },
+        "TokenGovernance": {
+            "address": "0xa489c2b5b36835a327851ab917a80562b5afc244",
+            "governor": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
+        },
         "ContractRegistry": {
             "address": "0x52Ae12ABe5D8BD778BD5397F99cA900624CfADD4",
+            "owner": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
+        },
+        "CheckpointStore": {
+            "address": "0xF8a2FB650e25a26CE839D64bE8a0aBbCb0b87B32",
             "owner": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
         }
     }

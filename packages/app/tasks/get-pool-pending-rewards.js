@@ -33,7 +33,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
     };
 
     const getProtectionLiquidityChanges = async (data, targetPoolToken, fromBlock, toBlock) => {
-        const pool = {};
+        const poolData = {};
 
         let eventCount = 0;
         for (let i = fromBlock; i < toBlock; i += BATCH_SIZE) {
@@ -78,7 +78,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             continue;
                         }
 
-                        set(pool, [provider, poolToken, reserveToken], {});
+                        set(poolData, [provider, poolToken, reserveToken], {});
 
                         eventCount++;
 
@@ -171,7 +171,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             continue;
                         }
 
-                        set(pool, [provider, poolToken, reserveToken], {});
+                        set(poolData, [provider, poolToken, reserveToken], {});
 
                         eventCount++;
 
@@ -198,7 +198,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             continue;
                         }
 
-                        set(pool, [provider, poolToken, reserveToken], {});
+                        set(poolData, [provider, poolToken, reserveToken], {});
 
                         eventCount++;
 
@@ -212,15 +212,15 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
 
         info('Finished processing all new protection change events', arg('count', eventCount));
 
-        return pool;
+        return poolData;
     };
 
-    const getPendingRewards = async (data, pool, toBlock) => {
+    const getPendingRewards = async (data, poolData, toBlock) => {
         info('Querying all pending rewards at block', arg('toBlock', toBlock));
 
         const { pendingRewards = {} } = data;
 
-        for (const [provider, poolTokens] of Object.entries(pool)) {
+        for (const [provider, poolTokens] of Object.entries(poolData)) {
             for (const [poolToken, reserveTokens] of Object.entries(poolTokens)) {
                 for (const reserveToken of Object.keys(reserveTokens)) {
                     const rewards = await web3Provider.call(

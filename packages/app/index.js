@@ -9,6 +9,7 @@ const { info, error, setVerbose, setMultiline } = require('./utils/logger');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPoolPendingRewardsTask = require('./tasks/get-pool-pending-rewards');
+const updatePoolRewardsTask = require('./tasks/update-pool-rewards');
 
 const main = async () => {
     try {
@@ -85,6 +86,18 @@ const main = async () => {
                     });
                 },
                 async ({ poolToken }) => getPoolPendingRewardsTask(env, { poolToken })
+            )
+            .command(
+                'update-pool-rewards',
+                'Update pool rewards',
+                (yargs) => {
+                    return yargs.option('poolToken', {
+                        alias: 'p',
+                        description: 'The address of the pool token',
+                        type: 'string'
+                    });
+                },
+                async ({ poolToken }) => updatePoolRewardsTask(env, { poolToken })
             )
             .onFinishCommand(async () => {
                 env.web3Provider.disconnect();

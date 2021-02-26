@@ -21,10 +21,7 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
 
     const initExternalContract = (name) => {
         const { externalContracts } = settings;
-        const externalContractsDir = path.resolve(
-            __dirname,
-            '../../../node_modules/@bancor/contracts-solidity/solidity/build/contracts'
-        );
+        const externalContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
         const { address } = externalContracts[name];
         const rawData = fs.readFileSync(path.join(externalContractsDir, `${name}.json`));
@@ -51,11 +48,13 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     const setupExternalContracts = async () => {
         info('Setting up External Contracts');
 
+        initExternalContract('TokenGovernance');
+        initExternalContract('CheckpointStore');
         initExternalContract('ContractRegistry');
-        initExternalContract('LiquidityProtectionSettings');
         initExternalContract('LiquidityProtectionStore');
         initExternalContract('LiquidityProtectionStats');
         initExternalContract('LiquidityProtection');
+        initExternalContract('CheckpointStore');
     };
 
     const deploySystemContract = async (name, { arguments, contractName } = {}) => {
@@ -100,7 +99,35 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
 
     const setupSystemContracts = async () => {
         initSystemContract('StakingRewardsStore');
-        initSystemContract('StakingRewards');
+
+        if (init) {
+            const { systemContracts, externalContracts } = settings;
+
+            info('Deploying contracts');
+
+            await deploySystemContract('StakingRewards', {
+                arguments: [
+                    contracts.StakingRewardsStore.options.address,
+                    contracts.TokenGovernance.options.address,
+                    contracts.CheckpointStore.options.address,
+                    contracts.ContractRegistry.options.address
+                ]
+            });
+
+            info('Granting required permissions');
+
+            await grantRole('StakingRewardsStore', 'ROLE_OWNER', 'StakingRewards', {
+                from: systemContracts.StakingRewardsStore.supervisor
+            });
+
+            await grantRole('TokenGovernance', 'ROLE_MINTER', 'StakingRewards', {
+                from: externalContracts.TokenGovernance.governor
+            });
+
+            await grantRole('StakingRewards', 'ROLE_PUBLISHER', 'LiquidityProtection');
+        } else {
+            initSystemContract('StakingRewards');
+        }
     };
 
     try {

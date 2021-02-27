@@ -776,12 +776,24 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // calculate the new reward rate per-token and update it in the store.
         PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
 
+        bool update = false;
+
         // rewardPerToken must be calculated with the previous value of lastUpdateTime.
         uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, poolRewardsData, program, lpStats);
-        if (newRewardPerToken != poolRewardsData.rewardPerToken) {
+        if (poolRewardsData.rewardPerToken != newRewardPerToken) {
             poolRewardsData.rewardPerToken = newRewardPerToken;
-            poolRewardsData.lastUpdateTime = Math.min(time(), program.endTime);
 
+            update = true;
+        }
+
+        uint256 newLastUpdateTime = Math.min(time(), program.endTime);
+        if (poolRewardsData.lastUpdateTime != newLastUpdateTime) {
+            poolRewardsData.lastUpdateTime = newLastUpdateTime;
+
+            update = true;
+        }
+
+        if (update) {
             _store.updatePoolRewardsData(
                 poolToken,
                 reserveToken,
@@ -913,6 +925,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
         uint256 stakingEndTime = Math.min(currentTime, program.endTime);
         uint256 stakingStartTime = Math.max(program.startTime, poolRewardsData.lastUpdateTime);
+        if (stakingStartTime == stakingEndTime) {
+            return poolRewardsData.rewardPerToken;
+        }
 
         // since we will be dividing by the total amount of protected tokens in units of wei, we can encounter cases
         // where the total amount in the denominator is higher than the product of the rewards rate and staking duration.

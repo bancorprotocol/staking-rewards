@@ -132,11 +132,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256, /* poolAmount */
         uint256 /* reserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
-        if (!_store.isReserveParticipating(IDSToken(address(poolAnchor)), reserveToken)) {
+        IDSToken poolToken = IDSToken(address(poolAnchor));
+        if (!_store.isReserveParticipating(poolToken, reserveToken)) {
             return;
         }
 
-        updateRewards(provider, IDSToken(address(poolAnchor)), reserveToken, liquidityProtectionStats());
+        PoolProgram memory program = poolProgram(poolToken);
+        updateRewards(provider, poolToken, reserveToken, program, liquidityProtectionStats());
     }
 
     /**
@@ -435,7 +437,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ) private returns (uint256) {
         // update all provider's pending rewards, in order to apply retroactive reward multipliers.
         (PoolRewards memory poolRewardsData, ProviderRewards memory providerRewards) =
-            updateRewards(provider, poolToken, reserveToken, lpStats);
+            updateRewards(provider, poolToken, reserveToken, program, lpStats);
 
         // get full rewards and the respective rewards multiplier.
         (uint256 fullReward, uint32 multiplier) =
@@ -707,7 +709,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
 
             // update all provider's pending rewards, in order to apply retroactive reward multipliers.
             (PoolRewards memory poolRewardsData, ProviderRewards memory providerRewards) =
-                updateRewards(provider, poolToken, reserveToken, lpStats);
+                updateRewards(provider, poolToken, reserveToken, program, lpStats);
 
             // get full rewards and the respective rewards multiplier.
             (uint256 fullReward, uint32 multiplier) =
@@ -862,15 +864,16 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * @param provider the owner of the liquidity
      * @param poolToken the pool token representing the rewards pool
      * @param reserveToken the reserve token representing the liquidity in the pool
+     * @param program the pool program info
      * @param lpStats liquidity protection statistics store
      */
     function updateRewards(
         address provider,
         IDSToken poolToken,
         IERC20 reserveToken,
+        PoolProgram memory program,
         ILiquidityProtectionStats lpStats
     ) private returns (PoolRewards memory, ProviderRewards memory) {
-        PoolProgram memory program = poolProgram(poolToken);
         PoolRewards memory poolRewardsData = updateReserveRewards(poolToken, reserveToken, program, lpStats);
         ProviderRewards memory providerRewards =
             updateProviderRewards(provider, poolToken, reserveToken, poolRewardsData, program, lpStats);

@@ -1,7 +1,7 @@
 const { trace, info, error, arg } = require('../utils/logger');
 const DB = require('../utils/db');
 
-const BATCH_SIZE = 1;
+const BATCH_SIZE = 25;
 
 const updatePoolRewardsTask = async (env, { poolToken }) => {
     const updatePoolRewards = async (data) => {
@@ -10,7 +10,6 @@ const updatePoolRewardsTask = async (env, { poolToken }) => {
         let totalGas = 0;
 
         const providers = Object.keys(data.pendingRewards);
-
         for (let i = 0; i < providers.length; i += BATCH_SIZE) {
             const providersBatch = providers.slice(i, i + BATCH_SIZE);
 
@@ -20,16 +19,14 @@ const updatePoolRewardsTask = async (env, { poolToken }) => {
                 trace('Updating provider pool rewards for', arg('provider', provider), arg('poolToken', poolToken));
             }
 
-            console.log('START');
             const tx = await web3Provider.send(
                 contracts.StakingRewards.methods.updatePoolRewards(providersBatch, poolToken)
             );
-            console.log('tx.gasUsed', tx.gasUsed);
+
             totalGas += tx.gasUsed;
-            console.log('END');
         }
 
-        info('Finished updating pool rewards', arg('totalGas', totalGas));
+        info('Finished updating pool rewards', arg('totalGas', totalGas), arg('providers', providers.length));
     };
 
     const { web3Provider, contracts } = env;

@@ -155,11 +155,6 @@ class Provider {
         return this.queryWeb3.eth.abi.decodeParameters(typesArray, hexString);
     }
 
-    disconnect() {
-        this.queryWeb3.currentProvider.disconnect(0, 'OK');
-        this.sendWeb3.currentProvider.disconnect(0, 'OK');
-    }
-
     static unlockedAccounts() {
         const {
             externalContracts: {

@@ -99,8 +99,8 @@ const main = async () => {
                 },
                 async ({ poolToken }) => updatePoolRewardsTask(env, { poolToken })
             )
-            .onFinishCommand(async () => {
-                env.web3Provider.disconnect();
+            .onFinishCommand(() => {
+                process.exit(0);
             })
             .demandCommand()
             .help()

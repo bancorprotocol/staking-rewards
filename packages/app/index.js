@@ -14,6 +14,8 @@ const updatePoolRewardsTask = require('./tasks/update-pool-rewards');
 const main = async () => {
     try {
         let env;
+        const dbDir = path.resolve(__dirname, './data');
+        await mkdirp(dbDir);
 
         await yargs(hideBin(process.argv))
             .option('verbose', {
@@ -59,13 +61,9 @@ const main = async () => {
                 'Resets the DB',
                 () => {},
                 async () => {
-                    const dbDir = path.resolve(__dirname, './data');
+                    info('Resetting the local DB');
 
-                    if (reset) {
-                        info('Resetting the local DB');
-
-                        fs.rmdirSync(dbDir, { recursive: true });
-                    }
+                    fs.rmdirSync(dbDir, { recursive: true });
                     await mkdirp(dbDir);
                 }
             )

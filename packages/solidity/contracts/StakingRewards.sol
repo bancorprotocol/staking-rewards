@@ -137,8 +137,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             return;
         }
 
-        PoolProgram memory program = poolProgram(poolToken);
-        updateRewards(provider, poolToken, reserveToken, program, liquidityProtectionStats());
+        updateRewards(provider, poolToken, reserveToken, poolProgram(poolToken), liquidityProtectionStats());
     }
 
     /**

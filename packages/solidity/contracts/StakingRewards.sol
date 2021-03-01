@@ -909,7 +909,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         PoolRewards memory poolRewardsData,
         PoolProgram memory program,
         ILiquidityProtectionStats lpStats
-    ) internal view returns (uint256) {
+    ) private view returns (uint256) {
         // if there is no longer any liquidity in this reserve, return the historic rate (i.e., rewards won't accrue).
         uint256 totalReserveAmount = lpStats.totalReserveAmount(poolToken, reserveToken);
         if (totalReserveAmount == 0) {
@@ -963,7 +963,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ProviderRewards memory providerRewards,
         PoolProgram memory program,
         ILiquidityProtectionStats lpStats
-    ) internal view returns (uint256) {
+    ) private view returns (uint256) {
         uint256 totalProviderAmount = lpStats.totalProviderAmount(provider, poolToken, reserveToken);
         uint256 newRewardPerToken = rewardPerToken(poolToken, reserveToken, poolRewardsData, program, lpStats);
 
@@ -994,7 +994,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ProviderRewards memory providerRewards,
         PoolProgram memory program,
         ILiquidityProtectionStats lpStats
-    ) internal view returns (uint256, uint32) {
+    ) private view returns (uint256, uint32) {
         // calculate the claimable base rewards (since the last claim).
         uint256 newBaseRewards =
             baseRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats);
@@ -1084,7 +1084,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return the pool program for a specific pool
      */
-    function poolProgram(IDSToken poolToken) internal view returns (PoolProgram memory) {
+    function poolProgram(IDSToken poolToken) private view returns (PoolProgram memory) {
         PoolProgram memory program;
         (program.startTime, program.endTime, program.rewardRate, program.reserveTokens, program.rewardShares) = _store
             .poolProgram(poolToken);
@@ -1100,7 +1100,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return pool rewards for a specific pool and reserve
      */
-    function poolRewards(IDSToken poolToken, IERC20 reserveToken) internal view returns (PoolRewards memory) {
+    function poolRewards(IDSToken poolToken, IERC20 reserveToken) private view returns (PoolRewards memory) {
         PoolRewards memory data;
         (data.lastUpdateTime, data.rewardPerToken, data.totalClaimedRewards) = _store.poolRewards(
             poolToken,
@@ -1123,7 +1123,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         address provider,
         IDSToken poolToken,
         IERC20 reserveToken
-    ) internal view returns (ProviderRewards memory) {
+    ) private view returns (ProviderRewards memory) {
         ProviderRewards memory data;
         (
             data.rewardPerToken,
@@ -1231,7 +1231,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return the liquidity protection store data contract
      */
-    function liquidityProtectionStats() internal view returns (ILiquidityProtectionStats) {
+    function liquidityProtectionStats() private view returns (ILiquidityProtectionStats) {
         return liquidityProtection().stats();
     }
 
@@ -1240,7 +1240,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @return the liquidity protection contract
      */
-    function liquidityProtection() internal view returns (ILiquidityProtection) {
+    function liquidityProtection() private view returns (ILiquidityProtection) {
         return ILiquidityProtection(addressOf(LIQUIDITY_PROTECTION));
     }
 }

@@ -9,7 +9,7 @@ const { info, error, arg } = require('./logger');
 const settings = require('../settings.json');
 const providers = require('../providers.json');
 
-const GAS_LIMIT_BUFFER = 0.1; // 10%
+const GAS_LIMIT_BUFFER = 0.2; // 20%
 
 class Provider {
     async initialize({ test, gasPrice }) {

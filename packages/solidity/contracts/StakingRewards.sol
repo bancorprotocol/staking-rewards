@@ -1009,7 +1009,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
             fullReward = fullReward.mul(multiplier).div(PPM_RESOLUTION);
         }
 
-        // add any debt, while applying the best retractive multiplier.
+        // add any debt, while applying the best retroactive multiplier.
         fullReward = fullReward.add(
             applyHigherMultiplier(
                 providerRewards.baseRewardsDebt,

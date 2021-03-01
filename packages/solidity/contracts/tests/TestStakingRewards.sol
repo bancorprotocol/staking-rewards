@@ -24,25 +24,4 @@ contract TestStakingRewards is StakingRewards, TestTime {
     function setStoreTime(uint256 currentTime) public {
         TestStakingRewardsStore(address(this.store())).setTime(currentTime);
     }
-
-    function baseRewards(
-        address provider,
-        IDSToken poolToken,
-        IERC20 reserveToken
-    ) external view returns (uint256) {
-        PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
-        ProviderRewards memory providerRewards = providerRewards(provider, poolToken, reserveToken);
-        PoolProgram memory program = poolProgram(poolToken);
-
-        return
-            baseRewards(
-                provider,
-                poolToken,
-                reserveToken,
-                poolRewardsData,
-                providerRewards,
-                program,
-                liquidityProtectionStats()
-            );
-    }
 }

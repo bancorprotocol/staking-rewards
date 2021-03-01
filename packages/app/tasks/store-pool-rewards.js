@@ -3,9 +3,9 @@ const DB = require('../utils/db');
 
 const BATCH_SIZE = 25;
 
-const updatePoolRewardsTask = async (env, { poolToken }) => {
-    const updatePoolRewards = async (data) => {
-        info('Updating pool rewards for', arg('poolToken', poolToken), arg('batchSize', BATCH_SIZE));
+const storePoolRewardsTask = async (env, { poolToken }) => {
+    const storePoolRewards = async (data) => {
+        info('Storing pool rewards for', arg('poolToken', poolToken), arg('batchSize', BATCH_SIZE));
 
         let totalGas = 0;
 
@@ -16,17 +16,17 @@ const updatePoolRewardsTask = async (env, { poolToken }) => {
             for (let j = 0; j < providersBatch.length; ++j) {
                 const provider = providersBatch[j];
 
-                trace('Updating provider pool rewards for', arg('provider', provider), arg('poolToken', poolToken));
+                trace('Storing provider pool rewards for', arg('provider', provider), arg('poolToken', poolToken));
             }
 
             const tx = await web3Provider.send(
-                contracts.StakingRewards.methods.updatePoolRewards(providersBatch, poolToken)
+                contracts.StakingRewards.methods.storePoolRewards(providersBatch, poolToken)
             );
 
             totalGas += tx.gasUsed;
         }
 
-        info('Finished updating pool rewards', arg('totalGas', totalGas), arg('providers', providers.length));
+        info('Finished storing pool rewards', arg('totalGas', totalGas), arg('providers', providers.length));
     };
 
     const { web3Provider, contracts } = env;
@@ -37,7 +37,7 @@ const updatePoolRewardsTask = async (env, { poolToken }) => {
 
     const db = new DB(`${poolToken}-pending-rewards`);
 
-    await updatePoolRewards(db.data);
+    await storePoolRewards(db.data);
 };
 
-module.exports = updatePoolRewardsTask;
+module.exports = storePoolRewardsTask;

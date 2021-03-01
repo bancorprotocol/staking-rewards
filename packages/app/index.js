@@ -9,7 +9,7 @@ const { info, error, setVerbose, setMultiline } = require('./utils/logger');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPoolPendingRewardsTask = require('./tasks/get-pool-pending-rewards');
-const updatePoolRewardsTask = require('./tasks/update-pool-rewards');
+const storePoolRewardsTask = require('./tasks/store-pool-rewards');
 
 const main = async () => {
     try {
@@ -86,8 +86,8 @@ const main = async () => {
                 async ({ poolToken }) => getPoolPendingRewardsTask(env, { poolToken })
             )
             .command(
-                'update-pool-rewards',
-                'Update pool rewards',
+                'store-pool-rewards',
+                'Store pool rewards',
                 (yargs) => {
                     return yargs.option('poolToken', {
                         alias: 'p',
@@ -95,7 +95,7 @@ const main = async () => {
                         type: 'string'
                     });
                 },
-                async ({ poolToken }) => updatePoolRewardsTask(env, { poolToken })
+                async ({ poolToken }) => storePoolRewardsTask(env, { poolToken })
             )
             .onFinishCommand(() => {
                 process.exit(0);

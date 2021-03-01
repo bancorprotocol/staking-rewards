@@ -38,6 +38,7 @@ const ROLE_MANAGER = web3.utils.keccak256('ROLE_MANAGER');
 const ROLE_GOVERNOR = web3.utils.keccak256('ROLE_GOVERNOR');
 const ROLE_MINTER = web3.utils.keccak256('ROLE_MINTER');
 const ROLE_PUBLISHER = web3.utils.keccak256('ROLE_PUBLISHER');
+const ROLE_UPDATER = web3.utils.keccak256('ROLE_UPDATER');
 
 const PPM_RESOLUTION = new BN(1000000);
 const MULTIPLIER_INCREMENT = PPM_RESOLUTION.div(new BN(4)); // 25%
@@ -77,6 +78,7 @@ describe('StakingRewards', () => {
     let staking;
 
     const supervisor = defaultSender;
+    const updater = accounts[1];
 
     const setTime = async (time) => {
         prevNow = now;
@@ -272,6 +274,7 @@ describe('StakingRewards', () => {
             contractRegistry.address
         );
 
+        await staking.grantRole(ROLE_UPDATER, updater);
         await store.grantRole(ROLE_OWNER, staking.address);
         await store.grantRole(ROLE_MANAGER, defaultSender);
         await networkTokenGovernance.grantRole(ROLE_MINTER, staking.address);
@@ -329,12 +332,15 @@ describe('StakingRewards', () => {
 
             expect(await newStaking.getRoleMemberCount.call(ROLE_SUPERVISOR)).to.be.bignumber.equal(new BN(1));
             expect(await newStaking.getRoleMemberCount.call(ROLE_PUBLISHER)).to.be.bignumber.equal(new BN(0));
+            expect(await newStaking.getRoleMemberCount.call(ROLE_UPDATER)).to.be.bignumber.equal(new BN(0));
 
             expect(await newStaking.getRoleAdmin.call(ROLE_SUPERVISOR)).to.eql(ROLE_SUPERVISOR);
             expect(await newStaking.getRoleAdmin.call(ROLE_PUBLISHER)).to.eql(ROLE_SUPERVISOR);
+            expect(await newStaking.getRoleAdmin.call(ROLE_UPDATER)).to.eql(ROLE_SUPERVISOR);
 
             expect(await newStaking.hasRole.call(ROLE_SUPERVISOR, supervisor)).to.be.true();
             expect(await newStaking.hasRole.call(ROLE_PUBLISHER, supervisor)).to.be.false();
+            expect(await newStaking.hasRole.call(ROLE_UPDATER, supervisor)).to.be.false();
         });
 
         it('should initialize the state', async () => {
@@ -745,41 +751,42 @@ describe('StakingRewards', () => {
             expect(await staking.pendingRewards.call(provider)).to.be.bignumber.equal(new BN(0));
         };
 
-        const testUpdatePoolRewards = async (providers, poolToken) => {
+        const testStorePoolRewards = async (providers, poolToken) => {
             const pendingRewards = {};
-            const baseRewards = {};
+            const effectiveStakingTimes = {};
 
             for (const provider of providers) {
-                set(pendingRewards, [provider, poolToken.address], {});
-                set(baseRewards, [provider, poolToken.address], {});
-
                 for (const reserveToken of providerPools[provider][poolToken.address] || []) {
-                    const providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken);
+                    set(
+                        pendingRewards,
+                        [provider, poolToken.address, reserveToken],
+                        await staking.pendingReserveRewards(provider, poolToken.address, reserveToken)
+                    );
 
-                    pendingRewards[provider][poolToken.address][reserveToken] = providerRewards.pendingBaseRewards;
-                    baseRewards[provider][poolToken.address][reserveToken] = await staking.baseRewards.call(
-                        provider,
-                        poolToken.address,
-                        reserveToken
+                    const providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken);
+                    set(
+                        effectiveStakingTimes,
+                        [provider, poolToken.address, reserveToken],
+                        providerRewards.effectiveStakingTime
                     );
                 }
             }
 
-            await staking.updatePoolRewards(providers, poolToken.address);
+            await staking.storePoolRewards(providers, poolToken.address, { from: updater });
 
             for (const provider of providers) {
                 for (const reserveToken of providerPools[provider][poolToken.address] || []) {
                     const providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken);
 
-                    expect(providerRewards.pendingBaseRewards).to.bignumber.equal(
-                        pendingRewards[provider][poolToken.address][reserveToken].add(
-                            baseRewards[provider][poolToken.address][reserveToken]
-                        )
-                    );
-
                     expect(
-                        await staking.baseRewards.call(provider, poolToken.address, reserveToken)
-                    ).to.be.bignumber.equal(new BN(0));
+                        providerRewards.baseRewardsDebt
+                            .mul(providerRewards.baseRewardsDebtMultiplier)
+                            .div(PPM_RESOLUTION)
+                    ).to.be.bignumber.equal(pendingRewards[provider][poolToken.address][reserveToken]);
+
+                    expect(providerRewards.effectiveStakingTime).to.be.bignumber.equal(
+                        effectiveStakingTimes[provider][poolToken.address][reserveToken]
+                    );
                 }
             }
         };
@@ -1526,43 +1533,49 @@ describe('StakingRewards', () => {
                 });
             }
 
-            describe('updating pool rewards', async () => {
-                it('should update all rewards for all providers', async () => {
-                    // Should grant all rewards for the duration of one second.
-                    await setTime(now.add(duration.seconds(1)));
-                    await testUpdatePoolRewards(providers, poolToken);
-
-                    // Should return all rewards for a single day, excluding previously granted rewards.
-                    await setTime(programStartTime.add(duration.days(1)));
-                    await testUpdatePoolRewards(providers, poolToken);
-
-                    // Should return all weekly rewards, excluding previously granted rewards, but without the
-                    // multiplier bonus.
-                    await setTime(programStartTime.add(duration.weeks(1)));
-                    await testUpdatePoolRewards(providers, poolToken2);
-
-                    // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
-                    // two weeks rewards multiplier.
-                    await setTime(programStartTime.add(duration.weeks(3)));
-                    await testUpdatePoolRewards(providers, poolToken2);
-
-                    // Should return all program rewards, excluding previously granted rewards + max retroactive
-                    // multipliers.
-                    await setTime(programEndTime);
-                    await testUpdatePoolRewards(providers, poolToken3);
-
-                    // Should return no additional rewards after the ending time of the program.
-                    await setTime(programEndTime.add(duration.days(1)));
-                    await testUpdatePoolRewards(providers, poolToken);
+            describe('storing pool rewards', async () => {
+                it('should revert when a non-updater attempts store pool rewards', async () => {
+                    await expectRevert(staking.storePoolRewards(providers, poolToken.address), 'ERR_ACCESS_DENIED');
                 });
 
-                it('should handle claiming for repeated or not participating providers', async () => {
-                    await setTime(now.add(duration.seconds(1)));
-                    await testUpdatePoolRewards([providers[0], providers[0], providers[0]], poolToken);
+                context('updater', async () => {
+                    it('should store all rewards for all providers', async () => {
+                        // Should grant all rewards for the duration of one second.
+                        await setTime(now.add(duration.seconds(1)));
+                        await testStorePoolRewards(providers, poolToken);
 
-                    const provider3 = accounts[3];
-                    await setTime(programStartTime.add(duration.days(5)));
-                    testUpdatePoolRewards([provider3, providers[0], provider3], poolToken2);
+                        // Should return all rewards for a single day, excluding previously granted rewards.
+                        await setTime(programStartTime.add(duration.days(1)));
+                        await testStorePoolRewards(providers, poolToken);
+
+                        // Should return all weekly rewards, excluding previously granted rewards, but without the
+                        // multiplier bonus.
+                        await setTime(programStartTime.add(duration.weeks(1)));
+                        await testStorePoolRewards(providers, poolToken2);
+
+                        // Should return all the rewards for the two weeks, excluding previously granted rewards, with the
+                        // two weeks rewards multiplier.
+                        await setTime(programStartTime.add(duration.weeks(3)));
+                        await testStorePoolRewards(providers, poolToken2);
+
+                        // Should return all program rewards, excluding previously granted rewards + max retroactive
+                        // multipliers.
+                        await setTime(programEndTime);
+                        await testStorePoolRewards(providers, poolToken3);
+
+                        // Should return no additional rewards after the ending time of the program.
+                        await setTime(programEndTime.add(duration.days(1)));
+                        await testStorePoolRewards(providers, poolToken);
+                    });
+
+                    it('should handle storing rewards for repeated or not participating providers', async () => {
+                        await setTime(now.add(duration.seconds(1)));
+                        await testStorePoolRewards([providers[0], providers[0], providers[0]], poolToken);
+
+                        const provider3 = accounts[3];
+                        await setTime(programStartTime.add(duration.days(5)));
+                        testStorePoolRewards([provider3, providers[0], provider3], poolToken2);
+                    });
                 });
             });
         };

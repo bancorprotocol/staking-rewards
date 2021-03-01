@@ -749,7 +749,8 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         (uint256 fullReward, uint32 multiplier) =
             fullRewards(provider, poolToken, reserveToken, poolRewardsData, providerRewards, program, lpStats);
 
-        // if we're not resetting the effective staking time, then we'd have to store the debt without a multiplier.
+        // if we're setting the effective staking time, then we'd have to store the rewards multiplier in order to
+        // account for it in the future.
         if (resetStakingTime) {
             // get the amount of the actual base rewards that were claimed.
             if (multiplier == PPM_RESOLUTION) {

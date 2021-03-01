@@ -13,9 +13,7 @@ const storePoolRewardsTask = async (env, { poolToken }) => {
         for (let i = 0; i < providers.length; i += BATCH_SIZE) {
             const providersBatch = providers.slice(i, i + BATCH_SIZE);
 
-            for (let j = 0; j < providersBatch.length; ++j) {
-                const provider = providersBatch[j];
-
+            for (const provider of providersBatch) {
                 trace('Storing provider pool rewards for', arg('provider', provider), arg('poolToken', poolToken));
             }
 

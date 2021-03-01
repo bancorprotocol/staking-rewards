@@ -625,7 +625,7 @@ describe('StakingRewards', () => {
                 return reward;
             }
 
-            for (const poolToken of Object.keys(providerPools[provider])) {
+            for (const poolToken in providerPools[provider]) {
                 const reserveTokens = providerPools[provider][poolToken];
 
                 for (const reserveToken of reserveTokens) {

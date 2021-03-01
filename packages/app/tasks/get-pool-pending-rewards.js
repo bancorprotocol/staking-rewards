@@ -222,7 +222,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
 
         for (const [provider, poolTokens] of Object.entries(poolData)) {
             for (const [poolToken, reserveTokens] of Object.entries(poolTokens)) {
-                for (const reserveToken of Object.keys(reserveTokens)) {
+                for (const reserveToken in reserveTokens) {
                     const rewards = await web3Provider.call(
                         contracts.StakingRewards.methods.pendingReserveRewards(provider, poolToken, reserveToken)
                     );

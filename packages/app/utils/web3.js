@@ -2,33 +2,26 @@ const path = require('path');
 const fs = require('fs');
 
 const Contract = require('web3-eth-contract');
-const { keccak256, asciiToHex } = require('web3-utils');
+const { keccak256 } = require('web3-utils');
 
 const { info, error, warning, arg } = require('./logger');
 const Provider = require('./provider');
-const { test, init, reorgOffset } = require('./yargs');
 
 const settings = require('../settings.json');
-const programs = require('../programs.json');
-
-const LIQUIDITY_PROTECTION = asciiToHex('LiquidityProtection');
 
 let contracts = {};
 let web3Provider;
 
-const setup = async () => {
+const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     const setupProvider = async () => {
         web3Provider = new Provider();
 
-        await web3Provider.initialize();
+        await web3Provider.initialize({ test, gasPrice });
     };
 
     const initExternalContract = (name) => {
         const { externalContracts } = settings;
-        const externalContractsDir = path.resolve(
-            __dirname,
-            '../../../node_modules/@bancor/contracts-solidity/solidity/build/contracts'
-        );
+        const externalContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
         const { address } = externalContracts[name];
         const rawData = fs.readFileSync(path.join(externalContractsDir, `${name}.json`));
@@ -58,10 +51,10 @@ const setup = async () => {
         initExternalContract('TokenGovernance');
         initExternalContract('CheckpointStore');
         initExternalContract('ContractRegistry');
-        initExternalContract('LiquidityProtectionSettings');
         initExternalContract('LiquidityProtectionStore');
         initExternalContract('LiquidityProtectionStats');
         initExternalContract('LiquidityProtection');
+        initExternalContract('CheckpointStore');
     };
 
     const deploySystemContract = async (name, { arguments, contractName } = {}) => {
@@ -105,77 +98,36 @@ const setup = async () => {
     };
 
     const setupSystemContracts = async () => {
-        const { externalContracts, systemContracts } = settings;
+        initSystemContract('StakingRewardsStore');
 
         if (init) {
+            const { systemContracts, externalContracts } = settings;
+
             info('Deploying contracts');
 
-            await deploySystemContract('TestCheckpointStore');
-            await deploySystemContract('TestStakingRewardsStore');
-            await deploySystemContract('TestStakingRewards', {
+            await deploySystemContract('StakingRewards', {
                 arguments: [
-                    contracts.TestStakingRewardsStore.options.address,
+                    contracts.StakingRewardsStore.options.address,
                     contracts.TokenGovernance.options.address,
-                    contracts.TestCheckpointStore.options.address,
-                    externalContracts.ContractRegistry.address
+                    contracts.CheckpointStore.options.address,
+                    contracts.ContractRegistry.options.address
                 ]
             });
-
-            await deploySystemContract('TestLiquidityProtectionStats', { contractName: 'LiquidityProtectionStats' });
-            await deploySystemContract('TestLiquidityProtectionSimulator', {
-                arguments: [
-                    contracts.TestStakingRewards.options.address,
-                    contracts.LiquidityProtectionSettings.options.address,
-                    contracts.LiquidityProtectionStore.options.address,
-                    contracts.TestLiquidityProtectionStats.options.address,
-                    contracts.TokenGovernance.options.address,
-                    contracts.TokenGovernance.options.address,
-                    contracts.TestCheckpointStore.options.address
-                ]
-            });
-
-            contracts.StakingRewardsStore = contracts.TestStakingRewardsStore;
-
-            info('Registering contracts');
-
-            await registerContract(LIQUIDITY_PROTECTION, 'TestLiquidityProtectionSimulator');
 
             info('Granting required permissions');
 
-            await grantRole('StakingRewardsStore', 'ROLE_OWNER', 'TestStakingRewards');
-            await grantRole('StakingRewardsStore', 'ROLE_SEEDER', web3Provider.getDefaultAccount());
-            await grantRole('TokenGovernance', 'ROLE_MINTER', 'TestStakingRewards', {
+            await grantRole('StakingRewardsStore', 'ROLE_OWNER', 'StakingRewards', {
+                from: systemContracts.StakingRewardsStore.supervisor
+            });
+
+            await grantRole('StakingRewards', 'ROLE_UPDATER', web3Provider.getDefaultAccount());
+
+            await grantRole('TokenGovernance', 'ROLE_MINTER', 'StakingRewards', {
                 from: externalContracts.TokenGovernance.governor
             });
-            await grantRole('TestCheckpointStore', 'ROLE_SEEDER', web3Provider.getDefaultAccount());
-            await grantRole('TestCheckpointStore', 'ROLE_OWNER', 'TestLiquidityProtectionSimulator');
 
-            await grantRole('TestStakingRewards', 'ROLE_PUBLISHER', 'TestLiquidityProtectionSimulator');
-            await grantRole('LiquidityProtectionSettings', 'ROLE_OWNER', 'TestLiquidityProtectionSimulator', {
-                from: externalContracts.LiquidityProtectionSettings.owner
-            });
-            await grantRole('TestLiquidityProtectionStats', 'ROLE_OWNER', 'TestLiquidityProtectionSimulator');
-
-            info('Transferring LiquidityProtectionStore ownership to TestLiquidityProtectionSimulator');
-            await web3Provider.send(
-                contracts.LiquidityProtection.methods.transferStoreOwnership(
-                    contracts.TestLiquidityProtectionSimulator.options.address
-                ),
-                {
-                    from: externalContracts.LiquidityProtection.owner
-                }
-            );
-            await web3Provider.send(contracts.TestLiquidityProtectionSimulator.methods.acceptStoreOwnership());
-
-            info('Setting initial time StakingRewardsStore');
-
-            const block = await web3Provider.getLastBlock();
-            const { timestamp } = block;
-
-            await web3Provider.send(contracts.TestStakingRewardsStore.methods.setTime(timestamp));
-            await web3Provider.send(contracts.TestStakingRewards.methods.setTime(timestamp));
+            await grantRole('StakingRewards', 'ROLE_PUBLISHER', 'LiquidityProtection');
         } else {
-            initSystemContract('StakingRewardsStore');
             initSystemContract('StakingRewards');
         }
     };
@@ -187,7 +139,6 @@ const setup = async () => {
 
         return {
             settings,
-            programs,
             web3Provider,
             contracts,
             reorgOffset,

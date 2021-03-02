@@ -2,17 +2,15 @@
     "genesisBlock": 11039642,
     "systemContracts": {
         "StakingRewardsStore": {
-            "address": "0x891AfF26593Da95e574E3f62619dAD6624FB5693"
+            "address": "0x891AfF26593Da95e574E3f62619dAD6624FB5693",
+            "supervisor": "0xB93081c32beFda94168483c78b780E601f07B192"
         },
         "StakingRewards": {
-            "address": "0x457FE44E832181e1D3eCee0fc5be72cd9b36859f"
+            "address": "0xB443DEA978B39178Cb05Ae005074227A4390DfCe",
+            "supervisor": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
         }
     },
     "externalContracts": {
-        "LiquidityProtectionSettings": {
-            "address": "0xd444ec18952c7caf09636f21807683dacc1d7da9",
-            "owner": "0xdfeE8DC240c6CadC2c7f7f9c257c259914dEa84E"
-        },
         "LiquidityProtectionStore": {
             "address": "0xf5fab5dbd2f3bf675de4cb76517d4767013cfb55",
             "owner": "0x9Ab934010E6f2D633FeEB5b6f1DdCeEdeD601BCF"

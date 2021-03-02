@@ -5,20 +5,20 @@ const ganache = require('ganache-core');
 const memdown = require('memdown');
 
 const { info, error, arg } = require('./logger');
-const { test, gasPrice } = require('./yargs');
 
 const settings = require('../settings.json');
 const providers = require('../providers.json');
 
-const GAS_LIMIT_BUFFER = 0.1; // 10%
+const GAS_LIMIT_BUFFER = 0.2; // 20%
 
 class Provider {
-    async initialize() {
+    async initialize({ test, gasPrice }) {
+        this.test = test;
         this.privateKey = require('../credentials.json').privateKey;
 
         const { WebsocketProvider, HttpProvider } = providers;
 
-        if (!test) {
+        if (!this.test) {
             info('Running against mainnet');
 
             this.queryWeb3 = new Web3(WebsocketProvider);
@@ -80,14 +80,14 @@ class Provider {
         Contract.setProvider(this.sendWeb3);
 
         if (!options.gasPrice) {
-            if (!test && (!this.gasPrice || Number(this.gasPrice) === 0)) {
+            if (!this.test && (!this.gasPrice || Number(this.gasPrice) === 0)) {
                 error("Gas price isn't set. Aborting");
             }
 
             options.gasPrice = this.gasPrice;
         }
 
-        if (test) {
+        if (this.test) {
             if (!options.from) {
                 options.from = this.defaultAccount;
             }
@@ -159,21 +159,23 @@ class Provider {
         const {
             externalContracts: {
                 LiquidityProtectionStore: { owner: liquidityProtectionStoreOwner },
-                LiquidityProtectionSettings: { owner: liquidityProtectionSettingsOwner },
                 LiquidityProtection: { owner: liquidityProtectionOwner },
                 TokenGovernance: { governor },
                 CheckpointStore: { owner: checkpointStoreOwner },
                 ContractRegistry: { owner: contractRegistryOwner }
+            },
+            systemContracts: {
+                StakingRewardsStore: { supervisor: stakingRewardsStoreSupervisor }
             }
         } = settings;
 
         return [
             liquidityProtectionStoreOwner,
-            liquidityProtectionSettingsOwner,
             liquidityProtectionOwner,
             governor,
             checkpointStoreOwner,
-            contractRegistryOwner
+            contractRegistryOwner,
+            stakingRewardsStoreSupervisor
         ];
     }
 }

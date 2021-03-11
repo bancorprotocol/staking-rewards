@@ -146,11 +146,12 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         uint256 /* reserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
         IDSToken poolToken = IDSToken(address(poolAnchor));
-        if (!_store.isReserveParticipating(poolToken, reserveToken)) {
+        PoolProgram memory program = poolProgram(poolToken);
+        if (program.startTime == 0) {
             return;
         }
 
-        updateRewards(provider, poolToken, reserveToken, poolProgram(poolToken), liquidityProtectionStats());
+        updateRewards(provider, poolToken, reserveToken, program, liquidityProtectionStats());
     }
 
     /**
@@ -159,17 +160,18 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      *
      * @param provider the owner of the liquidity
      * @param poolAnchor the pool token representing the rewards pool
-     * @param reserveToken the reserve token of the removed liquidity
      */
     function onRemovingLiquidity(
         uint256, /* id */
         address provider,
         IConverterAnchor poolAnchor,
-        IERC20 reserveToken,
+        IERC20, /* reserveToken */
         uint256, /* poolAmount */
         uint256 /* reserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
-        if (!_store.isReserveParticipating(IDSToken(address(poolAnchor)), reserveToken)) {
+        IDSToken poolToken = IDSToken(address(poolAnchor));
+        PoolProgram memory program = poolProgram(poolToken);
+        if (program.startTime == 0) {
             return;
         }
 

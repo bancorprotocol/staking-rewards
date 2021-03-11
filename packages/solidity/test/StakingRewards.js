@@ -1286,6 +1286,25 @@ describe('StakingRewards', () => {
                             // multipliers.
                             expectAlmostEqual(reward, expectedRewards);
                         });
+
+                        it('should properly calculate new position rewards after the program has ended', async () => {
+                            // Should not affect rewards after the ending time of the program.
+                            await setTime(programEndTime.add(duration.days(1)));
+
+                            const provider3 = accounts[3];
+                            await addLiquidity(
+                                provider3,
+                                poolToken,
+                                reserveToken,
+                                new BN(1000000).mul(new BN(10).pow(new BN(18)))
+                            );
+
+                            const reward = await staking.pendingRewards.call(provider3);
+                            expect(reward).to.be.bignumber.equal(new BN(0));
+
+                            const claimed = await staking.claimRewards.call({ from: provider3 });
+                            expect(claimed).to.be.bignumber.equal(reward);
+                        });
                     });
 
                     describe('claiming', async () => {

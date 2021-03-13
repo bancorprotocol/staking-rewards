@@ -17,6 +17,7 @@ const setProgramsTask = async (env, { programsPath }) => {
             const programsBatch = programs.slice(i, i + BATCH_SIZE);
 
             const poolTokens = [];
+            const poolTokensToRemove = [];
             const reserveTokens = [];
             const rewardShares = [];
             const startTimes = [];
@@ -35,14 +36,12 @@ const setProgramsTask = async (env, { programsPath }) => {
                     rewardRate
                 } = program;
 
-                const participating = await web3Provider.call(
-                    contracts.StakingRewardsStore.methods.isPoolParticipating(poolToken)
-                );
+                const data = await web3Provider.call(contracts.StakingRewardsStore.methods.poolProgram(poolToken));
+                const actualStartTime = data[0];
+                if (actualStartTime > 0) {
+                    trace('Scheduling existing program for removal', arg('poolToken', poolToken));
 
-                if (participating) {
-                    trace('Skipping already participating program', arg('poolToken', poolToken));
-
-                    continue;
+                    poolTokensToRemove.push(poolToken);
                 }
 
                 poolTokens.push(poolToken);
@@ -55,6 +54,13 @@ const setProgramsTask = async (env, { programsPath }) => {
 
             if (poolTokens.length === 0) {
                 continue;
+            }
+
+            for (const poolToken of poolTokensToRemove) {
+                info('Removing already participating program', arg('poolToken', poolToken));
+
+                const tx = await web3Provider.send(contracts.StakingRewardsStore.methods.removePoolProgram(poolToken));
+                totalGas += tx.gasUsed;
             }
 
             const tx = await web3Provider.send(

@@ -124,6 +124,10 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
                 from: systemContracts.StakingRewardsStore.supervisor
             });
 
+            await grantRole('StakingRewardsStore', 'ROLE_MANAGER', web3Provider.getDefaultAccount(), {
+                from: systemContracts.StakingRewardsStore.supervisor
+            });
+
             await grantRole('StakingRewards', 'ROLE_UPDATER', web3Provider.getDefaultAccount());
 
             await grantRole('TokenGovernance', 'ROLE_MINTER', 'StakingRewards', {

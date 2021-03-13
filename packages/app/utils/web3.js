@@ -16,7 +16,7 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     const setupProvider = async () => {
         web3Provider = new Provider();
 
-        await web3Provider.initialize({ test, gasPrice });
+        await web3Provider.initialize({ test: test || init, gasPrice });
     };
 
     const initExternalContract = (name) => {

@@ -9,6 +9,7 @@ const { info, error, setVerbose, setMultiline } = require('./utils/logger');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPoolPendingRewardsTask = require('./tasks/get-pool-pending-rewards');
+const setProgramsTask = require('./tasks/set-programs');
 const storePoolRewardsTask = require('./tasks/store-pool-rewards');
 
 const main = async () => {
@@ -77,13 +78,25 @@ const main = async () => {
                 'get-pool-pending-rewards',
                 'Get pool pending rewards',
                 (yargs) => {
-                    return yargs.option('poolToken', {
+                    return yargs.option('pool-poken', {
                         alias: 'p',
                         description: 'The address of the pool token',
                         type: 'string'
                     });
                 },
                 async ({ poolToken }) => getPoolPendingRewardsTask(env, { poolToken })
+            )
+            .command(
+                'set-programs',
+                'Set reward programs',
+                (yargs) => {
+                    return yargs.option('programs-path', {
+                        alias: 'p',
+                        description: 'The path to the programs.json config file',
+                        type: 'string'
+                    });
+                },
+                async ({ programsPath }) => setProgramsTask(env, { programsPath })
             )
             .command(
                 'store-pool-rewards',

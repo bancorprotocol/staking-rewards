@@ -16,7 +16,7 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     const setupProvider = async () => {
         web3Provider = new Provider();
 
-        await web3Provider.initialize({ test, gasPrice });
+        await web3Provider.initialize({ test: test || init, gasPrice });
     };
 
     const initExternalContract = (name) => {
@@ -117,6 +117,14 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
             info('Granting required permissions');
 
             await grantRole('StakingRewardsStore', 'ROLE_OWNER', 'StakingRewards', {
+                from: systemContracts.StakingRewardsStore.supervisor
+            });
+
+            await grantRole('StakingRewardsStore', 'ROLE_SEEDER', web3Provider.getDefaultAccount(), {
+                from: systemContracts.StakingRewardsStore.supervisor
+            });
+
+            await grantRole('StakingRewardsStore', 'ROLE_MANAGER', web3Provider.getDefaultAccount(), {
                 from: systemContracts.StakingRewardsStore.supervisor
             });
 

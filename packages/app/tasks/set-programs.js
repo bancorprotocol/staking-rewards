@@ -38,7 +38,7 @@ const setProgramsTask = async (env, { programsPath }) => {
 
                 const data = await web3Provider.call(contracts.StakingRewardsStore.methods.poolProgram(poolToken));
                 const actualStartTime = data[0];
-                if (actualStartTime > 0) {
+                if (new BN(actualStartTime).gt(new BN(0))) {
                     trace('Scheduling existing program for removal', arg('poolToken', poolToken));
 
                     poolTokensToRemove.push(poolToken);
@@ -104,11 +104,11 @@ const setProgramsTask = async (env, { programsPath }) => {
             const [actualNetworkToken, actualReserveToken] = data[3];
             const [actualNetworkTokenRate, actualReserveTokenRate] = data[4];
 
-            if (actualStartTime != startTime) {
+            if (!new BN(actualStartTime).eq(new BN(startTime))) {
                 error("Program start times don't match", arg('expected', startTime), arg('actual', actualStartTime));
             }
 
-            if (actualEndTime != endTime) {
+            if (!new BN(actualEndTime).eq(new BN(endTime))) {
                 error("Program end times don't match", arg('expected', endTime), arg('actual', actualEndTime));
             }
 

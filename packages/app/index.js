@@ -78,7 +78,7 @@ const main = async () => {
                 'get-pool-pending-rewards',
                 'Get pool pending rewards',
                 (yargs) => {
-                    return yargs.option('pool-poken', {
+                    return yargs.option('pool-token', {
                         alias: 'p',
                         description: 'The address of the pool token',
                         type: 'string'
@@ -102,7 +102,7 @@ const main = async () => {
                 'store-pool-rewards',
                 'Store pool rewards',
                 (yargs) => {
-                    return yargs.option('poolToken', {
+                    return yargs.option('pool-token', {
                         alias: 'p',
                         description: 'The address of the pool token',
                         type: 'string'

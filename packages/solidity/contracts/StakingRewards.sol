@@ -159,22 +159,15 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
      * contract
      *
      * @param provider the owner of the liquidity
-     * @param poolAnchor the pool token representing the rewards pool
      */
     function onRemovingLiquidity(
         uint256, /* id */
         address provider,
-        IConverterAnchor poolAnchor,
+        IConverterAnchor, /* poolAnchor */
         IERC20, /* reserveToken */
         uint256, /* poolAmount */
         uint256 /* reserveAmount */
     ) external override onlyPublisher validExternalAddress(provider) {
-        IDSToken poolToken = IDSToken(address(poolAnchor));
-        PoolProgram memory program = poolProgram(poolToken);
-        if (program.startTime == 0) {
-            return;
-        }
-
         ILiquidityProtectionStats lpStats = liquidityProtectionStats();
 
         // make sure that all pending rewards are properly stored for future claims, with retroactive rewards

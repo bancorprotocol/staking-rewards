@@ -41,6 +41,9 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     // the maximum weekly 200% rewards multiplier (in units of PPM).
     uint32 private constant MAX_MULTIPLIER = PPM_RESOLUTION + MULTIPLIER_INCREMENT * 4;
 
+    // the rewards halving factor we need to take into account during the sanity verification process.
+    uint8 private constant REWARDS_HALVING_FACTOR = 2;
+
     // since we will be dividing by the total amount of protected tokens in units of wei, we can encounter cases
     // where the total amount in the denominator is higher than the product of the rewards rate and staking duration. In
     // order to avoid this imprecision, we will amplify the reward rate by the units amount.
@@ -1203,8 +1206,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         // make sure that we aren't exceeding the base reward rate for any reason.
         require(
             baseReward <=
-                program
-                    .rewardRate
+                (program.rewardRate * REWARDS_HALVING_FACTOR)
                     .mul(effectiveStakingEndTime.sub(effectiveStakingStartTime))
                     .mul(rewardShare(reserveToken, program))
                     .div(PPM_RESOLUTION),
@@ -1228,8 +1230,7 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
     ) private pure {
         uint256 maxClaimableReward =
             (
-                program
-                    .rewardRate
+                (program.rewardRate * REWARDS_HALVING_FACTOR)
                     .mul(program.endTime.sub(program.startTime))
                     .mul(rewardShare(reserveToken, program))
                     .mul(MAX_MULTIPLIER)

@@ -1305,6 +1305,26 @@ describe('StakingRewards', () => {
                             const claimed = await staking.claimRewards.call({ from: provider3 });
                             expect(claimed).to.be.bignumber.equal(reward);
                         });
+
+                        it('should return no rewards for non-participating reserves', async () => {
+                            const nonParticipatingPoolToken = accounts[8];
+
+                            expect(
+                                await staking.pendingReserveRewards.call(
+                                    provider,
+                                    nonParticipatingPoolToken,
+                                    reserveToken.address
+                                )
+                            ).to.be.bignumber.equal(new BN(0));
+
+                            expect(
+                                await staking.pendingReserveRewards.call(provider, ZERO_ADDRESS, reserveToken.address)
+                            ).to.be.bignumber.equal(new BN(0));
+
+                            expect(
+                                await staking.pendingReserveRewards.call(provider, poolToken.address, ZERO_ADDRESS)
+                            ).to.be.bignumber.equal(new BN(0));
+                        });
                     });
 
                     describe('claiming', async () => {
@@ -1594,6 +1614,24 @@ describe('StakingRewards', () => {
                         const provider3 = accounts[3];
                         await setTime(programStartTime.add(duration.days(5)));
                         testStorePoolRewards([provider3, providers[0], provider3], poolToken2);
+                    });
+
+                    it('should not store rewards for non-participating pools', async () => {
+                        const nonParticipatingPoolToken = accounts[8];
+                        await staking.storePoolRewards(providers, nonParticipatingPoolToken, { from: updater });
+                        for (const provider of providers) {
+                            const providerRewards = await getProviderRewards(
+                                provider,
+                                nonParticipatingPoolToken,
+                                ZERO_ADDRESS
+                            );
+                            expect(providerRewards.rewardPerToken).to.be.bignumber.equal(new BN(0));
+                            expect(providerRewards.pendingBaseRewards).to.be.bignumber.equal(new BN(0));
+                            expect(providerRewards.totalClaimedRewards).to.be.bignumber.equal(new BN(0));
+                            expect(providerRewards.effectiveStakingTime).to.be.bignumber.equal(new BN(0));
+                            expect(providerRewards.baseRewardsDebt).to.be.bignumber.equal(new BN(0));
+                            expect(providerRewards.baseRewardsDebtMultiplier).to.be.bignumber.equal(new BN(0));
+                        }
                     });
                 });
             });

@@ -316,6 +316,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         PoolProgram memory program,
         ILiquidityProtectionStats lpStats
     ) private view returns (uint256) {
+        if (
+            address(reserveToken) == address(0) ||
+            (program.reserveTokens[0] != reserveToken && program.reserveTokens[1] != reserveToken)
+        ) {
+            return 0;
+        }
+
         // calculate the new reward rate per-token
         PoolRewards memory poolRewardsData = poolRewards(poolToken, reserveToken);
 
@@ -739,6 +746,13 @@ contract StakingRewards is ILiquidityProtectionEventsSubscriber, AccessControl, 
         ILiquidityProtectionStats lpStats,
         bool resetStakingTime
     ) private {
+        if (
+            address(reserveToken) == address(0) ||
+            (program.reserveTokens[0] != reserveToken && program.reserveTokens[1] != reserveToken)
+        ) {
+            return;
+        }
+
         // update all provider's pending rewards, in order to apply retroactive reward multipliers.
         (PoolRewards memory poolRewardsData, ProviderRewards memory providerRewards) =
             updateRewards(provider, poolToken, reserveToken, program, lpStats);

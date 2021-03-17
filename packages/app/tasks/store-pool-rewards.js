@@ -1,7 +1,7 @@
 const { trace, info, error, arg } = require('../utils/logger');
 const DB = require('../utils/db');
 
-const BATCH_SIZE = 25;
+const BATCH_SIZE = 15;
 
 const storePoolRewardsTask = async (env, { poolToken }) => {
     const storePoolRewards = async (data) => {

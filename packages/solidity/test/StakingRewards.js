@@ -777,12 +777,21 @@ describe('StakingRewards', () => {
             for (const provider of providers) {
                 for (const reserveToken of providerPools[provider][poolToken.address] || []) {
                     const providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken);
+                    const multiplier = await staking.rewardsMultiplier.call(provider, poolToken.address, reserveToken);
 
-                    expect(
+                    expectAlmostEqual(
                         providerRewards.baseRewardsDebt
                             .mul(providerRewards.baseRewardsDebtMultiplier)
+                            .mul(multiplier)
                             .div(PPM_RESOLUTION)
-                    ).to.be.bignumber.equal(pendingRewards[provider][poolToken.address][reserveToken]);
+                            .div(PPM_RESOLUTION),
+                        pendingRewards[provider][poolToken.address][reserveToken]
+                    );
+
+                    expectAlmostEqual(
+                        await staking.pendingReserveRewards.call(provider, poolToken.address, reserveToken),
+                        pendingRewards[provider][poolToken.address][reserveToken]
+                    );
 
                     expect(providerRewards.effectiveStakingTime).to.be.bignumber.equal(
                         effectiveStakingTimes[provider][poolToken.address][reserveToken]

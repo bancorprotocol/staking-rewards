@@ -760,7 +760,7 @@ describe('StakingRewards', () => {
                     set(
                         pendingRewards,
                         [provider, poolToken.address, reserveToken],
-                        await staking.pendingReserveRewards(provider, poolToken.address, reserveToken)
+                        await staking.pendingReserveRewards.call(provider, poolToken.address, reserveToken)
                     );
 
                     const providerRewards = await getProviderRewards(provider, poolToken.address, reserveToken);

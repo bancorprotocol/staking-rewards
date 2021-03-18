@@ -626,13 +626,24 @@ describe('StakingRewards', () => {
             }
 
             for (const poolToken in providerPools[provider]) {
-                const reserveTokens = providerPools[provider][poolToken];
+                reward = reward.add(getExpectedPoolRewards(provider, poolToken, duration, multiplierDuration));
+            }
 
-                for (const reserveToken of reserveTokens) {
-                    reward = reward.add(
-                        getExpectedReserveRewards(provider, poolToken, reserveToken, duration, multiplierDuration)
-                    );
-                }
+            return reward;
+        };
+
+        const getExpectedPoolRewards = (provider, poolToken, duration, multiplierDuration = undefined) => {
+            let reward = new BN(0);
+            if (duration.lte(new BN(0))) {
+                return reward;
+            }
+
+            const reserveTokens = providerPools[provider][poolToken];
+
+            for (const reserveToken of reserveTokens) {
+                reward = reward.add(
+                    getExpectedReserveRewards(provider, poolToken, reserveToken, duration, multiplierDuration)
+                );
             }
 
             return reward;
@@ -680,6 +691,23 @@ describe('StakingRewards', () => {
             const effectiveTime = BN.min(now, programEndTime);
             const expectedReward = getExpectedRewards(
                 provider,
+                effectiveTime.sub(programStartTime),
+                multiplierDuration
+            );
+
+            expect(reward).to.be.bignumber.equal(expectedReward);
+
+            const totalProviderClaimedRewards = await staking.totalClaimedRewards.call(provider);
+            expect(totalProviderClaimedRewards).to.be.bignumber.equal(new BN(0));
+        };
+
+        const testPoolRewards = async (provider, poolToken, multiplierDuration = undefined) => {
+            const reward = await staking.pendingPoolRewards.call(provider, poolToken.address);
+
+            const effectiveTime = BN.min(now, programEndTime);
+            const expectedReward = getExpectedPoolRewards(
+                provider,
+                poolToken.address,
                 effectiveTime.sub(programStartTime),
                 multiplierDuration
             );
@@ -872,6 +900,30 @@ describe('StakingRewards', () => {
                         });
 
                         it('should properly calculate pool specific rewards', async () => {
+                            // Should return all rewards for the duration of one second.
+                            await setTime(now.add(duration.seconds(1)));
+                            await testPoolRewards(provider, poolToken);
+
+                            // Should return all rewards for a single day.
+                            await setTime(programStartTime.add(duration.days(1)));
+                            await testPoolRewards(provider, poolToken);
+
+                            // Should return all weekly rewards + second week's retroactive multiplier.
+                            await setTime(programStartTime.add(duration.weeks(1)));
+                            await testPoolRewards(provider, poolToken);
+
+                            // Should return all program rewards + max retroactive multipliers.
+                            await setTime(programEndTime);
+                            await testPoolRewards(provider, poolToken, duration.weeks(4));
+                            await testPoolRewards(provider, poolToken, duration.weeks(4));
+
+                            // Should not affect rewards after the ending time of the program.
+                            await setTime(programEndTime.add(duration.days(1)));
+                            await testPoolRewards(provider, poolToken, duration.weeks(4));
+                            await testPoolRewards(provider, poolToken, duration.weeks(4));
+                        });
+
+                        it('should properly calculate reserve specific rewards', async () => {
                             // Should return all rewards for the duration of one second.
                             await setTime(now.add(duration.seconds(1)));
                             await testReserveRewards(provider, poolToken, networkToken);

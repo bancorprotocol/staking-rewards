@@ -2,12 +2,14 @@ const path = require('path');
 const fs = require('fs');
 
 const Contract = require('web3-eth-contract');
-const { keccak256 } = require('web3-utils');
+const { keccak256, asciiToHex } = require('web3-utils');
 
 const { info, error, warning, arg } = require('./logger');
 const Provider = require('./provider');
 
 const settings = require('../settings.json');
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 let contracts = {};
 let web3Provider;
@@ -19,25 +21,29 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
         await web3Provider.initialize({ test: test || init, gasPrice });
     };
 
-    const initExternalContract = (name) => {
+    const initExternalContract = async (name) => {
         const { externalContracts } = settings;
         const externalContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
-        const { address } = externalContracts[name];
+        let { address } = externalContracts[name];
+        if (!address) {
+            // If the address isn't specified, try to fetch it from the registry.
+            address = await addressOf(name);
+        }
+
         const rawData = fs.readFileSync(path.join(externalContractsDir, `${name}.json`));
         const { abi } = JSON.parse(rawData);
         contracts[name] = new Contract(abi, address);
     };
 
-    const initSystemContract = (name, contractName) => {
+    const initSystemContract = async (name, contractName) => {
         const { systemContracts } = settings;
         const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
-        const { address } = systemContracts[contractName || name];
+        let { address } = systemContracts[contractName || name];
         if (!address) {
-            warning(`Unable to retrieve ${contractName || name} settings`);
-
-            return;
+            // If the address isn't specified, try to fetch it from the registry.
+            address = await addressOf(name);
         }
 
         const rawData = fs.readFileSync(path.join(systemContractsDir, `${name}.json`));
@@ -46,15 +52,15 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     };
 
     const setupExternalContracts = async () => {
-        info('Setting up External Contracts');
+        info('Setting up external contracts');
 
-        initExternalContract('TokenGovernance');
-        initExternalContract('CheckpointStore');
-        initExternalContract('ContractRegistry');
-        initExternalContract('LiquidityProtectionStore');
-        initExternalContract('LiquidityProtectionStats');
-        initExternalContract('LiquidityProtection');
-        initExternalContract('CheckpointStore');
+        await initExternalContract('TokenGovernance');
+        await initExternalContract('CheckpointStore');
+        await initExternalContract('ContractRegistry');
+        await initExternalContract('LiquidityProtectionStore');
+        await initExternalContract('LiquidityProtectionStats');
+        await initExternalContract('LiquidityProtection');
+        await initExternalContract('CheckpointStore');
     };
 
     const deploySystemContract = async (name, { arguments, contractName } = {}) => {
@@ -90,6 +96,16 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
         );
     };
 
+    const addressOf = async (name) => {
+        // If the address isn't specified, try to fetch it from the registry.
+        const address = await web3Provider.call(contracts.ContractRegistry.methods.addressOf(asciiToHex(name)));
+        if (address === ZERO_ADDRESS) {
+            error(`Unable to retrieve the address of ${name}`);
+        }
+
+        return address;
+    };
+
     const grantRole = async (contract, role, name, options = {}) => {
         info(`Granting ${name} the ${role} role on ${contract}`);
 
@@ -98,7 +114,9 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     };
 
     const setupSystemContracts = async () => {
-        initSystemContract('StakingRewardsStore');
+        info('Setting up system contracts');
+
+        await initSystemContract('StakingRewardsStore');
 
         if (init) {
             const { systemContracts, externalContracts } = settings;
@@ -136,7 +154,7 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
 
             await grantRole('StakingRewards', 'ROLE_PUBLISHER', 'LiquidityProtection');
         } else {
-            initSystemContract('StakingRewards');
+            await initSystemContract('StakingRewards');
         }
     };
 

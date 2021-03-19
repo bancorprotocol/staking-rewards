@@ -12,6 +12,30 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
         return address1.toLowerCase() === address2.toLowerCase();
     };
 
+    const isObject = (item) => item && typeof item === 'object' && !Array.isArray(item);
+
+    const mergeDeep = (target, ...sources) => {
+        if (!sources.length) {
+            return target;
+        }
+        const source = sources.shift();
+
+        if (isObject(target) && isObject(source)) {
+            for (const key in source) {
+                if (isObject(source[key])) {
+                    if (!target[key]) {
+                        Object.assign(target, { [key]: {} });
+                    }
+                    mergeDeep(target[key], source[key]);
+                } else {
+                    Object.assign(target, { [key]: source[key] });
+                }
+            }
+        }
+
+        return mergeDeep(target, ...sources);
+    };
+
     const getPosition = async (id, blockNumber) => {
         const position = await web3Provider.call(
             contracts.LiquidityProtectionStore.methods.protectedLiquidity(id),
@@ -33,7 +57,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
     };
 
     const getProtectionLiquidityChanges = async (data, targetPoolToken, fromBlock, toBlock) => {
-        const poolData = {};
+        const newPendingRewards = {};
 
         let eventCount = 0;
         for (let i = fromBlock; i < toBlock; i += BATCH_SIZE) {
@@ -78,7 +102,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             continue;
                         }
 
-                        set(poolData, [provider, poolToken, reserveToken], {});
+                        set(newPendingRewards, [provider, poolToken, reserveToken], {});
 
                         eventCount++;
 
@@ -171,7 +195,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             continue;
                         }
 
-                        set(poolData, [provider, poolToken, reserveToken], {});
+                        set(newPendingRewards, [provider, poolToken, reserveToken], {});
 
                         eventCount++;
 
@@ -198,7 +222,7 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
                             continue;
                         }
 
-                        set(poolData, [provider, poolToken, reserveToken], {});
+                        set(newPendingRewards, [provider, poolToken, reserveToken], {});
 
                         eventCount++;
 
@@ -212,15 +236,16 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
 
         info('Finished processing all new protection change events', arg('count', eventCount));
 
-        return poolData;
+        return newPendingRewards;
     };
 
-    const getPendingRewards = async (data, poolData, toBlock) => {
+    const getPendingRewards = async (data, newPendingRewards, toBlock) => {
         info('Querying all pending rewards at block', arg('toBlock', toBlock));
 
         const { pendingRewards = {} } = data;
+        mergeDeep(pendingRewards, newPendingRewards);
 
-        for (const [provider, poolTokens] of Object.entries(poolData)) {
+        for (const [provider, poolTokens] of Object.entries(pendingRewards)) {
             for (const [poolToken, reserveTokens] of Object.entries(poolTokens)) {
                 for (const reserveToken in reserveTokens) {
                     const rewards = await web3Provider.call(
@@ -259,8 +284,9 @@ const getPoolPendingRewardsTask = async (env, { poolToken }) => {
             data.pendingRewards = {};
         }
 
-        const pools = await getProtectionLiquidityChanges(data, targetPoolToken, fromBlock, toBlock);
-        await getPendingRewards(data, pools, toBlock);
+        const newPendingRewards = await getProtectionLiquidityChanges(data, targetPoolToken, fromBlock, toBlock);
+
+        await getPendingRewards(data, newPendingRewards, toBlock);
     };
 
     const { settings, web3Provider, reorgOffset, contracts, test } = env;

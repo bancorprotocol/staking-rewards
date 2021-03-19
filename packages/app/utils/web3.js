@@ -29,20 +29,20 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
         contracts[name] = new Contract(abi, address);
     };
 
-    const initSystemContract = (name) => {
+    const initSystemContract = (name, contractName) => {
         const { systemContracts } = settings;
         const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
-        const { address } = systemContracts[name];
+        const { address } = systemContracts[contractName || name];
         if (!address) {
-            warning(`Unable to retrieve ${name} settings`);
+            warning(`Unable to retrieve ${contractName || name} settings`);
 
             return;
         }
 
         const rawData = fs.readFileSync(path.join(systemContractsDir, `${name}.json`));
         const { abi } = JSON.parse(rawData);
-        contracts[name] = new Contract(abi, address);
+        contracts[contractName || name] = new Contract(abi, address);
     };
 
     const setupExternalContracts = async () => {

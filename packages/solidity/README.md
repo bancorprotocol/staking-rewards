@@ -1,1 +1,0 @@
-﻿# Bancor Staking Rewards Distribution

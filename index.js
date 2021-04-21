@@ -6,6 +6,7 @@ const { hideBin } = require('yargs/helpers');
 
 const setup = require('./utils/web3');
 const { info, error, setVerbose, setMultiline } = require('./utils/logger');
+const DB = require('./utils/db');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPoolPendingRewardsTask = require('./tasks/get-pool-pending-rewards');
@@ -14,6 +15,23 @@ const storePoolRewardsTask = require('./tasks/store-pool-rewards');
 
 const main = async () => {
     try {
+        const db = new DB('liquidity');
+        const { totalProviderAmounts } = db.data;
+
+        const trbProviders = new Set();
+        const vBNT = '0x3D9E2dA44Af9386484d0D35C29eB62122e4F4742'.toLowerCase();
+        for (const [provider, poolTokens] of Object.entries(totalProviderAmounts)) {
+            for (const poolToken in poolTokens) {
+                if (poolToken.toLowerCase() === vBNT) {
+                    trbProviders.add(provider);
+                }
+            }
+        }
+
+        console.log(trbProviders);
+
+        return;
+
         let env;
         const dbDir = path.resolve(__dirname, './data');
         await mkdirp(dbDir);

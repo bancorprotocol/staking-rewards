@@ -7,6 +7,8 @@ const { set, get } = require('lodash');
 const { trace, info, error, warning, arg } = require('../utils/logger');
 const DB = require('../utils/db');
 
+const CONTRACTS_DIR = path.resolve(__dirname, '../node_modules/@bancor/contracts-solidity/solidity/build/contracts');
+
 const ETH_RESERVE_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const MKR_RESERVE_ADDRESS = '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2';
 
@@ -407,9 +409,7 @@ const getLiquidityTask = async (env) => {
         warning('Please be aware that querying a forked mainnet is much slower than querying the mainnet directly');
     }
 
-    const externalContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
-
-    const rawData = fs.readFileSync(path.join(externalContractsDir, 'ERC20.json'));
+    const rawData = fs.readFileSync(path.join(CONTRACTS_DIR, 'ERC20.json'));
     const { abi: ERC20_ABI } = JSON.parse(rawData);
 
     const db = new DB('liquidity');

@@ -535,10 +535,15 @@
     "@babel/helper-validator-identifier" "^7.12.11"
     to-fast-properties "^2.0.0"
 
-"@bancor/contracts-solidity@^0.6.33":
-  version "0.6.34"
-  resolved "https://registry.yarnpkg.com/@bancor/contracts-solidity/-/contracts-solidity-0.6.34.tgz#68b5aa96efcc5c7734fe353b879bd879e6937860"
-  integrity sha512-T4Y5d0AvuDk4/FZbkwKxBQpEv9BpqZ70Wvi/EEWledWruGJ4V8AFPqWhs/PNyQwAiTgiL7rxaXXIWHTFrtClzw==
+"@bancor/contracts-solidity@bancorprotocol/contracts#3.0.0":
+  version "0.6.35"
+  resolved "https://codeload.github.com/bancorprotocol/contracts/tar.gz/277c98c106b3b55fd783ff330113cbbcfbb90345"
+
+"@bancor/token-governance@bancorprotocol/token-governance":
+  version "0.1.0"
+  resolved "https://codeload.github.com/bancorprotocol/token-governance/tar.gz/72c40f70149cbd4b294556ee253bb0afd9620098"
+  dependencies:
+    "@openzeppelin/contracts" "3.2.0"
 
 "@ethersproject/abi@5.0.0-beta.153":
   version "5.0.0-beta.153"
@@ -1050,6 +1055,11 @@
   dependencies:
     "@nodelib/fs.scandir" "2.1.4"
     fastq "^1.6.0"
+
+"@openzeppelin/contracts@3.4.0":
+  version "3.4.0"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-3.4.0.tgz#9a1669ad5f9fdfb6e273bb5a4fed10cb4cc35eb0"
+  integrity sha512-qh+EiHWzfY/9CORr+eRUkeEUP1WiFUcq3974bLHwyYzLBUtK6HPaMkIUHi74S1rDTZ0sNz42DwPc5A4IJvN3rg==
 
 "@protobufjs/aspromise@^1.1.1", "@protobufjs/aspromise@^1.1.2":
   version "1.1.2"

@@ -13,9 +13,13 @@
     "author": "Leonid Beder",
     "license": "MIT",
     "scripts": {
+        "build": "cd ./node_modules/@bancor/contracts-solidity && truffle compile",
         "test": "mocha"
     },
     "dependencies": {
+        "@bancor/contracts-solidity": "bancorprotocol/contracts#3.0.0",
+        "@bancor/token-governance": "bancorprotocol/token-governance",
+        "@openzeppelin/contracts": "3.4.0",
         "bn.js": "^5.2.0",
         "chalk": "^4.1.0",
         "humanize-duration": "^3.25.1",
@@ -25,7 +29,6 @@
         "web3": "1.3.4"
     },
     "devDependencies": {
-        "@bancor/contracts-solidity": "^0.6.33",
         "chai": "^4.3.4",
         "chai-bn": "^0.2.1",
         "dirty-chai": "^2.0.1",

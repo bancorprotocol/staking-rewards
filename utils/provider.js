@@ -157,15 +157,13 @@ class Provider {
 
     static unlockedAccounts() {
         const {
-            externalContracts: {
+            systemContracts: {
+                StakingRewardsStore: { supervisor: stakingRewardsStoreSupervisor },
                 LiquidityProtectionStore: { owner: liquidityProtectionStoreOwner },
                 LiquidityProtection: { owner: liquidityProtectionOwner },
                 TokenGovernance: { governor },
                 CheckpointStore: { owner: checkpointStoreOwner },
                 ContractRegistry: { owner: contractRegistryOwner }
-            },
-            systemContracts: {
-                StakingRewardsStore: { supervisor: stakingRewardsStoreSupervisor }
             }
         } = settings;
 

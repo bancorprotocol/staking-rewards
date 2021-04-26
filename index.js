@@ -6,6 +6,7 @@ const { hideBin } = require('yargs/helpers');
 
 const setup = require('./utils/web3');
 const { info, error, setVerbose, setMultiline } = require('./utils/logger');
+const DB = require('./utils/db');
 
 const getLiquidityTask = require('./tasks/get-liquidity');
 const getPoolPendingRewardsTask = require('./tasks/get-pool-pending-rewards');

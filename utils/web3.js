@@ -10,6 +10,7 @@ const Provider = require('./provider');
 const settings = require('../settings.json');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const CONTRACTS_DIR = path.resolve(__dirname, '../node_modules/@bancor/contracts-solidity/solidity/build/contracts');
 
 let contracts = {};
 let web3Provider;
@@ -21,24 +22,8 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
         await web3Provider.initialize({ test: test || init, gasPrice });
     };
 
-    const initExternalContract = async (name) => {
-        const { externalContracts } = settings;
-        const externalContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
-
-        let { address } = externalContracts[name];
-        if (!address) {
-            // If the address isn't specified, try to fetch it from the registry.
-            address = await addressOf(name);
-        }
-
-        const rawData = fs.readFileSync(path.join(externalContractsDir, `${name}.json`));
-        const { abi } = JSON.parse(rawData);
-        contracts[name] = new Contract(abi, address);
-    };
-
-    const initSystemContract = async (name, contractName) => {
+    const initContract = async (name, contractName) => {
         const { systemContracts } = settings;
-        const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
 
         let { address } = systemContracts[contractName || name];
         if (!address) {
@@ -46,29 +31,15 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
             address = await addressOf(name);
         }
 
-        const rawData = fs.readFileSync(path.join(systemContractsDir, `${name}.json`));
+        const rawData = fs.readFileSync(path.join(CONTRACTS_DIR, `${name}.json`));
         const { abi } = JSON.parse(rawData);
         contracts[contractName || name] = new Contract(abi, address);
     };
 
-    const setupExternalContracts = async () => {
-        info('Setting up external contracts');
-
-        await initExternalContract('TokenGovernance');
-        await initExternalContract('CheckpointStore');
-        await initExternalContract('ContractRegistry');
-        await initExternalContract('LiquidityProtectionStore');
-        await initExternalContract('LiquidityProtectionStats');
-        await initExternalContract('LiquidityProtection');
-        await initExternalContract('CheckpointStore');
-    };
-
-    const deploySystemContract = async (name, { arguments, contractName } = {}) => {
-        const systemContractsDir = path.resolve(__dirname, '../../solidity/build/contracts');
-
+    const deployContract = async (name, { arguments, contractName } = {}) => {
         info(`Deploying ${name}`);
 
-        const rawData = fs.readFileSync(path.join(systemContractsDir, `${contractName || name}.json`));
+        const rawData = fs.readFileSync(path.join(CONTRACTS_DIR, `${contractName || name}.json`));
         const { abi, bytecode } = JSON.parse(rawData);
 
         const contract = new Contract(abi);
@@ -85,7 +56,7 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
         info(`Registering ${contract} in ContractRegistry`);
 
         const {
-            externalContracts: {
+            systemContracts: {
                 ContractRegistry: { owner }
             }
         } = settings;
@@ -116,14 +87,21 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
     const setupSystemContracts = async () => {
         info('Setting up system contracts');
 
-        await initSystemContract('StakingRewardsStore');
+        await initContract('TokenGovernance');
+        await initContract('CheckpointStore');
+        await initContract('ContractRegistry');
+        await initContract('LiquidityProtectionStore');
+        await initContract('LiquidityProtectionStats');
+        await initContract('LiquidityProtection');
+        await initContract('CheckpointStore');
+        await initContract('StakingRewardsStore');
 
         if (init) {
-            const { systemContracts, externalContracts } = settings;
+            const { systemContracts } = settings;
 
             info('Deploying contracts');
 
-            await deploySystemContract('StakingRewards', {
+            await deployContract('StakingRewards', {
                 arguments: [
                     contracts.StakingRewardsStore.options.address,
                     contracts.TokenGovernance.options.address,
@@ -149,18 +127,17 @@ const setup = async ({ test, gasPrice, init, reorgOffset }) => {
             await grantRole('StakingRewards', 'ROLE_UPDATER', web3Provider.getDefaultAccount());
 
             await grantRole('TokenGovernance', 'ROLE_MINTER', 'StakingRewards', {
-                from: externalContracts.TokenGovernance.governor
+                from: systemContracts.TokenGovernance.governor
             });
 
             await grantRole('StakingRewards', 'ROLE_PUBLISHER', 'LiquidityProtection');
         } else {
-            await initSystemContract('StakingRewards');
+            await initContract('StakingRewards');
         }
     };
 
     try {
         await setupProvider();
-        await setupExternalContracts();
         await setupSystemContracts();
 
         return {

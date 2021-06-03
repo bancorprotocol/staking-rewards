@@ -1,4 +1,5 @@
 const { trace, info, error, arg } = require('../utils/logger');
+const BN = require('bn.js');
 const DB = require('../utils/db');
 
 const BATCH_SIZE = 15;
@@ -9,7 +10,21 @@ const storePoolRewardsTask = async (env, { poolToken }) => {
 
         let totalGas = 0;
 
-        const providers = Object.keys(data.pendingRewards);
+        let providers = [];
+        for (const provider of Object.keys(data.pendingRewards)) {
+            const rewards = await web3Provider.call(
+                contracts.StakingRewards.methods.pendingPoolRewards(provider, poolToken)
+            );
+
+            if (new BN(rewards).eq(new BN(0))) {
+                trace('Skipping provider without any pending rewards', arg('provider', provider));
+
+                continue;
+            }
+
+            providers.push(provider);
+        }
+
         for (let i = 0; i < providers.length; i += BATCH_SIZE) {
             const providersBatch = providers.slice(i, i + BATCH_SIZE);
 
